@@ -1,0 +1,1889 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PbootCMS SEO 检查工具</title>
+    <style>
+      /* 设计令牌 —— 同步维护:
+         frontend/src/assets/styles.scss | seo_publish_tool/public/index.html | ftp_publish_tool/public/index.html */
+      :root {
+        --el-color-primary: #1677ff;
+        --el-color-primary-light-3: #4096ff;
+        --el-color-primary-light-5: #69b1ff;
+        --el-color-primary-light-7: #91caff;
+        --el-color-primary-light-8: #bae0ff;
+        --el-color-primary-light-9: #e6f4ff;
+        --el-color-primary-dark-2: #0958d9;
+        --el-color-success: #2f9e5b;
+        --el-color-success-light-8: #d6f0e0;
+        --el-color-success-light-9: #edf9f1;
+        --el-color-success-dark-2: #257e48;
+        --el-color-warning: #ee9418;
+        --el-color-warning-light-8: #fdeccd;
+        --el-color-warning-light-9: #fff8ed;
+        --el-color-warning-dark-2: #be7613;
+        --el-color-danger: #f04438;
+        --el-color-danger-light-8: #fdcfcc;
+        --el-color-danger-light-9: #fff1f0;
+        --el-color-danger-dark-2: #c0362d;
+        --text-success: #176b3a;
+        --text-warning: #b25e09;
+        --text-danger: #d94b35;
+        --el-text-color-primary: #303133;
+        --el-text-color-regular: #606266;
+        --el-text-color-secondary: #909399;
+        --el-border-color: #dcdfe6;
+        --el-border-color-light: #e4e7ed;
+        --el-border-color-lighter: #ebeef5;
+        --el-bg-color: #ffffff;
+        --el-bg-color-page: #f5f7fa;
+        --el-fill-color-light: #f5f7fa;
+        --radius-card: 8px;
+        --radius-pill: 999px;
+        --shadow-card: 0 1px 2px rgba(16, 24, 40, .04), 0 1px 3px rgba(16, 24, 40, .06);
+        --space-page: 24px;
+      }
+
+      /* ---------- 基础 ---------- */
+      * { box-sizing: border-box; }
+      body { margin: 0; color: var(--el-text-color-primary); background: var(--el-bg-color-page); font: 14px/1.55 "PingFang SC", "Microsoft YaHei", Inter, Arial, sans-serif; }
+      button, input, select { font: inherit; }
+      button { height: 36px; padding: 0 15px; border: 1px solid var(--el-border-color); border-radius: 6px; color: var(--el-text-color-primary); background: var(--el-bg-color); cursor: pointer; font-weight: 600; transition: color .15s ease, border-color .15s ease; }
+      button:hover { border-color: var(--el-color-primary-light-5); color: var(--el-color-primary); }
+      button:disabled { opacity: .55; cursor: not-allowed; }
+      button.primary { color: #fff; border-color: var(--el-color-primary); background: var(--el-color-primary); }
+      button.success { color: #fff; border-color: var(--el-color-success); background: var(--el-color-success); }
+      button.warn { color: #fff; border-color: var(--el-color-warning); background: var(--el-color-warning); }
+      .action-link { display: inline-flex; align-items: center; height: 36px; padding: 0 15px; border: 1px solid var(--el-border-color); border-radius: 6px; color: var(--el-text-color-primary); background: var(--el-bg-color); text-decoration: none; font-weight: 600; white-space: nowrap; }
+      .action-link:hover { border-color: var(--el-color-primary-light-5); color: var(--el-color-primary); }
+      input, select { width: 100%; height: 36px; padding: 0 11px; border: 1px solid var(--el-border-color); border-radius: 6px; color: var(--el-text-color-primary); background: var(--el-bg-color); outline: none; }
+      input:focus, select:focus { border-color: var(--el-color-primary); }
+      a { color: var(--el-color-primary); text-decoration: none; }
+
+      /* ---------- 布局 ---------- */
+      header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: 10px 20px; border-bottom: 1px solid var(--el-border-color-light); background: var(--el-bg-color); }
+      .brand { display: flex; align-items: center; gap: 11px; font-size: 22px; font-weight: 700; }
+      .brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; color: #fff; background: var(--el-color-primary); font-size: 16px; }
+      .runtime { max-width: 62%; color: var(--el-text-color-regular); text-align: right; font-size: 12px; }
+      .tool-nav { position: sticky; top: 64px; z-index: 9; display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 5px 20px; border-bottom: 1px solid var(--el-border-color-light); background: var(--el-bg-color); overflow-x: auto; }
+      .tool-nav a { flex: 0 0 auto; padding: 8px 13px; border-radius: 6px; color: var(--el-text-color-regular); font-size: 14px; font-weight: 600; }
+      .tool-nav a:hover { background: var(--el-color-primary-light-9); color: var(--el-color-primary); }
+      .tool-nav a.active { background: var(--el-color-primary); color: #fff; }
+      main { padding: 18px var(--space-page) 36px; }
+      .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+
+      /* ---------- 卡片与表单 ---------- */
+      .band { margin-bottom: 14px; padding: 16px 18px; border: 1px solid var(--el-border-color-light); border-radius: var(--radius-card); background: var(--el-bg-color); box-shadow: var(--shadow-card); }
+      .band h2 { margin: 0 0 12px; font-size: 18px; }
+      .band-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      .note { color: var(--el-text-color-secondary); font-size: 13px; }
+      .warning { display: none; margin-bottom: 14px; padding: 11px 14px; border-left: 4px solid var(--el-color-danger); color: var(--text-danger); background: var(--el-color-danger-light-9); }
+      .form-grid { display: grid; grid-template-columns: minmax(180px, .75fr) minmax(260px, 1fr) minmax(360px, 1.6fr) auto; gap: 12px; align-items: end; }
+      .google-grid { display: grid; grid-template-columns: 100px minmax(250px, 1fr) minmax(260px, 1fr) minmax(260px, 1.15fr) auto; gap: 12px; align-items: end; }
+      label span { display: block; margin-bottom: 5px; color: var(--el-text-color-secondary); font-size: 12px; }
+      .switch-field { display: flex; align-items: center; gap: 8px; height: 36px; }
+      .switch-field input { width: auto; height: auto; }
+      .google-config-actions { display: flex; gap: 8px; }
+      .credential-field { display: flex; gap: 8px; }
+      .credential-field input[readonly] { color: var(--el-text-color-regular); background: var(--el-fill-color-light); }
+      .credential-field button { flex: 0 0 auto; }
+
+      /* ---------- Google 工作流 ---------- */
+      .google-workflow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 2px 0 14px; }
+      .google-step { min-height: 62px; padding: 10px 12px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-fill-color-light); }
+      .google-step strong { display: block; margin-bottom: 2px; color: var(--el-text-color-primary); }
+      .google-step span { color: var(--el-text-color-regular); font-size: 12px; }
+      .google-checklist { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-fill-color-light); }
+      .google-check { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 4px; color: var(--el-color-warning-dark-2); background: var(--el-color-warning-light-9); font-size: 12px; }
+      .google-check.ok { color: var(--text-success); background: var(--el-color-success-light-9); }
+      .google-check-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--el-color-danger); }
+      .google-check.ok .google-check-dot { background: var(--el-color-success); }
+      .google-ready-summary { margin-left: auto; font-weight: 700; }
+      .google-ready-summary.ok { color: var(--el-color-success); }
+      .google-ready-summary.bad { color: var(--text-danger); }
+      .google-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 12px; }
+      .inspect-field { min-width: 360px; flex: 1; }
+      .google-result { display: none; margin-top: 12px; padding: 12px 14px; border-left: 4px solid var(--el-color-primary); background: var(--el-color-primary-light-9); }
+      .google-result[data-tone="success"] { border-left-color: var(--el-color-success); background: var(--el-color-success-light-9); }
+      .google-result[data-tone="warning"] { border-left-color: var(--el-color-warning); background: var(--el-color-warning-light-9); }
+      .google-result-title { margin-bottom: 6px; font-weight: 700; }
+      .google-result pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+      .in-summary { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 8px; padding: 8px 10px; border-radius: 6px; background: var(--el-fill-color-light); font-size: 13px; }
+      .in-summary .ok { color: var(--text-success); font-weight: 700; }
+      .in-summary .bad { color: var(--text-danger); font-weight: 700; }
+      .in-summary .warn { color: var(--text-warning); font-weight: 700; }
+      .google-result a { display: inline-block; margin-top: 8px; font-weight: 600; }
+      .identity-grid, .definition-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+      .identity-item, .definition { min-width: 0; padding: 10px 12px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-fill-color-light); }
+      .identity-item span, .definition span { display: block; color: var(--el-text-color-regular); font-size: 12px; }
+      .identity-item strong, .definition strong { display: block; margin-top: 3px; overflow-wrap: anywhere; }
+      .definition strong { color: var(--el-text-color-primary); }
+      .guide-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .guide { padding: 13px 15px; border-left: 3px solid var(--el-color-primary); background: var(--el-fill-color-light); }
+      .guide h3 { margin: 0 0 7px; font-size: 15px; }
+      .guide ol, .guide ul { margin: 0; padding-left: 20px; color: var(--el-text-color-regular); }
+      .guide li + li { margin-top: 4px; }
+      .guide-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+      /* ---------- 状态与统计 ---------- */
+      .flow-status { display: none; margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--el-color-primary-light-7); border-radius: 6px; color: var(--el-color-primary-dark-2); background: var(--el-color-primary-light-9); }
+      .flow-status strong { display: block; margin-bottom: 3px; }
+      .flow-status.error { border-color: var(--el-color-danger-light-8); color: var(--text-danger); background: var(--el-color-danger-light-9); }
+      .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+      .metric { padding: 16px 18px; border: 1px solid var(--el-border-color-light); border-radius: var(--radius-card); background: var(--el-bg-color); box-shadow: var(--shadow-card); }
+      .metric span { color: var(--el-text-color-secondary); }
+      .metric strong { display: block; margin-top: 4px; font-size: 28px; font-variant-numeric: tabular-nums; }
+      .content-grid { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(520px, 1.4fr); gap: 14px; align-items: start; }
+      .site-meta > div { margin: 5px 0; overflow-wrap: anywhere; }
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+      .chip { padding: 4px 10px; border: 1px solid var(--el-color-primary-light-7); border-radius: var(--radius-pill); color: var(--el-color-primary-dark-2); background: var(--el-color-primary-light-9); }
+
+      /* ---------- 问题列表 ---------- */
+      .issue-tools { display: grid; grid-template-columns: 130px minmax(160px, 1fr); gap: 8px; margin-bottom: 10px; }
+      .issue { margin-bottom: 8px; padding: 10px 12px; border-left: 4px solid var(--el-color-warning); background: var(--el-fill-color-light); }
+      .issue.high { border-left-color: var(--el-color-danger); }
+      .issue.low { border-left-color: var(--el-text-color-secondary); }
+      .issue-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+      .issue-title { font-weight: 700; }
+      .issue-edit { flex: 0 0 auto; padding: 2px 8px; border: 1px solid var(--el-color-primary-light-5); border-radius: 4px; background: var(--el-bg-color); }
+      .issue-detail { margin-top: 3px; color: var(--el-text-color-regular); overflow-wrap: anywhere; font-size: 12px; }
+      .pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+      .pagination-actions { display: flex; gap: 8px; }
+      .status.error { color: var(--el-color-danger); }
+
+      /* ---------- AI 一键修复 ---------- */
+      .ai-fix-bar { display: grid; grid-template-columns: minmax(220px, 1fr) 180px auto auto; gap: 8px; align-items: end; margin-bottom: 12px; padding: 12px; border: 1px solid var(--el-color-primary-light-7); border-radius: 6px; background: var(--el-color-primary-light-9); }
+      .ai-fix-bar label { margin: 0; }
+      .ai-model-info { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 18px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--el-color-primary-light-7); border-radius: 6px; background: var(--el-color-primary-light-9); font-size: 13px; }
+      .ai-model-summary, .ai-quota-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+      .ai-tag { padding: 1px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; border: 1px solid var(--el-color-primary-light-7); color: var(--el-color-primary-dark-2); background: var(--el-bg-color); }
+      .ai-tag.rec { color: var(--text-success); background: var(--el-color-success-light-9); border-color: var(--el-color-success-light-8); }
+      .ai-tag.danger { color: var(--text-danger); background: var(--el-color-danger-light-9); border-color: var(--el-color-danger-light-8); }
+      .ai-model-purpose, .ai-quota-label { color: var(--el-text-color-regular); }
+      .ai-fix-note { margin: 2px 0 12px; color: var(--el-text-color-secondary); font-size: 12px; }
+      .ai-problem-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 12px; padding: 8px 10px; border: 1px dashed var(--el-border-color-light); border-radius: 6px; background: var(--el-fill-color-light); }
+      .ai-problem-filter label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--el-text-color-regular); cursor: pointer; }
+      .ai-problem-filter input { width: auto; height: auto; }
+      .ai-key-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .ai-key-row { padding: 10px 12px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-bg-color); }
+      .ai-key-row .head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .ai-key-row .head strong { flex: 1; }
+      .ai-key-row input { margin-bottom: 8px; }
+      .ai-key-row button { height: 32px; padding: 0 12px; font-size: 12px; }
+      .ai-fix-logs { max-height: 160px; overflow: auto; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--el-border-color-lighter); border-radius: 6px; background: var(--el-bg-color); font: 12px/1.6 ui-monospace, Consolas, "SFMono-Regular", monospace; color: var(--el-text-color-regular); white-space: pre-wrap; overflow-wrap: anywhere; }
+      .ai-preview { max-height: 460px; overflow: auto; margin-top: 8px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-bg-color); }
+      .pv-item { padding: 8px 12px; border-bottom: 1px solid var(--el-border-color-lighter); }
+      .pv-item:last-child { border-bottom: none; }
+      .pv-head { font-weight: 700; margin-bottom: 4px; }
+      .pv-change { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; font-size: 12px; margin: 2px 0; }
+      .pv-field { flex: 0 0 auto; color: var(--el-color-primary-dark-2); font-weight: 600; }
+      .pv-old { color: var(--text-danger); text-decoration: line-through; }
+      .pv-new { color: var(--text-success); }
+      .pv-arrow { color: var(--el-text-color-secondary); }
+      .ai-preview-actions { display: flex; gap: 8px; margin-top: 10px; }
+      @media (max-width: 680px) {
+        .ai-fix-bar { grid-template-columns: 1fr; }
+        .ai-key-grid { grid-template-columns: 1fr; }
+      }
+
+      /* ---------- Indexing 提交列表 ---------- */
+      .gi-list { max-height: 360px; overflow: auto; margin-top: 12px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-bg-color); }
+      .gi-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--el-border-color-lighter); }
+      .gi-row:last-child { border-bottom: none; }
+      .gi-url { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--el-text-color-primary); font-size: 12px; }
+      .gi-status { font-size: 12px; color: var(--el-text-color-regular); min-width: 130px; }
+      .gi-status.ok { color: var(--text-success); }
+      .gi-status.bad { color: var(--text-danger); }
+      .gi-row button { height: 30px; padding: 0 10px; font-size: 12px; flex: 0 0 auto; }
+      .gi-progress { display: none; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-fill-color-light); }
+      .gi-progress-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 12px; color: var(--el-text-color-regular); }
+      .gi-progress-bar { height: 10px; border-radius: 5px; background: var(--el-border-color-lighter); overflow: hidden; }
+      .gi-progress-fill { height: 100%; width: 0; border-radius: 5px; background: var(--el-color-primary); transition: width .25s ease; }
+      .gi-textarea { width: 100%; min-height: 96px; padding: 8px 11px; border: 1px solid var(--el-border-color); border-radius: 6px; font: inherit; background: var(--el-bg-color); outline: none; }
+      .gi-textarea:focus { border-color: var(--el-color-primary); }
+      .gi-steps { margin-top: 12px; padding: 10px 14px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-fill-color-light); }
+      .gi-steps summary { cursor: pointer; font-weight: 700; color: var(--el-text-color-primary); }
+      .gi-steps[open] summary { margin-bottom: 8px; }
+      .gi-steps ol { margin: 0 0 8px; padding-left: 22px; color: var(--el-text-color-regular); }
+      .gi-steps li + li { margin-top: 7px; }
+      .gi-steps .note { margin-bottom: 0; }
+
+      /* ---------- Google 提交状态与配额 ---------- */
+      .gi-summary { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+      .gi-stat { display: flex; align-items: center; gap: 8px; padding: 8px 15px; border: 1px solid var(--el-border-color-light); border-radius: var(--radius-pill); background: var(--el-fill-color-light); }
+      .gi-stat .num { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .gi-stat .lbl { color: var(--el-text-color-secondary); font-size: 12px; }
+      .gi-stat.done .num { color: var(--el-color-success); }
+      .gi-stat.pending .num { color: var(--el-color-primary); }
+      .gi-stat.quota .num { color: var(--el-color-warning-dark-2); }
+      .gi-stat.quota.low .num { color: var(--el-color-danger); }
+      .gi-badge { flex: 0 0 auto; padding: 2px 9px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; white-space: nowrap; }
+      .gi-badge.done { color: var(--text-success); background: var(--el-color-success-light-9); }
+      .gi-badge.pending { color: var(--el-color-primary-dark-2); background: var(--el-color-primary-light-9); }
+      .gi-row { transition: background .12s ease; }
+      .gi-row:hover { background: var(--el-fill-color-light); }
+      .gi-row.is-done .gi-url { color: var(--el-text-color-secondary); }
+      .gi-time { flex: 0 0 auto; color: var(--el-text-color-secondary); font-size: 11px; white-space: nowrap; }
+
+      /* ---------- 通用装饰 ---------- */
+      .band h2 { display: flex; align-items: center; gap: 9px; }
+      .band h2::before { content: ""; width: 5px; height: 20px; border-radius: 3px; background: var(--el-color-primary); flex: 0 0 auto; }
+      .brand-mark { background: linear-gradient(135deg, #1677ff, #0958d9); }
+      button:active { transform: translateY(1px); }
+      .gi-progress-fill { background: linear-gradient(90deg, #1677ff, #69b1ff); }
+
+      /* ---------- 响应式 ---------- */
+      @media (max-width: 1100px) {
+        .form-grid, .google-grid { grid-template-columns: 1fr 1fr; }
+        .google-workflow { grid-template-columns: 1fr 1fr; }
+        .identity-grid, .definition-grid { grid-template-columns: 1fr 1fr; }
+        .content-grid { grid-template-columns: 1fr; }
+        .runtime { display: none; }
+      }
+      @media (max-width: 680px) {
+        main { padding: 12px; }
+        .form-grid, .google-grid, .metrics { grid-template-columns: 1fr; }
+        .inspect-field { min-width: 100%; }
+        .google-workflow { grid-template-columns: 1fr; }
+        .identity-grid, .definition-grid, .guide-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand"><span class="brand-mark">SEO</span><span>PbootCMS SEO 检查工具</span></div>
+      <div>
+        <div id="status" class="status">准备就绪</div>
+        <div id="runtime" class="runtime"></div>
+      </div>
+    </header>
+    <nav class="tool-nav" id="toolNav" aria-label="项目工具导航"></nav>
+
+    <main>
+      <div class="toolbar">
+        <button class="success" id="prepareGoogleBtn">一键准备 Google 提交</button>
+        <button class="primary" id="refreshBtn">刷新检查</button>
+        <button class="success" id="generateBtn">生成 sitemap + robots</button>
+        <button id="keyBtn">生成 IndexNow Key</button>
+        <button class="warn" id="pushBtn">推送 IndexNow（Bing 等）</button>
+        <button id="uploadSeoFtpBtn">上传 SEO 文件到 FTP</button>
+      </div>
+      <div id="flowStatus" class="flow-status"></div>
+      <div id="indexNowResult" class="google-result"></div>
+      <div id="urlWarning" class="warning"></div>
+
+      <section class="band">
+        <h2>站点地址</h2>
+        <div class="form-grid">
+          <label><span>站点名称</span><input id="siteNameInput" /></label>
+          <label><span>本地测试地址</span><input id="localTestBaseUrlInput" placeholder="http://your-site.local" /></label>
+          <label><span>真实线上地址（SEO 提交只使用这里）</span><input id="siteBaseUrlInput" placeholder="https://www.example.com" /></label>
+          <button class="primary" id="saveConfigBtn">保存地址</button>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
+            <h2>当前项目身份</h2>
+            <div class="note">所有路径、数据库和端口均从当前站点自己的配置读取，用于防止多个 PbootCMS 项目串站。</div>
+          </div>
+          <button id="copyProjectSummaryBtn">复制项目摘要</button>
+        </div>
+        <div id="projectIdentity" class="identity-grid"></div>
+      </section>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
+            <h2>Google 收录</h2>
+            <div class="note">无需 Google Cloud 或服务账号。本工具负责生成并检查 sitemap.xml、robots.txt；Sitemap 提交和单页请求收录在 Google Search Console 官方页面完成。</div>
+          </div>
+          <a class="action-link" id="googleConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener">打开 Search Console</a>
+        </div>
+        <div class="google-workflow">
+          <div class="google-step"><strong>1. 生成 SEO 文件</strong><span>生成 sitemap.xml 与 robots.txt。</span></div>
+          <div class="google-step"><strong>2. 检查线上文件</strong><span>确认两个文件可被公网正常访问。</span></div>
+          <div class="google-step"><strong>3. 提交 Sitemap</strong><span>复制地址并在 Search Console 的 Sitemaps 页面提交。</span></div>
+          <div class="google-step"><strong>4. 检查重要页面</strong><span>复制真实 URL，在网址检查中请求编入索引。</span></div>
+        </div>
+        <div class="definition-grid">
+          <div class="definition"><strong>已提交</strong><span>Sitemap 已交给 Google，仅代表 Google 收到地址。</span></div>
+          <div class="definition"><strong>已发现</strong><span>Google 知道该 URL，但还不一定访问过。</span></div>
+          <div class="definition"><strong>已抓取</strong><span>Googlebot 已访问页面，但可能仍不建立索引。</span></div>
+          <div class="definition"><strong>已收录</strong><span>页面进入 Google 索引，才有机会出现在搜索结果中。</span></div>
+        </div>
+        <div id="googleChecklist" class="google-checklist"></div>
+        <div class="google-actions">
+          <button id="checkGooglePublicBtn">检查线上 sitemap / robots</button>
+          <label class="inspect-field"><span>Sitemap 线上地址</span><input id="googleSitemapInput" readonly /></label>
+          <button id="copyGoogleSitemapBtn">复制 Sitemap 地址</button>
+          <a class="action-link" id="googleSitemapsLink" href="https://search.google.com/search-console/sitemaps" target="_blank" rel="noopener">打开 Sitemaps 页面</a>
+          <a class="action-link" id="googlePageIndexLink" href="https://search.google.com/search-console/index" target="_blank" rel="noopener">查看网页索引</a>
+        </div>
+        <div class="google-actions">
+          <label class="inspect-field"><span>需要检查的真实线上 URL</span><input id="googleInspectUrlInput" placeholder="https://example.com/page/" /></label>
+          <button id="copyGoogleInspectUrlBtn">复制页面 URL</button>
+          <a class="action-link" id="googleInspectLink" href="https://search.google.com/search-console" target="_blank" rel="noopener">打开网址检查</a>
+        </div>
+        <div class="note" id="googleAccountMeta"></div>
+        <div id="googleResult" class="google-result"></div>
+      </section>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
+            <h2>Google Indexing 一键提交</h2>
+            <div class="note">用 Google Indexing API 真正把 URL 提交给 Google（只需配置一次服务账号）。配好后每条 URL 可一键提交，并查询 Google 的处理状态。普通页面属于“通知 Google 来抓取”，不保证一定收录——这是 Google 的规则，任何工具都一样。</div>
+          </div>
+          <span class="note" id="googleIndexingMeta">未配置</span>
+        </div>
+        <div class="google-actions">
+          <label class="inspect-field" style="flex: 1 1 100%;">
+            <span>Google 服务账号 JSON（Google Cloud → IAM → 服务账号 → 新建 JSON 密钥，下载后整段粘贴；保存后输入框会清空，密钥仅保存在本工具目录）</span>
+            <textarea id="googleServiceAccountInput" class="gi-textarea" placeholder='{ "type": "service_account", "client_email": "xxx@project.iam.gserviceaccount.com", "private_key": "-----BEGIN PRIVATE KEY-----\n..." }'></textarea>
+          </label>
+        </div>
+        <details class="gi-steps">
+          <summary>Google 服务账号 JSON 怎么获取？点开看详细步骤（首次配置约 10 分钟，只需做一次）</summary>
+          <ol>
+            <li>用拥有本网站 Search Console 权限的 Google 账号，打开 <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a>（console.cloud.google.com）。</li>
+            <li>点页面顶部的项目选择器 →「新建项目」，名称随意（例如 shanbo-search-console），创建后切换到该项目。</li>
+            <li>左侧菜单「API 和服务」→「库」→ 搜索 <b>Indexing API</b> → 打开它 → 点「启用」（Enable）。没有结算账号一般也能启用，提交量小在免费额度内。</li>
+            <li>左侧菜单「IAM 和管理」→「服务账号」→「创建服务账号」。名称随意（例如 shanbocc），角色可以不选，一路「完成」。</li>
+            <li>在服务账号列表中点进刚建的账号 →「密钥」标签页 →「添加密钥」→「创建新密钥」→ 类型选 <b>JSON</b> →「创建」。浏览器会自动下载一个 .json 文件，这就是服务账号 JSON。</li>
+            <li>打开 <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Search Console</a> → 左下角「设置」→「用户和权限」→「添加用户」→ 粘贴 JSON 里 <b>client_email</b> 的值（形如 xxx@xxx.iam.gserviceaccount.com）→ 权限选「完整」。<b>漏掉这步提交会报 403。</b></li>
+            <li>用记事本打开下载的 JSON 文件，全选、复制，粘贴到上方输入框，点「保存并验证服务账号」。看到「取得 Google 访问令牌」即配置成功。</li>
+          </ol>
+          <div class="note">密钥只保存在本工具目录的 seo.config.json 里，不要提交到代码仓库或发给他人；若怀疑泄露，回到 Google Cloud 服务账号的「密钥」页删除该密钥再重新创建即可。当前账号：<span id="giStepsAccount">-</span></div>
+        </details>
+        <div class="google-actions">
+          <button class="primary" id="saveGoogleServiceAccountBtn">保存并验证服务账号</button>
+          <button id="testGoogleIndexingBtn">测试连接</button>
+          <button class="warn" id="clearGoogleServiceAccountBtn">清除服务账号</button>
+          <a class="action-link" id="googleIndexingHelpLink" href="https://developers.google.com/search/apis/indexing-api/v3/using-api" target="_blank" rel="noopener">Indexing API 文档</a>
+          <a class="action-link" id="googleIndexingConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener">打开 Search Console</a>
+        </div>
+        <div class="google-actions">
+          <button class="success" id="googleIndexingSubmitAllBtn">提交全部 URL 到 Google</button>
+          <button class="warn" id="googleIndexingStopBtn" style="display: none;">停止提交</button>
+          <button id="googleIndexingReloadBtn">刷新提交状态</button>
+          <button id="googleIndexingClearBtn">清除提交记录</button>
+          <span class="note">逐条提交，每批最多 100 条；已提交过的 URL 会自动跳过，不会重复提交。Google 默认每天约 200 条配额，太平洋时间零点重置。</span>
+        </div>
+        <div class="gi-summary" id="googleIndexingSummary">
+          <div class="gi-stat pending"><span class="lbl">待提交</span><span class="num" id="giPendingCount">0</span></div>
+          <div class="gi-stat done"><span class="lbl">已提交</span><span class="num" id="giDoneCount">0</span></div>
+          <div class="gi-stat quota"><span class="lbl">今日配额已用</span><span class="num" id="giQuotaText">0 / 200</span></div>
+        </div>
+        <div class="gi-progress" id="googleIndexingProgress">
+          <div class="gi-progress-head">
+            <span id="googleIndexingProgressText">准备提交...</span>
+            <span id="googleIndexingProgressCount">0 / 0</span>
+          </div>
+          <div class="gi-progress-bar"><div class="gi-progress-fill" id="googleIndexingProgressFill"></div></div>
+        </div>
+        <div class="google-actions">
+          <label class="inspect-field"><span>手动提交单个 URL（不必在 sitemap 列表中）</span><input id="googleIndexingManualUrl" placeholder="https://shanbo.cc/your-page/" /></label>
+          <button id="googleIndexingManualSubmitBtn">提交该 URL</button>
+          <button id="googleIndexingManualMetaBtn">查询该 URL 状态</button>
+        </div>
+        <div id="googleIndexingUrlList" class="gi-list"></div>
+        <div id="googleIndexingResult" class="google-result"></div>
+      </section>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
+            <h2>Yandex 收录</h2>
+            <div class="note">Yandex 是 IndexNow 的官方支持方：点「推送到 Yandex（IndexNow）」会把全部真实线上 URL 直提给 yandex.com/indexnow。要在 Yandex Webmaster 里查看收录状态，需先完成下面的网站验证。</div>
+          </div>
+          <span class="note" id="yandexMeta">未配置</span>
+        </div>
+        <div class="google-workflow">
+          <div class="google-step"><strong>1. 添加站点</strong><span>打开 Yandex Webmaster，添加真实线上域名 shanbo.cc（各语言子域名可分别添加）。</span></div>
+          <div class="google-step"><strong>2. 验证网站</strong><span>验证方式选「HTML 文件」，把文件名和内容粘贴到下方保存，再点「上传 SEO 文件到 FTP」。</span></div>
+          <div class="google-step"><strong>3. 提交 Sitemap</strong><span>验证通过后，在 Yandex Webmaster「索引 → 站点地图」提交 sitemap 地址。</span></div>
+          <div class="google-step"><strong>4. 推送页面</strong><span>点「推送到 Yandex（IndexNow）」，Yandex 会尽快来抓取新推送的页面。</span></div>
+        </div>
+        <div class="google-actions">
+          <label style="flex: 0 0 300px;"><span>Yandex 验证文件名（Yandex 页面给出的 yandex_xxxxxxxx.html）</span><input id="yandexVerificationFilenameInput" placeholder="yandex_1a2b3c4d.html" /></label>
+          <label class="inspect-field"><span>验证文件内容（Yandex 给出的整段内容，粘贴到上传框为止）</span><input id="yandexVerificationContentInput" placeholder="<html>...Verification: xxxxxxxx...</html>" /></label>
+          <button class="primary" id="saveYandexVerificationBtn">保存验证文件</button>
+          <button id="clearYandexVerificationBtn">清除配置</button>
+        </div>
+        <div class="google-actions">
+          <button id="checkYandexBtn">检查线上验证 / IndexNow Key</button>
+          <button class="warn" id="pushYandexBtn">推送到 Yandex（IndexNow）</button>
+          <a class="action-link" id="yandexAddSiteLink" href="https://webmaster.yandex.com/sites/add/" target="_blank" rel="noopener">打开 Yandex Webmaster</a>
+          <a class="action-link" id="yandexIndexNowHelpLink" href="https://yandex.com/support/webmaster/indexnow.html" target="_blank" rel="noopener">IndexNow 说明</a>
+        </div>
+        <div id="yandexResult" class="google-result"></div>
+      </section>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
+            <h2>Google 后续操作教程</h2>
+            <div class="note">普通新闻和产品页没有可用的 Google 强制收录接口，以下步骤需要在 Search Console 官方页面完成。</div>
+          </div>
+        </div>
+        <div class="guide-grid">
+          <div class="guide">
+            <h3>首次部署或更换域名</h3>
+            <ol>
+              <li>点击“一键准备 Google 提交”，等待 FTP 和线上检查全部完成。</li>
+              <li>打开 Sitemaps 页面，提交页面中显示的 sitemap 地址。</li>
+              <li>等待 Google 处理；显示“成功”只代表 sitemap 可读取，不等于全部收录。</li>
+            </ol>
+          </div>
+          <div class="guide">
+            <h3>发布重要新闻或产品后</h3>
+            <ol>
+              <li>先更新 sitemap 并上传到线上。</li>
+              <li>复制该页面真实 URL，打开“网址检查”。</li>
+              <li>运行线上测试，页面正常后点击“请求编入索引”。</li>
+            </ol>
+          </div>
+          <div class="guide">
+            <h3>日常检查重点</h3>
+            <ul>
+              <li>网页索引：查看未编入索引原因和趋势。</li>
+              <li>Sitemaps：确认最后读取时间与状态。</li>
+              <li>设置中的抓取统计信息：确认 Googlebot 能稳定访问。</li>
+            </ul>
+          </div>
+          <div class="guide">
+            <h3>不能自动化的边界</h3>
+            <ul>
+              <li>工具不能承诺排名，也不能保证每个 URL 被收录。</li>
+              <li>IndexNow 面向 Bing 等支持方，不会把普通页面提交给 Google。</li>
+              <li>Google Indexing API 不适用于普通新闻和产品页面。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="guide-actions">
+          <a class="action-link" id="googleSitemapHelpLink" href="https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap" target="_blank" rel="noopener">Google Sitemap 文档</a>
+          <a class="action-link" id="googleInspectionHelpLink" href="https://support.google.com/webmasters/answer/9012289" target="_blank" rel="noopener">网址检查说明</a>
+        </div>
+      </section>
+
+      <div class="metrics">
+        <div class="metric"><span>可收录 URL</span><strong id="urlCount">0</strong></div>
+        <div class="metric"><span>内容数量</span><strong id="contentCount">0</strong></div>
+        <div class="metric"><span>栏目数量</span><strong id="menuCount">0</strong></div>
+        <div class="metric"><span>高风险问题</span><strong id="highCount">0</strong></div>
+      </div>
+
+      <div class="content-grid">
+        <section class="band">
+          <h2>站点信息</h2>
+          <div id="siteMeta" class="site-meta"></div>
+          <div id="chips" class="chips"></div>
+        </section>
+        <section class="band">
+          <div class="band-title">
+            <h2>SEO 问题</h2>
+            <span id="issueTotal" class="note"></span>
+          </div>
+          <div class="ai-fix-bar">
+            <label>
+              <span>AI 模型（可选模型列表）</span>
+              <select id="aiModelSelect">
+                <option value="">加载中...</option>
+              </select>
+            </label>
+            <label>
+              <span>选择语言</span>
+              <select id="aiLanguageSelect">
+                <option value="all">全部语言（量大）</option>
+                <option value="cn">中文 (cn)</option>
+                <option value="en">English (en)</option>
+                <option value="es">Español (es)</option>
+                <option value="fr">Français (fr)</option>
+                <option value="ru">Русский (ru)</option>
+                <option value="ar">العربية (ar)</option>
+                <option value="pt">Português (pt)</option>
+              </select>
+            </label>
+            <button id="aiPreviewBtn">预览修复</button>
+            <button class="success" id="aiFixBtn">AI 开始修复</button>
+            <button class="warn" id="aiStopBtn" style="display: none;">停止修复</button>
+            <button id="aiTestBtn">测试模型连接</button>
+          </div>
+          <div class="ai-model-info" id="aiModelInfo">
+            <div class="ai-model-summary">
+              <span class="ai-tag">优先级 #<span id="aiModelPriority">-</span></span>
+              <span class="ai-tag rec" id="aiModelRec" style="display: none;">推荐</span>
+              <strong id="aiModelLabel">-</strong>
+              <span class="ai-model-purpose" id="aiModelPurpose"></span>
+            </div>
+            <div class="ai-quota-summary">
+              <span class="ai-quota-label">额度状态</span>
+              <span class="ai-tag" id="aiQuotaStatus">-</span>
+              <span id="aiQuotaText"></span>
+              <a class="action-link" id="aiQuotaLink" target="_blank" rel="noopener" style="display: none;">查看实时余量</a>
+            </div>
+          </div>
+          <div class="ai-fix-note">选中一个模型 + 目标语言，点「AI 开始修复」即可让模型自动补齐标题、副标题、关键词、描述、URL 名称、正文过短和图片 ALT 等问题（修复前自动备份数据库）。</div>
+          <div class="ai-problem-filter" id="aiProblemFilter">
+            <span class="ai-quota-label">只修：</span>
+            <label><input type="checkbox" value="title" checked /> 标题</label>
+            <label><input type="checkbox" value="subtitle" checked /> 副标题</label>
+            <label><input type="checkbox" value="slug" checked /> URL名称</label>
+            <label><input type="checkbox" value="keywords" checked /> 关键词</label>
+            <label><input type="checkbox" value="description" checked /> 描述缺失</label>
+            <label><input type="checkbox" value="description-too-long" checked /> 描述过长</label>
+            <label><input type="checkbox" value="content-too-short" checked /> 正文过短</label>
+            <label><input type="checkbox" value="image-alt" checked /> 图片ALT</label>
+          </div>
+          <details class="gi-steps" id="aiKeyConfig">
+            <summary>配置 AI API Key（未配置的模型会置灰，可在这里补填，保存即生效）</summary>
+            <div class="ai-key-grid" id="aiKeyGrid"></div>
+          </details>
+          <div class="gi-progress" id="aiFixProgress">
+            <div class="gi-progress-head">
+              <span id="aiFixProgressText">准备修复...</span>
+              <span id="aiFixProgressCount">0 / 0</span>
+            </div>
+            <div class="gi-progress-bar"><div class="gi-progress-fill" id="aiFixProgressFill"></div></div>
+            <div class="ai-fix-logs" id="aiFixLogs"></div>
+          </div>
+          <div id="aiFixResult" class="google-result"></div>
+          <div class="issue-tools">
+            <select id="severityFilter">
+              <option value="">全部级别</option>
+              <option value="high">高风险</option>
+              <option value="medium">中风险</option>
+              <option value="low">提示</option>
+            </select>
+            <input id="issueSearchInput" placeholder="搜索标题、栏目、URL 或问题内容" />
+          </div>
+          <div id="issues"></div>
+          <div class="pagination">
+            <span id="issuePageMeta" class="note"></span>
+            <div class="pagination-actions">
+              <button id="issuePrevBtn">上一页</button>
+              <button id="issueNextBtn">下一页</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
+            <h2>换站部署清单</h2>
+            <div class="note">每个 PbootCMS 网站使用自己独立的一份工具目录和配置，互不共用数据库、端口、FTP 或 IndexNow Key。</div>
+          </div>
+          <button id="copyMigrationGuideBtn">复制换站清单</button>
+        </div>
+        <div class="guide-grid">
+          <div class="guide"><h3>1. 独立放置</h3><ul><li>把完整工具目录复制到新网站自己的根目录。</li><li>不要直接共用另一个站点正在运行的工具目录。</li></ul></div>
+          <div class="guide"><h3>2. 项目配置</h3><ul><li>在项目配置页填写新网站根目录、SQLite 数据库、独立端口。</li><li>填写本地测试地址和真实线上地址。</li></ul></div>
+          <div class="guide"><h3>3. 发布配置</h3><ul><li>在 FTP 页面填写该网站自己的 FTP 信息。</li><li>为该网站单独生成 IndexNow Key，禁止跨站复用旧配置。</li></ul></div>
+          <div class="guide"><h3>4. 上线验证</h3><ul><li>生成并上传 SEO 文件后检查线上 sitemap 与 robots。</li><li>到对应站点的 Search Console 提交 sitemap。</li></ul></div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let busy = false;
+      let currentIssues = [];
+      let currentUrls = [];
+      let issuePage = 1;
+      const issuePageSize = 30;
+      let indexNowRetryHosts = [];
+      let googleStatus = {};
+      let googleIndexingStatus = {};
+      let giStopRequested = false;
+      let yandexStatus = {};
+      let googleSubmittedState = { submitted: {}, count: 0, quota: { dailyLimit: 200, dailyUsed: 0, dailyRemaining: 200 } };
+      let currentConfig = {};
+      let currentInstance = {};
+      let aiModels = [];
+      let aiJob = null;
+      let aiPolling = false;
+      let aiPreviewMode = false;
+      const AI_PROVIDERS = [
+        { id: "qwen", label: "Qwen（阿里云百炼）" },
+        { id: "zhipu", label: "智谱 GLM" },
+        { id: "deepseek", label: "DeepSeek" },
+        { id: "openai", label: "OpenAI" },
+      ];
+
+      const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function setStatus(text, isError = false) {
+        $("status").textContent = text;
+        $("status").className = isError ? "status error" : "status";
+      }
+
+      function setBusy(value) {
+        busy = value;
+        document.querySelectorAll("button").forEach((button) => (button.disabled = value));
+      }
+
+      function renderFlowStatus(title = "", detail = "", isError = false) {
+        const box = $("flowStatus");
+        box.style.display = title ? "flex" : "none";
+        box.className = `flow-status${isError ? " error" : ""}`;
+        box.innerHTML = title
+          ? `<strong>${escapeHtml(title)}</strong>${detail ? `<span>${escapeHtml(detail)}</span>` : ""}`
+          : "";
+      }
+
+      async function api(path, options = {}) {
+        const response = await fetch(path, options);
+        const text = await response.text();
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (_error) { data = { message: text }; }
+        if (!response.ok) throw new Error(data.message || `请求失败（HTTP ${response.status}）`);
+        return data;
+      }
+
+      async function runAction(action) {
+        if (busy) return;
+        setBusy(true);
+        try {
+          await action();
+        } catch (error) {
+          setStatus(error.message || String(error), true);
+          alert(error.message || String(error));
+        } finally {
+          setBusy(false);
+          renderIssues();
+        }
+      }
+
+      function renderWarning(text) {
+        $("urlWarning").style.display = text ? "block" : "none";
+        $("urlWarning").textContent = text || "";
+      }
+
+      function renderNavigation(items) {
+        $("toolNav").innerHTML = (items || [])
+          .map((item) => `<a class="${item.active ? "active" : ""}" href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>`)
+          .join("");
+      }
+
+      async function loadConfig() {
+        const result = await api("/api/config");
+        const config = result.config || {};
+        const instance = result.instance || {};
+        currentConfig = config;
+        currentInstance = instance;
+        $("siteNameInput").value = config.siteName || "";
+        $("localTestBaseUrlInput").value = config.localTestBaseUrl || "";
+        $("siteBaseUrlInput").value = config.siteBaseUrl || "";
+        $("runtime").textContent = `${config.siteName || "-"} · 端口 ${instance.port || location.port} · ${instance.databasePath || ""}`;
+        renderNavigation(result.navigation || []);
+        document.title = `${config.siteName || "PbootCMS"} · SEO 检查工具`;
+        renderWarning(result.publicUrlWarning ? "真实线上地址看起来仍是本地/测试域名，已禁止向搜索引擎提交。" : "");
+        renderProjectIdentity();
+      }
+
+      function projectIdentityRows(identity = googleStatus.projectIdentity || {}) {
+        const configuredPort = identity.configuredPort || currentConfig.localPort || "-";
+        const runningPort = identity.runningPort || currentInstance.port || location.port || "-";
+        return [
+          ["站点名称", identity.siteName || currentConfig.siteName || "-"],
+          ["真实线上域名", identity.siteBaseUrl || currentConfig.siteBaseUrl || "-"],
+          ["本地测试地址", identity.localTestBaseUrl || currentConfig.localTestBaseUrl || "-"],
+          ["网站根目录", identity.siteRoot || currentInstance.siteRoot || currentConfig.localRoot || "-"],
+          ["SQLite 数据库", identity.databasePath || currentInstance.databasePath || currentConfig.databasePath || "-"],
+          ["SEO 工具端口", configuredPort === runningPort ? `${runningPort}（配置一致）` : `${runningPort}（配置为 ${configuredPort}，请修正）`],
+          ["独立配置", identity.isolatedConfig === false ? "异常：正在共用外部配置" : "正常：当前工具目录独立配置"],
+          ["配置文件", identity.configPath || currentInstance.configPath || "当前工具目录/seo.config.json"],
+        ];
+      }
+
+      function renderProjectIdentity(identity = googleStatus.projectIdentity || {}) {
+        $("projectIdentity").innerHTML = projectIdentityRows(identity)
+          .map(([label, value]) => `<div class="identity-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
+          .join("");
+      }
+
+      function projectSummaryText() {
+        return [
+          "PbootCMS SEO 当前项目摘要",
+          ...projectIdentityRows().map(([label, value]) => `${label}：${value}`),
+          "",
+          "注意：每个网站必须使用独立工具目录、SQLite 数据库、端口、FTP 配置和 IndexNow Key。",
+          "本摘要不包含 FTP 密码或 AI API Key。",
+        ].join("\n");
+      }
+
+      function migrationGuideText() {
+        return [
+          "PbootCMS SEO 换站部署清单",
+          "1. 把整套 pboot_admin 工具复制到新网站自己的目录，不与旧站共用。",
+          "2. 打开项目配置页，填写新网站根目录、SQLite 数据库路径和未占用的独立端口。",
+          "3. 在本页填写本地测试地址与真实线上地址；SEO 提交只使用真实线上地址。",
+          "4. 打开 FTP 发布页，填写新站自己的 FTP 信息并测试连接。",
+          "5. 为新站重新生成 IndexNow Key，不复用旧站 Key。",
+          "6. 回到 SEO 检查页，核对“当前项目身份”，再运行“一键准备 Google 提交”。",
+          "7. 确认线上 sitemap.xml 与 robots.txt 通过检查后，到该站 Search Console 提交 sitemap。",
+          "8. 使用网址检查处理最重要的新页面；提交或抓取不等于已经收录。",
+        ].join("\n");
+      }
+
+      function showGoogleResult(title, lines = [], tone = "info", link = null) {
+        const result = $("googleResult");
+        const safeLines = (Array.isArray(lines) ? lines : [lines]).filter((line) => line !== undefined && line !== null && line !== "");
+        result.style.display = "block";
+        result.dataset.tone = tone;
+        result.innerHTML = `
+          <div class="google-result-title">${escapeHtml(title)}</div>
+          ${safeLines.length ? `<pre>${escapeHtml(safeLines.join("\n"))}</pre>` : ""}
+          ${link?.url ? `<a href="${escapeHtml(link.url)}" target="_blank" rel="noopener">${escapeHtml(link.label || "在 Search Console 中查看")}</a>` : ""}
+        `;
+      }
+
+      function renderGoogleStatus(result) {
+        googleStatus = result || {};
+        $("googleSitemapInput").value = result.sitemapUrl || "";
+        $("googleConsoleLink").href = result.consoleUrl || "https://search.google.com/search-console";
+        $("googleSitemapsLink").href = result.sitemapsUrl || "https://search.google.com/search-console/sitemaps";
+        $("googleInspectLink").href = result.consoleUrl || "https://search.google.com/search-console";
+        $("googlePageIndexLink").href = result.pageIndexUrl || result.consoleUrl || "https://search.google.com/search-console";
+        $("googleSitemapHelpLink").href = result.helpUrls?.sitemap || "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap";
+        $("googleInspectionHelpLink").href = result.helpUrls?.urlInspection || "https://support.google.com/webmasters/answer/9012289";
+        $("googleChecklist").innerHTML = [
+          ...(result.checklist || []).map((item) => `
+            <span class="google-check ${item.ok ? "ok" : ""}">
+              <span class="google-check-dot"></span>${escapeHtml(item.label)}
+            </span>
+          `),
+          `<span class="google-ready-summary ${result.ready ? "ok" : "bad"}">${result.ready ? "当前项目配置检查通过" : `尚有 ${result.issues?.length || 0} 项配置需要处理`}</span>`,
+        ].join("");
+        $("googleAccountMeta").textContent = result.ready
+          ? "无需 Google Cloud。首次把 Sitemap 地址提交到 Search Console；重要新页面可复制 URL 后在“网址检查”中请求编入索引。"
+          : (result.issues || []).join("；");
+        renderProjectIdentity(result.projectIdentity || {});
+      }
+
+      async function loadGoogleStatus() {
+        const result = await api("/api/google/status");
+        renderGoogleStatus(result);
+      }
+
+      async function loadGoogleIndexingStatus() {
+        try {
+          googleIndexingStatus = await api("/api/google-indexing/status");
+        } catch (_error) {
+          googleIndexingStatus = { enabled: false, clientEmail: "" };
+        }
+        const meta = $("googleIndexingMeta");
+        if (googleIndexingStatus.enabled) {
+          meta.textContent = `已配置：${googleIndexingStatus.clientEmail}`;
+          meta.style.color = "#176b3a";
+        } else {
+          meta.textContent = "未配置服务账号";
+          meta.style.color = "#d94b35";
+        }
+        $("googleIndexingSubmitAllBtn").disabled = busy || !googleIndexingStatus.enabled;
+        $("giStepsAccount").textContent = googleIndexingStatus.clientEmail || "尚未配置";
+        await loadGoogleSubmittedState();
+      }
+
+      async function loadGoogleSubmittedState() {
+        try {
+          googleSubmittedState = await api("/api/google-indexing/submitted");
+        } catch (_error) {
+          googleSubmittedState = { submitted: {}, count: 0, quota: { dailyLimit: 200, dailyUsed: 0, dailyRemaining: 200 } };
+        }
+        renderGoogleIndexingUrls();
+      }
+
+      async function loadYandexStatus() {
+        try {
+          yandexStatus = await api("/api/yandex/status");
+        } catch (_error) {
+          yandexStatus = {};
+        }
+        const meta = $("yandexMeta");
+        if (yandexStatus.verification?.filename) {
+          meta.textContent = `验证文件：${yandexStatus.verification.filename}`;
+          meta.style.color = "#176b3a";
+          if (!$("yandexVerificationFilenameInput").value) {
+            $("yandexVerificationFilenameInput").value = yandexStatus.verification.filename;
+          }
+        } else {
+          meta.textContent = "未配置验证文件";
+          meta.style.color = "#d94b35";
+        }
+        $("yandexAddSiteLink").href = yandexStatus.links?.addSite || "https://webmaster.yandex.com/sites/add/";
+        $("yandexIndexNowHelpLink").href = yandexStatus.links?.indexNowHelp || "https://yandex.com/support/webmaster/indexnow.html";
+      }
+
+      function showYandexResult(title, lines = [], tone = "info") {
+        const result = $("yandexResult");
+        const safeLines = (Array.isArray(lines) ? lines : [lines]).filter((line) => line !== undefined && line !== null && line !== "");
+        result.style.display = "block";
+        result.dataset.tone = tone;
+        result.innerHTML = `
+          <div class="google-result-title">${escapeHtml(title)}</div>
+          ${safeLines.length ? `<pre>${escapeHtml(safeLines.join("\n"))}</pre>` : ""}
+        `;
+      }
+
+      async function runIndexNowPush(triggerButton) {
+        const retrying = indexNowRetryHosts.length > 0;
+        if (!confirm(retrying ? `只重试失败域名：${indexNowRetryHosts.join("、")}？` : "把全部真实线上 URL 推送给 IndexNow（Bing 等）和 Yandex 吗？\n不会提交给 Google。")) return;
+        const result = await api("/api/indexnow-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ onlyHosts: indexNowRetryHosts }),
+        });
+        indexNowRetryHosts = result.retryHosts || [];
+        const buttonText = indexNowRetryHosts.length ? `重试失败域名（${indexNowRetryHosts.length}）` : "";
+        if (triggerButton) {
+          triggerButton.textContent = buttonText
+            || (triggerButton.id === "pushYandexBtn" ? "推送到 Yandex（IndexNow）" : "推送 IndexNow + Yandex");
+        }
+        setStatus(result.message);
+        renderIndexNowResult(result);
+        if (!result.ok) {
+          const keyIssue = (result.groups || []).filter((item) => item.skipped);
+          if (keyIssue.length) {
+            showYandexResult("部分域名推送前检查未通过（Key 文件线上不可用）",
+              keyIssue.map((item) => `${item.host}：${item.body || `HTTP ${item.status}`}`),
+              "warning");
+          }
+        }
+      }
+
+      function shortDate(iso) {
+        if (!iso) return "";
+        const date = new Date(iso);
+        if (Number.isNaN(date.getTime())) return "";
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
+      function renderGiSummary() {
+        const submitted = googleSubmittedState.submitted || {};
+        const urls = currentUrls.map((item) => item.url).filter(Boolean);
+        const doneCount = urls.filter((url) => submitted[url]).length;
+        const pendingCount = urls.length - doneCount;
+        const quota = googleSubmittedState.quota || { dailyLimit: 200, dailyUsed: 0, dailyRemaining: 200 };
+        $("giDoneCount").textContent = doneCount;
+        $("giPendingCount").textContent = pendingCount;
+        $("giQuotaText").textContent = `${quota.dailyUsed} / ${quota.dailyLimit}`;
+        const quotaEl = document.querySelector(".gi-stat.quota");
+        if (quotaEl) quotaEl.classList.toggle("low", Number(quota.dailyRemaining) <= 0);
+      }
+
+      function renderGoogleIndexingUrls() {
+        const box = $("googleIndexingUrlList");
+        const urls = currentUrls.map((item) => item.url).filter(Boolean);
+        const submitted = googleSubmittedState.submitted || {};
+        if (!urls.length) {
+          box.innerHTML = `<div class="note" style="padding: 12px;">暂无 URL，请先点“刷新检查”。</div>`;
+          renderGiSummary();
+          return;
+        }
+        box.innerHTML = urls
+          .map((url, index) => {
+            const rec = submitted[url];
+            const done = Boolean(rec);
+            return `
+              <div class="gi-row ${done ? "is-done" : ""}" data-url="${escapeHtml(url)}">
+                <span class="gi-url">${escapeHtml(url)}</span>
+                <span class="gi-badge ${done ? "done" : "pending"}">${done ? "已提交" : "待提交"}</span>
+                ${done ? `<span class="gi-time">${escapeHtml(shortDate(rec.submittedAt))}</span>` : ""}
+                <span class="gi-status" id="giStatus${index}"></span>
+                <button type="button" data-gi-action="submit" data-index="${index}">${done ? "重新提交" : "提交"}</button>
+                <button type="button" data-gi-action="meta" data-index="${index}">查状态</button>
+              </div>
+            `;
+          })
+          .join("");
+        renderGiSummary();
+      }
+
+      function showGoogleIndexingResult(title, lines = [], tone = "info") {
+        const result = $("googleIndexingResult");
+        const safeLines = (Array.isArray(lines) ? lines : [lines]).filter((line) => line !== undefined && line !== null && line !== "");
+        result.style.display = "block";
+        result.dataset.tone = tone;
+        result.innerHTML = `
+          <div class="google-result-title">${escapeHtml(title)}</div>
+          ${safeLines.length ? `<pre>${escapeHtml(safeLines.join("\n"))}</pre>` : ""}
+        `;
+      }
+
+      function updateGiProgress(done, total, okCount, failCount, text) {
+        const box = $("googleIndexingProgress");
+        if (!box) return;
+        box.style.display = "block";
+        const percent = total ? Math.round((done / total) * 100) : 0;
+        $("googleIndexingProgressFill").style.width = `${percent}%`;
+        $("googleIndexingProgressCount").textContent = `${done} / ${total}（成功 ${okCount}，失败 ${failCount}）`;
+        $("googleIndexingProgressText").textContent = text || (total && done >= total ? "提交完成" : "正在提交...");
+      }
+
+      function renderIndexNowResult(result) {
+        const box = $("indexNowResult");
+        const groups = result.groups || [];
+        const pushedUrls = Number(result.pushed || 0);
+        const successfulHosts = Number(result.successfulHosts || 0);
+        const pendingHosts = Number(result.pendingHosts || 0);
+        const failedHosts = Number(result.failedHosts || 0);
+        const failedUrls = groups
+          .filter((g) => !g.ok && !g.pending)
+          .reduce((sum, g) => sum + Number(g.requested || 0), 0);
+        const pendingUrls = groups
+          .filter((g) => g.pending)
+          .reduce((sum, g) => sum + Number(g.requested || 0), 0);
+
+        const summaryParts = [
+          `<span>成功 <span class="ok">${pushedUrls}</span> 条 URL / <span class="ok">${successfulHosts}</span> 个域名</span>`,
+        ];
+        if (pendingUrls || pendingHosts) {
+          summaryParts.push(`<span>平台验证中 <span class="warn">${pendingUrls}</span> 条 URL / ${pendingHosts} 个域名</span>`);
+        }
+        if (failedUrls || failedHosts) {
+          summaryParts.push(`<span>失败 <span class="bad">${failedUrls}</span> 条 URL / <span class="bad">${failedHosts}</span> 个域名</span>`);
+        }
+
+        const lines = [];
+        for (const group of groups) {
+          const endpoints = group.endpoints || [];
+          if (endpoints.length) {
+            for (const ep of endpoints) {
+              const engine = /yandex/i.test(ep.endpoint) ? "Yandex" : "IndexNow/Bing";
+              const flag = ep.ok ? "成功" : ep.pending ? "平台验证中" : "失败";
+              lines.push(`${group.host} [${engine}] → HTTP ${ep.status} ${flag}${ep.body ? `（${String(ep.body).slice(0, 100)}）` : ""}`);
+            }
+          } else {
+            lines.push(`${group.host} → HTTP ${group.status} ${group.ok ? "成功" : "失败"}${group.body ? `（${String(group.body).slice(0, 100)}）` : ""}`);
+          }
+        }
+        box.style.display = "block";
+        box.dataset.tone = result.ok ? "success" : "warning";
+        box.innerHTML = `
+          <div class="google-result-title">IndexNow / Yandex 提交结果</div>
+          <div class="in-summary">${summaryParts.join("")}</div>
+          <pre>${escapeHtml([result.message || "", "", ...lines].join("\n").trim())}</pre>
+        `;
+      }
+
+      function filteredIssues() {
+        const severity = $("severityFilter").value;
+        const query = $("issueSearchInput").value.trim().toLowerCase();
+        return currentIssues.filter((item) => {
+          if (severity && item.severity !== severity) return false;
+          if (!query) return true;
+          return [item.type, item.title, item.detail, item.url].some((value) => String(value || "").toLowerCase().includes(query));
+        });
+      }
+
+      function renderIssues() {
+        const rows = filteredIssues();
+        const pageCount = Math.max(1, Math.ceil(rows.length / issuePageSize));
+        issuePage = Math.min(Math.max(issuePage, 1), pageCount);
+        const pageRows = rows.slice((issuePage - 1) * issuePageSize, issuePage * issuePageSize);
+        $("issueTotal").textContent = `筛选结果 ${rows.length} 条`;
+        $("issuePageMeta").textContent = rows.length ? `第 ${issuePage}/${pageCount} 页` : "暂无问题";
+        $("issuePrevBtn").disabled = busy || issuePage <= 1;
+        $("issueNextBtn").disabled = busy || issuePage >= pageCount;
+        $("issues").innerHTML = pageRows.length
+          ? pageRows.map((item) => `
+              <div class="issue ${escapeHtml(item.severity)}">
+                <div class="issue-head">
+                  <div class="issue-title">[${escapeHtml(item.type)}] ${escapeHtml(item.title)}</div>
+                  ${item.editUrl ? `<a class="issue-edit" href="${escapeHtml(item.editUrl)}" target="_blank" rel="noopener">编辑</a>` : ""}
+                </div>
+                <div class="issue-detail">${escapeHtml(item.detail || "")}</div>
+                ${item.url ? `<div class="issue-detail">${escapeHtml(item.url)}</div>` : ""}
+              </div>
+            `).join("")
+          : `<div class="note">当前筛选范围没有发现问题。</div>`;
+      }
+
+      /* ---------- AI 一键修复 ---------- */
+      function aiModeFor(language) {
+        return language === "cn" ? "fix-cn" : "fix-language";
+      }
+
+      function renderAiModels() {
+        const select = $("aiModelSelect");
+        const available = aiModels.filter((model) => model.available);
+        select.innerHTML = aiModels.length
+          ? aiModels
+              .map(
+                (model) =>
+                  `<option value="${escapeHtml(model.value)}"${model.available ? "" : " disabled"}>${escapeHtml(model.displayLabel || model.label)}</option>`,
+              )
+              .join("")
+          : `<option value="">暂无模型（请先在 backend/.env 配置 API Key）</option>`;
+        if (available.length && !available.some((model) => model.value === select.value)) {
+          select.value = available[0].value;
+        }
+        if (!available.length) select.value = "";
+        renderAiModelInfo();
+      }
+
+      function renderAiModelInfo() {
+        const model = aiModels.find((item) => item.value === $("aiModelSelect").value) || null;
+        $("aiModelPriority").textContent = model?.priority ?? "-";
+        $("aiModelRec").style.display = model?.recommended ? "" : "none";
+        $("aiModelLabel").textContent = model?.label || "-";
+        $("aiModelPurpose").textContent = model?.purpose || "";
+        const available = Boolean(model?.available);
+        const statusTag = $("aiQuotaStatus");
+        statusTag.textContent = available ? "已配置" : "未配置";
+        statusTag.className = `ai-tag${available ? "" : " danger"}`;
+        $("aiQuotaText").textContent = model?.quotaText || "";
+        const link = $("aiQuotaLink");
+        if (model?.quotaUrl) {
+          link.href = model.quotaUrl;
+          link.style.display = "";
+        } else {
+          link.style.display = "none";
+        }
+      }
+
+      function renderAiKeyConfig() {
+        $("aiKeyGrid").innerHTML = AI_PROVIDERS.map((provider) => {
+          const configured = aiModels.some((m) => m.provider === provider.id && m.available);
+          return `
+            <div class="ai-key-row" data-provider="${provider.id}">
+              <div class="head">
+                <strong>${escapeHtml(provider.label)}</strong>
+                <span class="ai-tag${configured ? "" : " danger"}">${configured ? "已配置" : "未配置"}</span>
+              </div>
+              <input type="password" placeholder="粘贴 ${escapeHtml(provider.label)} 的 API Key" autocomplete="off" />
+              <button data-save-key>保存</button>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function showAiProgress() {
+        $("aiFixProgress").style.display = "block";
+      }
+
+      function updateAiProgress(current, total, text) {
+        const percent = total ? Math.min(100, Math.round((Number(current) / total) * 100)) : 0;
+        $("aiFixProgressFill").style.width = `${percent}%`;
+        $("aiFixProgressCount").textContent = `${current} / ${total}`;
+        $("aiFixProgressText").textContent = text || "处理中...";
+      }
+
+      function renderAiLogs(logs) {
+        const box = $("aiFixLogs");
+        box.innerHTML = (logs || []).map((line) => escapeHtml(line)).join("\n");
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function showAiResult(ok, title, lines) {
+        const box = $("aiFixResult");
+        box.style.display = "block";
+        box.dataset.tone = ok ? "success" : "warning";
+        box.innerHTML = `<div class="google-result-title">${escapeHtml(title)}</div><pre>${escapeHtml(lines.join("\n"))}</pre>`;
+      }
+
+      function buildAiResultLines(result) {
+        if (!result) return [];
+        const lines = [];
+        if (result.message) lines.push(result.message);
+        const contentChanged = Number(result.contentChanged || 0);
+        const menuChanged = Number(result.menuChanged || 0);
+        const changed = Number(result.changed || contentChanged + menuChanged);
+        lines.push(`修改内容 ${contentChanged} 条，修改栏目 ${menuChanged} 条，共 ${changed} 条`);
+        if (result.backupPath) lines.push(`数据库备份：${result.backupPath}`);
+        if (result.slugChanged) {
+          lines.push("⚠ 本次修改了 URL 名称（slug），页面地址已变化。请点击顶部「生成 sitemap + robots」重新生成 sitemap，并重新提交 IndexNow / Google。");
+        }
+        if (Number(result.skippedBatches || 0) > 0) {
+          lines.push(`⚠ ${result.skippedBatches} 批 AI 调用失败已跳过，对应记录本次未修改。`);
+        }
+        return lines;
+      }
+
+      async function loadAiStatus() {
+        try {
+          const result = await api("/api/ai/status");
+          aiModels = result.models || [];
+          renderAiModels();
+          renderAiKeyConfig();
+          const job = result.job || {};
+          aiJob = job;
+          if ((job.state || "idle") === "running") {
+            showAiProgress();
+            updateAiProgress(job.current || 0, job.total || 0, job.message || "");
+            renderAiLogs(job.logs || []);
+            if (!aiPolling) pollAiJob();
+          } else if (job.state === "completed" && job.result) {
+            showAiResult(true, "上次修复已完成", buildAiResultLines(job.result));
+          } else if (job.state === "stopped") {
+            showAiResult(false, "上次任务已停止", [job.message || "数据库未写入"]);
+          } else if (job.state === "failed") {
+            showAiResult(false, "上次修复失败", [job.error || "未知错误"]);
+          }
+        } catch (error) {
+          aiModels = [];
+          renderAiModels();
+          renderAiKeyConfig();
+          setStatus(`AI 状态读取失败：${error.message || error}`, true);
+        }
+      }
+
+      async function pollAiJob() {
+        if (aiPolling) return;
+        aiPolling = true;
+        try {
+          while (true) {
+            await sleep(1500);
+            let result;
+            try {
+              result = await api("/api/ai/status");
+            } catch (error) {
+              setStatus(`AI 任务状态读取失败：${error.message || error}`, true);
+              continue;
+            }
+            aiJob = result.job || {};
+            const state = aiJob.state || "idle";
+            updateAiProgress(aiJob.current || 0, aiJob.total || 0, aiJob.message || "");
+            renderAiLogs(aiJob.logs || []);
+            if (state === "completed") {
+              if (aiPreviewMode) {
+                renderAiPreview(aiJob.result || {});
+                setStatus("预览完成，请检查后点「确认写入」或「取消」");
+              } else {
+                await refresh();
+                showAiResult(true, aiJob.message || "修复完成", buildAiResultLines(aiJob.result));
+                setStatus(aiJob.message || "AI 修复完成");
+              }
+              break;
+            }
+            if (state === "stopped") {
+              showAiResult(false, "已停止", [aiJob.message || "任务已被用户停止，数据库未写入"]);
+              setStatus(aiJob.message || "任务已停止");
+              break;
+            }
+            if (state === "failed") {
+              showAiResult(false, "修复失败", [aiJob.error || "未知错误"]);
+              setStatus(`AI 修复失败：${aiJob.error || "未知错误"}`, true);
+              break;
+            }
+            if (state !== "running") {
+              showAiResult(false, "任务状态异常", ["未检测到正在运行的任务，可能是后端已重启。数据库可能未写入或已保留自动备份。"]);
+              setStatus("AI 任务状态异常，请刷新页面重试", true);
+              break;
+            }
+          }
+        } finally {
+          aiPolling = false;
+        }
+      }
+
+      function getSelectedProblems() {
+        const boxes = [...document.querySelectorAll("#aiProblemFilter input[type=checkbox]")];
+        const selected = boxes.filter((b) => b.checked).map((b) => b.value);
+        const allChecked = boxes.length > 0 && boxes.every((b) => b.checked);
+        return allChecked ? [] : selected;
+      }
+
+      async function startAiFix() {
+        if (aiJob && (aiJob.state || "idle") === "running") {
+          throw new Error("已有 AI 修复任务正在运行，请等待当前任务完成。");
+        }
+        const model = $("aiModelSelect").value;
+        const language = $("aiLanguageSelect").value;
+        const modelDef = aiModels.find((item) => item.value === model);
+        if (!modelDef) throw new Error("请先选择一个 AI 模型。");
+        if (!modelDef.available) throw new Error(`所选模型「${modelDef.label}」未配置 API Key，请先在 backend/.env 中配置。`);
+
+        const mode = aiModeFor(language);
+        const targetAcode = mode === "fix-language" && language !== "all" ? language : "";
+        const languageLabel = $("aiLanguageSelect").selectedOptions[0]?.textContent || language;
+
+        const preview = await api("/api/ai/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode, targetAcode, problems: getSelectedProblems() }),
+        });
+        const total = Number(preview.totalRecords || 0);
+        if (!total) {
+          setStatus("当前所选语言没有需要 AI 修复的问题");
+          return;
+        }
+        const fieldSummary = Object.entries(preview.fieldCounts || {})
+          .map(([key, value]) => `${key}: ${value}`)
+          .join("，");
+        if (
+          !confirm(
+            `将对【${languageLabel}】使用 ${modelDef.label} 修复约 ${total} 条 SEO 问题。\n\n问题分布：${fieldSummary}\n\n修复前会自动备份数据库，继续吗？`,
+          )
+        ) {
+          return;
+        }
+
+        const job = await api("/api/ai/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode, model, targetAcode, problems: getSelectedProblems() }),
+        });
+        aiJob = job;
+        showAiProgress();
+        updateAiProgress(0, total, "任务已启动...");
+        renderAiLogs(job.logs || []);
+        setStatus("AI 修复任务已启动");
+        const stopBtn = $("aiStopBtn");
+        stopBtn.style.display = "";
+        stopBtn.disabled = false;
+        stopBtn.textContent = "停止修复";
+        await pollAiJob();
+        stopBtn.style.display = "none";
+      }
+
+      function renderAiPreview(result) {
+        const box = $("aiFixResult");
+        const preview = result.preview || [];
+        const show = preview.slice(0, 150);
+        const more = preview.length - show.length;
+        const html = show
+          .map(
+            (item) => `
+              <div class="pv-item">
+                <div class="pv-head">[${escapeHtml(item.type)}] #${item.id} ${escapeHtml(item.title || "")}（${escapeHtml(item.lang)}）</div>
+                ${(item.changes || [])
+                  .map(
+                    (c) => `
+                      <div class="pv-change">
+                        <span class="pv-field">${escapeHtml(c.field)}</span>
+                        <span class="pv-old">${c.old ? escapeHtml(c.old) : "（空）"}</span>
+                        <span class="pv-arrow">→</span>
+                        <span class="pv-new">${c.new ? escapeHtml(c.new) : "（空）"}</span>
+                      </div>
+                    `,
+                  )
+                  .join("")}
+              </div>
+            `,
+          )
+          .join("");
+        box.style.display = "block";
+        box.dataset.tone = "success";
+        box.innerHTML = `
+          <div class="google-result-title">AI 修复预览（未写库）</div>
+          <div class="in-summary">
+            <span>将修改 <span class="ok">${preview.length}</span> 条记录</span>
+            ${result.skippedBatches ? `<span>跳过 <span class="warn">${result.skippedBatches}</span> 批</span>` : ""}
+          </div>
+          <div class="ai-preview">${html || `<div class="note" style="padding: 12px;">没有需要修改的内容。</div>`}</div>
+          ${more ? `<div class="note" style="margin-top: 6px;">（仅显示前 ${show.length} 条，共 ${preview.length} 条）</div>` : ""}
+          <div class="ai-preview-actions">
+            <button class="success" id="aiApplyBtn">确认写入（${result.changed ?? preview.length} 条）</button>
+            <button id="aiCancelBtn">取消</button>
+          </div>
+        `;
+        $("aiApplyBtn").onclick = () => runAction(applyAiPreview);
+        $("aiCancelBtn").onclick = () => {
+          box.style.display = "none";
+          setStatus("已取消预览，未写入数据库");
+        };
+      }
+
+      async function applyAiPreview() {
+        if (!confirm("确认把预览中的内容写入数据库吗？（写入前会自动备份）")) return;
+        const result = await api("/api/ai/apply", { method: "POST" });
+        showAiResult(true, "写入完成", buildAiResultLines(result));
+        setStatus(result.message || "写入完成");
+        await refresh();
+      }
+
+      async function previewAiFix() {
+        if (aiJob && (aiJob.state || "idle") === "running") {
+          throw new Error("已有 AI 任务正在运行，请等待当前任务完成。");
+        }
+        const model = $("aiModelSelect").value;
+        const language = $("aiLanguageSelect").value;
+        const modelDef = aiModels.find((item) => item.value === model);
+        if (!modelDef) throw new Error("请先选择一个 AI 模型。");
+        if (!modelDef.available) throw new Error(`所选模型「${modelDef.label}」未配置 API Key。`);
+
+        const mode = aiModeFor(language);
+        const targetAcode = mode === "fix-language" && language !== "all" ? language : "";
+        const languageLabel = $("aiLanguageSelect").selectedOptions[0]?.textContent || language;
+
+        const preview = await api("/api/ai/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode, targetAcode, problems: getSelectedProblems() }),
+        });
+        const total = Number(preview.totalRecords || 0);
+        if (!total) {
+          setStatus("当前所选语言没有需要修复的问题");
+          return;
+        }
+        if (!confirm(`将用 ${modelDef.label} 对【${languageLabel}】生成 ${total} 条修复预览（不写库），继续吗？`)) return;
+
+        aiPreviewMode = true;
+        const job = await api("/api/ai/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode, model, targetAcode, problems: getSelectedProblems(), dryRun: true }),
+        });
+        aiJob = job;
+        showAiProgress();
+        updateAiProgress(0, total, "正在生成预览...");
+        renderAiLogs(job.logs || []);
+        setStatus("正在生成 AI 修复预览（不写库）...");
+        const stopBtn = $("aiStopBtn");
+        stopBtn.style.display = "";
+        stopBtn.disabled = false;
+        stopBtn.textContent = "停止预览";
+        await pollAiJob();
+        stopBtn.style.display = "none";
+        aiPreviewMode = false;
+      }
+
+      function renderReport(report) {
+        currentIssues = report.issues || [];
+        currentUrls = report.urls || [];
+        issuePage = 1;
+        $("urlCount").textContent = report.stats.urls;
+        $("contentCount").textContent = report.stats.contents;
+        $("menuCount").textContent = report.stats.menus;
+        $("highCount").textContent = report.stats.highIssues;
+        $("siteMeta").innerHTML = `
+          <div><b>站点：</b>${escapeHtml(report.config.siteName)}</div>
+          <div><b>本地测试地址：</b>${escapeHtml(report.config.localTestBaseUrl)}</div>
+          <div><b>真实线上地址：</b>${escapeHtml(report.config.siteBaseUrl)}</div>
+          <div><b>网站根目录：</b>${escapeHtml(report.siteRoot)}</div>
+          <div><b>数据库：</b>${escapeHtml(report.dbRelativePath)}</div>
+        `;
+        $("chips").innerHTML = [
+          ...(report.languages || []).map((item) => `<span class="chip">${escapeHtml(item.name)} (${escapeHtml(item.acode)}): ${item.count}</span>`),
+          ...(report.types || []).map((item) => `<span class="chip">${escapeHtml(item.name)}: ${item.count}</span>`),
+        ].join("");
+        if (!$("googleInspectUrlInput").value && currentUrls.length) {
+          $("googleInspectUrlInput").value = currentUrls.find((item) => item.url)?.url || "";
+        }
+        renderGoogleIndexingUrls();
+        renderWarning(report.publicUrlWarning || "");
+        renderIssues();
+      }
+
+      async function refresh() {
+        setStatus("正在检查 PB 数据库...");
+        const report = await api("/api/report");
+        renderReport(report);
+        setStatus(`检查完成：${report.stats.urls} 个 URL，${report.stats.issues} 个问题`);
+      }
+
+      async function waitForSeoUpload(initialState = {}, timeoutMilliseconds = 20 * 60 * 1000) {
+        const startedAt = Date.now();
+        let state = initialState || {};
+        let observedCurrentRun = Boolean(state.running);
+        while (Date.now() - startedAt < timeoutMilliseconds) {
+          if (!state.running && (observedCurrentRun || state.finishedAt)) {
+            if (state.error) throw new Error(`SEO 文件上传失败：${state.error}`);
+            if (Number(state.failed || 0) > 0) throw new Error(`SEO 文件上传未完全成功：失败 ${state.failed} 个文件。请打开 FTP 发布页查看日志。`);
+            return state;
+          }
+          const done = Number(state.uploaded || 0) + Number(state.skipped || 0) + Number(state.failed || 0);
+          renderFlowStatus("正在上传 SEO 文件", `${done}/${Number(state.total || 0)} ${state.current || ""}`.trim());
+          setStatus(`SEO 文件上传中：${done}/${Number(state.total || 0)} ${state.current || ""}`.trim());
+          await sleep(1200);
+          const result = await api("/api/publish/online/status");
+          state = result.state || {};
+          observedCurrentRun = observedCurrentRun || Boolean(state.running);
+        }
+        throw new Error("等待 FTP 上传完成超时。上传可能仍在后台运行，请打开 FTP 发布页查看状态。");
+      }
+
+      async function startSeoUploadAndWait() {
+        const result = await api("/api/publish/online", { method: "POST" });
+        renderFlowStatus("SEO 文件已重新生成", "正在通过 FTP 上传 sitemap、robots 和验证文件。");
+        setStatus(result.message);
+        return waitForSeoUpload(result.state || {});
+      }
+
+      async function performGooglePublicCheck() {
+        const result = await api("/api/google/check-public", { method: "POST" });
+        const robotsOk = Boolean(result.robots?.referencesSitemap);
+        const recordCount = result.sitemap?.type === "sitemapindex"
+          ? Number(result.sitemap?.sitemapCount || 0)
+          : Number(result.sitemap?.urlCount || 0);
+        showGoogleResult(
+          robotsOk ? "线上 SEO 文件检查通过" : "线上文件可访问，但 robots.txt 未声明 sitemap",
+          [
+            result.message,
+            `sitemap：${result.sitemap?.url || "-"}（HTTP ${result.sitemap?.status || "-"}，类型：${result.sitemap?.type || "-"}，记录：${recordCount}，大小：${result.sitemap?.bytes || 0} 字节）`,
+            `robots：${result.robots?.url || "-"}（HTTP ${result.robots?.status || "-"}，已声明 sitemap：${robotsOk ? "是" : "否"}）`,
+            `检查时间：${result.checkedAt || new Date().toISOString()}`,
+          ],
+          robotsOk ? "success" : "warning",
+          { url: result.sitemap?.url, label: "打开线上 sitemap" },
+        );
+        if (!robotsOk) throw new Error("线上 sitemap 可访问，但 robots.txt 未声明当前 sitemap。请重新上传 SEO 文件。");
+        setStatus(`线上 SEO 文件检查通过，共 ${recordCount} 条 sitemap 记录`);
+        return { ...result, recordCount };
+      }
+
+      $("refreshBtn").onclick = () => runAction(refresh);
+      $("saveConfigBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            siteName: $("siteNameInput").value,
+            localTestBaseUrl: $("localTestBaseUrlInput").value,
+            siteBaseUrl: $("siteBaseUrlInput").value,
+            useLanguageSubdomains: true,
+          }),
+        });
+        renderWarning(result.publicUrlWarning ? "真实线上地址看起来仍是本地/测试域名，已禁止向搜索引擎提交。" : "");
+        await Promise.all([refresh(), loadGoogleStatus()]);
+      });
+      $("generateBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/generate", { method: "POST" });
+        setStatus(`已生成 sitemap.xml 和 robots.txt，共 ${result.urlCount} 个 URL`);
+        await refresh();
+      });
+      $("keyBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/indexnow-key", { method: "POST" });
+        setStatus(result.message);
+        alert(result.message);
+      });
+      $("pushBtn").onclick = () => runAction(() => runIndexNowPush($("pushBtn")));
+      $("pushYandexBtn").onclick = () => runAction(() => runIndexNowPush($("pushYandexBtn")));
+      $("saveYandexVerificationBtn").onclick = () => runAction(async () => {
+        const filename = $("yandexVerificationFilenameInput").value.trim();
+        const content = $("yandexVerificationContentInput").value.trim();
+        if (!filename) throw new Error("请填写 Yandex 验证文件名（yandex_xxxxxxxx.html）。");
+        if (!content) throw new Error("请粘贴 Yandex 验证文件的内容。");
+        const result = await api("/api/yandex/verification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename, content }),
+        });
+        $("yandexVerificationContentInput").value = "";
+        await loadYandexStatus();
+        showYandexResult("Yandex 验证文件已保存", [result.message, `本地路径：${result.filePath || ""}`], "success");
+        setStatus(result.message);
+      });
+      $("clearYandexVerificationBtn").onclick = () => runAction(async () => {
+        if (!confirm("确定清除 Yandex 验证文件配置吗？（线上已上传的文件不会删除）")) return;
+        const result = await api("/api/yandex/verification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clear: true }),
+        });
+        $("yandexVerificationFilenameInput").value = "";
+        await loadYandexStatus();
+        showYandexResult("已清除", [result.message], "info");
+        setStatus(result.message);
+      });
+      $("checkYandexBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/yandex/check", { method: "POST" });
+        const lines = [];
+        for (const item of result.keyChecks || []) {
+          lines.push(`IndexNow Key ${item.host} → ${item.ok ? "正常" : `异常（${item.reason || `HTTP ${item.status}`}）`}`);
+        }
+        const verification = result.verificationCheck;
+        if (verification) {
+          lines.push(`Yandex 验证文件 ${verification.url} → ${verification.ok ? "正常" : `异常（${verification.reason || `HTTP ${verification.status}`}）`}`);
+        } else if ((result.keyChecks || []).length) {
+          lines.push("尚未配置 Yandex 验证文件（可选，不配置不影响 IndexNow 推送）。");
+        }
+        showYandexResult(result.ok ? "Yandex / IndexNow 线上检查通过" : "存在线上文件异常，请处理后重试", [result.message, "", ...lines], result.ok ? "success" : "warning");
+        setStatus(result.message);
+      });
+      $("uploadSeoFtpBtn").onclick = () => runAction(async () => {
+        if (!confirm("将重新生成 sitemap.xml 和 robots.txt，然后只把 SEO 文件上传到已配置的 FTP。继续吗？")) return;
+        const state = await startSeoUploadAndWait();
+        const message = `SEO 文件上传完成：上传 ${state.uploaded || 0} 个，跳过 ${state.skipped || 0} 个。`;
+        renderFlowStatus("SEO 文件上传完成", message);
+        setStatus(message);
+        alert(message);
+      });
+      $("checkGooglePublicBtn").onclick = () => runAction(async () => {
+        await performGooglePublicCheck();
+      });
+      $("saveGoogleServiceAccountBtn").onclick = () => runAction(async () => {
+        const value = $("googleServiceAccountInput").value.trim();
+        if (!value) throw new Error("请粘贴服务账号 JSON。");
+        const result = await api("/api/google-indexing/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serviceAccount: value }),
+        });
+        $("googleServiceAccountInput").value = "";
+        await loadGoogleIndexingStatus();
+        showGoogleIndexingResult(result.message, ["正在用该账号向 Google 验证连通性..."], "info");
+        setStatus("已保存，正在验证 Google 连通性...");
+        const testResult = await api("/api/google-indexing/test", { method: "POST" });
+        showGoogleIndexingResult(testResult.message, [], testResult.ok ? "success" : "warning");
+        setStatus(testResult.message);
+      });
+      $("testGoogleIndexingBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/google-indexing/test", { method: "POST" });
+        showGoogleIndexingResult(result.message, [], result.ok ? "success" : "warning");
+        setStatus(result.message);
+      });
+      $("googleIndexingManualSubmitBtn").onclick = () => runAction(async () => {
+        const url = $("googleIndexingManualUrl").value.trim();
+        if (!url) throw new Error("请输入要提交的 URL。");
+        const result = await api("/api/google-indexing/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const item = (result.results || [])[0] || {};
+        showGoogleIndexingResult(item.ok ? `已通知 Google：${url}` : `提交失败：${url}`, [item.message || ""], item.ok ? "success" : "warning");
+        setStatus(item.ok ? `已通知 Google：${url}` : `提交失败：${item.message || url}`);
+      });
+      $("googleIndexingManualMetaBtn").onclick = () => runAction(async () => {
+        const url = $("googleIndexingManualUrl").value.trim();
+        if (!url) throw new Error("请输入要查询的 URL。");
+        const result = await api("/api/google-indexing/metadata", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        showGoogleIndexingResult(result.ok ? `Google 状态：${url}` : `查询失败：${url}`, [result.message || ""], result.ok ? "success" : "warning");
+        setStatus(result.message || `状态：${url}`);
+      });
+      $("clearGoogleServiceAccountBtn").onclick = () => runAction(async () => {
+        if (!confirm("确定清除已保存的 Google 服务账号吗？")) return;
+        const result = await api("/api/google-indexing/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clear: true }),
+        });
+        await loadGoogleIndexingStatus();
+        setStatus(result.message);
+      });
+      $("googleIndexingSubmitAllBtn").onclick = () => runAction(async () => {
+        const submitted = googleSubmittedState.submitted || {};
+        const allUrls = currentUrls.map((item) => item.url).filter(Boolean);
+        if (!allUrls.length) throw new Error("没有可提交的 URL，请先刷新检查。");
+        if (!googleIndexingStatus.enabled) throw new Error("请先配置 Google 服务账号。");
+        const pendingUrls = allUrls.filter((url) => !submitted[url]);
+        const alreadyCount = allUrls.length - pendingUrls.length;
+        const quota = googleSubmittedState.quota || { dailyLimit: 200, dailyRemaining: 200 };
+        if (!pendingUrls.length) {
+          showGoogleIndexingResult("没有需要提交的 URL", [`当前 ${allUrls.length} 个 URL 都已提交过，无需重复提交。`, "如需重新提交，可在下方列表点对应行的“重新提交”。"], "info");
+          setStatus("所有 URL 均已提交过，无需重复提交");
+          return;
+        }
+
+        // 所有权预检：用 metadata 免费接口（不消耗提交配额）。403 = 服务账号还不是该站点的所有者。
+        let ownershipOk = true;
+        let ownershipMessage = "";
+        try {
+          const meta = await api("/api/google-indexing/metadata", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: pendingUrls[0] }),
+          });
+          if (!meta.ok && meta.status === 403) {
+            ownershipOk = false;
+            ownershipMessage = meta.message || "403 所有权验证失败";
+          }
+        } catch (_error) {
+          /* 预检失败不阻断，按实际提交结果判断 */
+        }
+        if (!ownershipOk) {
+          showGoogleIndexingResult("Google 所有权验证失败（403）", [
+            `Google 返回：${ownershipMessage}`,
+            "这表示当前服务账号还不是该站点在 Search Console 里的「所有者/完整权限用户」，即使配额重置后提交也都会失败。",
+            "",
+            "修复步骤：",
+            "1. 打开 Search Console → 选择对应资源 → 左下角「设置」→「用户和权限」→「添加用户」。",
+            `2. 粘贴服务账号邮箱 ${googleIndexingStatus.clientEmail || "（见上方已配置账号）"}，权限选「完整」或「所有者」。`,
+            "3. 确认 Google Cloud 项目已启用 Indexing API。",
+            "4. 保存后回来点「提交全部 URL 到 Google」重试。",
+          ], "warning");
+          setStatus("Google 所有权验证失败，无法提交");
+          return;
+        }
+        if (Number(quota.dailyRemaining) <= 0) {
+          showGoogleIndexingResult("Google 今日配额已用完", [
+            `今日 ${quota.dailyLimit || 200} 条提交配额已用完，无法继续提交。`,
+            "配额太平洋时间零点重置（约北京时间 15:00），明天再点一次即可继续提交剩余 URL。",
+            `当前仍有 ${pendingUrls.length} 个 URL 待提交（${alreadyCount} 个已提交过会自动跳过）。`,
+          ], "warning");
+          setStatus("Google 今日配额已用完");
+          return;
+        }
+
+        const toSubmit = pendingUrls.slice(0, Math.max(0, Number(quota.dailyRemaining)));
+        const quotaCapped = toSubmit.length < pendingUrls.length;
+        const summary = `共 ${allUrls.length} 个 URL：已提交 ${alreadyCount} 个（自动跳过），本次提交 ${toSubmit.length} 个。${quotaCapped ? `（今日配额剩余 ${quota.dailyRemaining}，其余 ${pendingUrls.length - toSubmit.length} 个明天再提交）` : ""}`;
+        if (!confirm(`${summary}\n\n逐条提交，过程中可随时停止。继续吗？`)) return;
+
+        giStopRequested = false;
+        const stopBtn = $("googleIndexingStopBtn");
+        stopBtn.style.display = "";
+        stopBtn.disabled = false;
+        stopBtn.textContent = "停止提交";
+        let totalOk = 0;
+        let totalFail = 0;
+        let done = 0;
+        let quotaExhausted = false;
+        let ownershipBlocked = false;
+        const errorSamples = [];
+        const chunkSize = 20;
+        const totalChunks = Math.ceil(toSubmit.length / chunkSize);
+        try {
+          for (let i = 0; i < toSubmit.length; i += chunkSize) {
+            if (giStopRequested) break;
+            const batch = toSubmit.slice(i, i + chunkSize);
+            updateGiProgress(done, toSubmit.length, totalOk, totalFail, `正在提交第 ${done + 1}–${done + batch.length} 条...`);
+            renderFlowStatus("提交 Google Indexing", `批次 ${Math.floor(i / chunkSize) + 1}/${totalChunks}：${batch.length} 个 URL`);
+            const result = await api("/api/google-indexing/submit", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ urls: batch }),
+            });
+            totalOk += Number(result.succeeded || 0);
+            totalFail += Number(result.failed || 0);
+            done += batch.length;
+            for (const item of result.results || []) {
+              if (item.ok && !item.skipped) {
+                googleSubmittedState.submitted[item.url] = {
+                  url: item.url,
+                  submittedAt: new Date().toISOString(),
+                  type: item.type || "URL_UPDATED",
+                  notifyTime: item.notifyTime || "",
+                };
+              }
+              if (item.status === 403 && /ownership/i.test(item.message || "")) ownershipBlocked = true;
+              if (!item.ok && !item.skipped && errorSamples.length < 4) {
+                errorSamples.push(`${item.url}：${item.message || "未知错误"}`);
+              }
+            }
+            if (result.quota) {
+              googleSubmittedState.quota = result.quota;
+              if (Number(result.quota.dailyRemaining) <= 0) quotaExhausted = true;
+            }
+            if ((result.results || []).some((item) => item.status === 429)) quotaExhausted = true;
+            updateGiProgress(done, toSubmit.length, totalOk, totalFail);
+            if ((ownershipBlocked && totalOk === 0) || quotaExhausted) break;
+          }
+        } finally {
+          stopBtn.style.display = "none";
+          renderFlowStatus("", "");
+        }
+        const stopped = giStopRequested && done < toSubmit.length;
+        let message;
+        let tone = "success";
+        if (ownershipBlocked && totalOk === 0) {
+          message = `提交失败：Google 返回 403 所有权验证失败（服务账号不是该站点的所有者），本次 ${totalFail} 条全部未提交。请先在 Search Console 把服务账号加为该资源的所有者/完整权限用户，再重试。`;
+          tone = "warning";
+        } else if (quotaExhausted) {
+          message = `Google 今日配额已用完（默认每天约 200 条），已自动停止。本次完成 ${done}/${toSubmit.length} 条，成功 ${totalOk}，失败 ${totalFail}；另有 ${alreadyCount} 个已提交过的 URL 已自动跳过。配额太平洋时间零点重置（= 北京时间每天 15:00），重置后再点一次继续提交剩余 ${pendingUrls.length - totalOk} 个（已提交的会自动跳过）。`;
+          tone = "warning";
+        } else if (stopped) {
+          message = `已停止提交：完成 ${done}/${toSubmit.length} 条，成功 ${totalOk}，失败 ${totalFail}。`;
+          tone = "warning";
+        } else {
+          message = `Google Indexing 提交完成：成功 ${totalOk}，失败 ${totalFail}，跳过已提交 ${alreadyCount} 个。`;
+          tone = totalFail ? "warning" : "success";
+        }
+        updateGiProgress(done, toSubmit.length, totalOk, totalFail, ownershipBlocked && totalOk === 0 ? "所有权验证失败" : quotaExhausted ? "配额用完，已停止" : stopped ? "已停止" : "提交完成");
+        await loadGoogleSubmittedState();
+        showGoogleIndexingResult(message, errorSamples, tone);
+        setStatus(message);
+      });
+      $("googleIndexingStopBtn").onclick = () => {
+        giStopRequested = true;
+        const stopBtn = $("googleIndexingStopBtn");
+        stopBtn.disabled = true;
+        stopBtn.textContent = "正在停止...";
+        setStatus("已请求停止，当前批次提交完成后即停止...");
+      };
+      $("googleIndexingReloadBtn").onclick = () => runAction(async () => {
+        await loadGoogleSubmittedState();
+        setStatus("已刷新 Google 提交状态");
+      });
+      $("googleIndexingClearBtn").onclick = () => runAction(async () => {
+        if (!confirm("确定清空 Google 提交记录与今日配额计数吗？\n清空后「提交全部」会把所有 URL 重新提交（会重新占用配额）。")) return;
+        const result = await api("/api/google-indexing/submitted/clear", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clear: true }),
+        });
+        await loadGoogleSubmittedState();
+        showGoogleIndexingResult("已清空", [result.message], "info");
+        setStatus(result.message);
+      });
+      $("googleIndexingUrlList").onclick = (event) => {
+        const button = event.target.closest("button[data-gi-action]");
+        if (!button || busy) return;
+        const row = button.closest(".gi-row");
+        const url = row?.dataset.url;
+        const index = button.dataset.index;
+        const action = button.dataset.giAction;
+        if (!url) return;
+        const statusEl = $("giStatus" + index);
+        runAction(async () => {
+          if (action === "submit") {
+            statusEl.textContent = "提交中...";
+            statusEl.className = "gi-status";
+            const force = Boolean((googleSubmittedState.submitted || {})[url]);
+            const result = await api("/api/google-indexing/submit", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url, force }),
+            });
+            const item = (result.results || [])[0] || {};
+            if (item.ok && !item.skipped) {
+              googleSubmittedState.submitted[url] = {
+                url,
+                submittedAt: new Date().toISOString(),
+                type: item.type || "URL_UPDATED",
+                notifyTime: item.notifyTime || "",
+              };
+            }
+            if (result.quota) googleSubmittedState.quota = result.quota;
+            if (item.skipped) {
+              statusEl.textContent = item.ok ? "已提交过" : "配额用完";
+              statusEl.className = "gi-status ok";
+              setStatus(item.message || url);
+            } else if (item.ok) {
+              statusEl.textContent = "已通知 Google";
+              statusEl.className = "gi-status ok";
+              setStatus(`已通知 Google：${url}`);
+            } else {
+              statusEl.textContent = item.message || "失败";
+              statusEl.className = "gi-status bad";
+              setStatus(`提交失败：${item.message || url}`);
+            }
+            renderGiSummary();
+            renderGoogleIndexingUrls();
+          } else if (action === "meta") {
+            statusEl.textContent = "查询中...";
+            statusEl.className = "gi-status";
+            const result = await api("/api/google-indexing/metadata", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url }),
+            });
+            statusEl.textContent = result.ok
+              ? (result.notified ? `已通知 ${result.latestTime || ""}` : "Google 暂无通知记录")
+              : result.message || "失败";
+            statusEl.className = "gi-status " + (result.ok ? "ok" : "bad");
+            setStatus(result.message || `状态：${url}`);
+          }
+        });
+      };
+      $("prepareGoogleBtn").onclick = () => runAction(async () => {
+        if (!googleStatus.ready) throw new Error(`当前项目配置未通过：${(googleStatus.issues || []).join("；") || "请检查站点身份。"}`);
+        if (!confirm("将重新生成当前站点的 sitemap.xml 和 robots.txt，通过 FTP 上传，并检查真实网站上的文件。继续吗？")) return;
+        renderFlowStatus("步骤 1/3：生成 SEO 文件", "正在读取当前 PbootCMS 数据库。");
+        const uploadState = await startSeoUploadAndWait();
+        renderFlowStatus("步骤 3/3：验证真实网站", "正在检查公网 sitemap.xml 与 robots.txt。");
+        const publicResult = await performGooglePublicCheck();
+        const message = `Google 提交材料已准备完成：线上 sitemap 共 ${publicResult.recordCount} 条记录；FTP 上传 ${uploadState.uploaded || 0} 个、跳过 ${uploadState.skipped || 0} 个。下一步请打开 Search Console 提交 Sitemap 或检查重要 URL。此结果不代表页面已经被 Google 收录。`;
+        renderFlowStatus("Google 提交材料已准备完成", message);
+        setStatus(message);
+        alert(message);
+      });
+      async function copyText(value, label) {
+        const text = String(value || "").trim();
+        if (!text) throw new Error(`${label}为空，无法复制。`);
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+        }
+        setStatus(`${label}已复制`);
+      }
+      $("copyGoogleSitemapBtn").onclick = () => runAction(() => copyText($("googleSitemapInput").value, "Sitemap 地址"));
+      $("copyGoogleInspectUrlBtn").onclick = () => runAction(() => copyText($("googleInspectUrlInput").value, "页面 URL"));
+      $("copyProjectSummaryBtn").onclick = () => runAction(() => copyText(projectSummaryText(), "项目摘要"));
+      $("copyMigrationGuideBtn").onclick = () => runAction(() => copyText(migrationGuideText(), "换站部署清单"));
+      $("severityFilter").onchange = () => { issuePage = 1; renderIssues(); };
+      $("issueSearchInput").oninput = () => { issuePage = 1; renderIssues(); };
+      $("issuePrevBtn").onclick = () => { if (issuePage > 1) { issuePage -= 1; renderIssues(); } };
+      $("issueNextBtn").onclick = () => {
+        const count = Math.ceil(filteredIssues().length / issuePageSize);
+        if (issuePage < count) { issuePage += 1; renderIssues(); }
+      };
+      $("aiModelSelect").onchange = renderAiModelInfo;
+      $("aiStopBtn").onclick = () => {
+        $("aiStopBtn").disabled = true;
+        $("aiStopBtn").textContent = "正在停止...";
+        setStatus("已请求停止，当前批次完成后即停止（数据库不会写入）...");
+        api("/api/ai/stop", { method: "POST" }).catch(() => {});
+      };
+      $("aiKeyGrid").onclick = (event) => {
+        const btn = event.target.closest("button[data-save-key]");
+        if (!btn || busy) return;
+        const row = btn.closest(".ai-key-row");
+        const provider = row?.dataset.provider;
+        const input = row?.querySelector("input");
+        const model = aiModels.find((m) => m.provider === provider);
+        if (!model) {
+          setStatus("该提供商没有可选模型", true);
+          return;
+        }
+        runAction(async () => {
+          const key = input.value.trim();
+          if (!key) throw new Error("请输入 API Key。");
+          await api("/api/ai/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: model.value, apiKey: key }),
+          });
+          input.value = "";
+          await loadAiStatus();
+          setStatus(`已保存 ${model.label} 的 API Key，模型列表已更新`);
+        });
+      };
+      $("aiPreviewBtn").onclick = () => runAction(previewAiFix);
+      $("aiFixBtn").onclick = () => runAction(startAiFix);
+      $("aiTestBtn").onclick = () =>
+        runAction(async () => {
+          const model = $("aiModelSelect").value;
+          const modelDef = aiModels.find((item) => item.value === model);
+          if (!modelDef) throw new Error("请先选择一个 AI 模型。");
+          if (!modelDef.available) throw new Error(`所选模型「${modelDef.label}」未配置 API Key。`);
+          setStatus(`正在测试 ${modelDef.label} 连接...`);
+          const result = await api("/api/ai/test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model }),
+          });
+          showAiResult(true, "模型连接测试通过", [
+            result.message || "连接正常",
+            `模型：${result.model || model}`,
+            `耗时：${result.elapsedMs ?? "-"} ms`,
+          ]);
+          setStatus("模型连接测试通过");
+        });
+
+      Promise.all([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus()]).then(refresh).catch((error) => {
+        setStatus(error.message || String(error), true);
+      });
+      loadAiStatus();
+    </script>
+  </body>
+</html>

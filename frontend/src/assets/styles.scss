@@ -1,0 +1,145 @@
+/* ============================================================
+   全局样式与设计令牌（唯一生效的全局样式表，main.ts 引入）
+   设计令牌 —— 同步维护:
+     frontend/src/assets/styles.scss
+     tools/seo_publish_tool/public/index.html
+     tools/ftp_publish_tool/public/index.html
+   亮色单主题 / 主蓝 #1677ff
+   ============================================================ */
+
+/* ---------- 1. 设计令牌 ---------- */
+:root {
+  /* 主色（Ant blue 色阶，与 Element Plus 变量一一对应） */
+  --el-color-primary: #1677ff;
+  --el-color-primary-light-3: #4096ff;
+  --el-color-primary-light-5: #69b1ff;
+  --el-color-primary-light-7: #91caff;
+  --el-color-primary-light-8: #bae0ff;
+  --el-color-primary-light-9: #e6f4ff;
+  --el-color-primary-dark-2: #0958d9;
+
+  /* 功能色（主值 + light-9 浅底 + dark-2 深文字） */
+  --el-color-success: #2f9e5b;
+  --el-color-success-light-8: #d6f0e0;
+  --el-color-success-light-9: #edf9f1;
+  --el-color-success-dark-2: #257e48;
+  --el-color-warning: #ee9418;
+  --el-color-warning-light-8: #fdeccd;
+  --el-color-warning-light-9: #fff8ed;
+  --el-color-warning-dark-2: #be7613;
+  --el-color-danger: #f04438;
+  --el-color-danger-light-8: #fdcfcc;
+  --el-color-danger-light-9: #fff1f0;
+  --el-color-danger-dark-2: #c0362d;
+
+  /* 语义文字色（白底可读的深一档；--text-success/--text-danger 与
+     SEO 工具页 JS 硬编码的 style.color 保持一致） */
+  --text-success: #176b3a;
+  --text-warning: #b25e09;
+  --text-danger: #d94b35;
+
+  /* 页面背景（三端统一，替代原 #f5f7fb） */
+  --el-bg-color-page: #f5f7fa;
+
+  /* 控件圆角（按钮/输入框/菜单项，向原生工具页靠拢） */
+  --el-border-radius-base: 6px;
+
+  /* 自定义令牌 */
+  --radius-card: 8px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-page: 24px;
+}
+
+/* ---------- 2. 基础 reset ---------- */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100vh;
+  margin: 0;
+}
+
+body {
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color-page);
+  font-family: "PingFang SC", "Microsoft YaHei", Inter, Arial, sans-serif;
+  font-size: 14px;
+}
+
+a {
+  color: inherit;
+}
+
+/* ---------- 3. 公共页面类（新页面直接用，旧页面的 scoped 定义与这里值一致） ---------- */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.page-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.page-bar h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.page-bar p {
+  margin-top: 4px;
+  color: var(--el-text-color-regular);
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.white-card {
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------- 4. Element Plus 全局微调 ---------- */
+.el-table {
+  --el-table-row-hover-bg-color: var(--el-color-primary-light-9);
+}
+
+.el-table th.el-table__cell {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-regular);
+  font-weight: 600;
+}

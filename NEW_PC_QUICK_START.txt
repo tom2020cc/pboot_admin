@@ -1,0 +1,23 @@
+Pboot Admin 新电脑快速启动
+===========================
+
+准备：把整个 pboot_admin 文件夹放在目标 PbootCMS 网站根目录。
+
+第 1 步：安装 Node.js LTS，安装时勾选 Add to PATH。
+第 2 步：双击 00-install.cmd，等到显示安装完成。
+第 3 步：双击 01-config.cmd。
+第 4 步：确认网站根目录和 data 目录中的数据库，点击“一键自检”。
+第 5 步：自检全部正常后保存配置。
+第 6 步：双击 02-start.cmd，保持前后端窗口打开。
+
+首次没有账号：双击 03-create-admin.cmd。
+停止本项目端口：双击 04-stop-ports.cmd。
+启动 SEO 工具：双击 05-start-seo-tool.cmd。
+启动 FTP 工具：双击 06-start-ftp-tool.cmd。
+
+重要：
+1. 每个网站复制一套独立的 pboot_admin，不要跨网站共用。
+2. 一台电脑运行多个网站时，每套项目使用不同端口。
+3. 同步前核对页面显示的网站根目录和数据库路径。
+4. API Key、FTP 密码输入框留空表示保留原值。
+5. 完整教程请打开 docs\NEW_PC_SETUP_ZH.md。

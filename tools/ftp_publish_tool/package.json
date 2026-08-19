@@ -1,0 +1,14 @@
+{
+  "name": "pboot-ftp-publish-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Upload local PbootCMS database and image assets to a remote FTP space.",
+  "scripts": {
+    "start": "node server.js",
+    "upload": "node upload-to-ftp.js",
+    "dry-run": "node upload-to-ftp.js --dry-run"
+  },
+  "dependencies": {
+    "basic-ftp": "^5.0.5"
+  }
+}

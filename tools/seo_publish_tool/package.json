@@ -1,0 +1,12 @@
+{
+  "name": "pboot-seo-publish-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local SEO helper for PbootCMS sitemap, robots, IndexNow and SEO checks.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "sql.js": "^1.14.1"
+  }
+}

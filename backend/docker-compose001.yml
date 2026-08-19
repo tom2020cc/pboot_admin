@@ -1,0 +1,44 @@
+version: '3.8'
+services:
+  # PostgreSQL 服务
+  postgres:
+    image: postgres:13
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: tom1993
+      POSTGRES_PASSWORD: tom1993
+      POSTGRES_DB: tom2021
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  # NestJS 服务
+  nestjs:
+    container_name: nestjs_app
+    build: .
+    command: npm run start:dev  # 启动 NestJS 服务
+    ports:
+      - '3000:3000'
+    environment:
+      DB_HOST: postgres  # 连接到 postgres 容器
+      DB_PORT: 5432
+      DB_USERNAME: tom1993
+      DB_PASSWORD: tom1993
+      DB_DATABASE: tom2021
+    depends_on:
+      - postgres  # 保证 Postgres 容器先启动
+    networks:
+      - app-network
+    volumes:
+      - .:/app
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge

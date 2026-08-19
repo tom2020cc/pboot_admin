@@ -1,0 +1,26 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 日志
+*.log
+logs/
+
+# 本地数据库（dev.sqlite 等，含用户数据，严禁提交）
+*.sqlite
+*.sqlite.*
+*.db
+
+# 密钥 / 敏感配置（严禁提交）
+.env
+.env.local
+seo.config.json
+ftp.config.json
+ai.config.json
+google-submitted.json
+.runtime.json
+
+# 本地上传与备份
+uploads/
+backups/

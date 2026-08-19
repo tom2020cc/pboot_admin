@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PbootCMS 模板直接嵌入油管视频教程（不进数据库）</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --text: #1f2d3d;
+    --muted: #667085;
+    --border: #e4e7ed;
+    --primary: #1677ff;
+    --primary-weak: #e8f1ff;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2d3d;
+    --tag: #c7254e;
+    --hl: #0a6cff;
+    --warn-bg: #fff8e6;
+    --warn-border: #ffd591;
+    --ok-bg: #eafff2;
+    --ok-border: #7bd8a2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --card: #1d2128;
+      --text: #e6e8eb;
+      --muted: #9aa3af;
+      --border: #2c323c;
+      --primary: #3c8dff;
+      --primary-weak: #1c2b45;
+      --code-bg: #101318;
+      --code-text: #dfe3e8;
+      --tag: #ff7b93;
+      --hl: #5ca0ff;
+      --warn-bg: #2c2414;
+      --warn-border: #5a4a1f;
+      --ok-bg: #14241b;
+      --ok-border: #2f6b4a;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.hero {
+    padding: 28px 28px;
+    background: linear-gradient(135deg, #1677ff, #2f8cff);
+    border-radius: 14px;
+    color: #fff;
+    margin-bottom: 24px;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 25px; line-height: 1.3; }
+  header.hero p { margin: 0; opacity: .92; font-size: 14px; }
+
+  section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 26px;
+    margin-bottom: 20px;
+  }
+  h2 {
+    margin: 0 0 6px;
+    font-size: 20px;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px; height: 26px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 14px;
+    flex: none;
+  }
+  .lead { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  h3 { font-size: 16px; margin: 22px 0 10px; }
+  p { margin: 8px 0; }
+  code.inline {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .9em;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 5px;
+    color: var(--hl);
+    white-space: nowrap;
+  }
+
+  pre.code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--code-text);
+    margin: 12px 0;
+  }
+  pre.code code { font-family: inherit; white-space: pre; }
+  .tpl { color: var(--tag); font-weight: 600; }
+  .cmt { color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--primary-weak); color: var(--text); font-weight: 600; }
+  td code.inline { white-space: normal; word-break: break-all; }
+
+  .note { border-left: 4px solid var(--warn-border); background: var(--warn-bg); border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 14px; }
+  .note.ok { border-left-color: var(--ok-border); background: var(--ok-bg); }
+  .note b { color: var(--primary); }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 5px 0; }
+  .footer-note { text-align: center; color: var(--muted); font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>PbootCMS 模板直接嵌入油管视频（不进数据库）</h1>
+    <p>视频不写进 PbootCMS 数据库，只在模板里用 iframe / 一段 JS 把 YouTube 视频调出来播放。</p>
+  </header>
+
+  <!-- 1 原理 -->
+  <section>
+    <h2><span class="num">1</span>原理：油管视频就是一个 iframe 地址</h2>
+    <p class="lead">YouTube 对所有视频都提供了「嵌入地址」，直接贴在模板里就能播，<b>完全不经过 PbootCMS 数据库</b>。</p>
+
+    <table>
+      <thead><tr><th>你要嵌入的东西</th><th>iframe 的 src 写法</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>单个视频</td>
+          <td><code class="inline">https://www.youtube.com/embed/视频ID</code></td>
+        </tr>
+        <tr>
+          <td>整个播放列表</td>
+          <td><code class="inline">https://www.youtube.com/embed/videoseries?list=播放列表ID</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note ok"><b>结论：</b>你只需要「视频 ID」或「播放列表 ID」，把它们填进模板的 iframe 里即可。模板里可以完全不用 <code class="inline">{pboot:list}</code>、<code class="inline">[list:ext_vv]</code> 这些数据库标签。</div>
+  </section>
+
+  <!-- 2 方法一 -->
+  <section>
+    <h2><span class="num">2</span>方法一：直接内嵌单个视频</h2>
+    <p class="lead">最简单。把视频 ID 填进 <code class="inline">src</code>。</p>
+
+    <pre class="code"><code><span class="tpl">{include file=comm/top.html}</span>
+
+<span class="cmt">&lt;!-- 16:9 视频播放器，src 里就是 YouTube 视频 ID --&gt;</span>
+&lt;div style="position:relative;max-width:960px;margin:0 auto;padding-top:56.25%;"&gt;
+  &lt;iframe
+    src="https://www.youtube.com/embed/DUOiRDZcIA4"
+    style="position:absolute;top:0;left:0;width:100%;height:100%;"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    allowfullscreen&gt;&lt;/iframe&gt;
+&lt;/div&gt;
+
+<span class="tpl">{include file=comm/foot.html}</span></code></pre>
+  </section>
+
+  <!-- 3 方法二 -->
+  <section>
+    <h2><span class="num">3</span>方法二：直接内嵌整个播放列表（最省事）</h2>
+    <p class="lead">如果一个分类页想放一整个播放列表，用 <code class="inline">videoseries?list=播放列表ID</code>，YouTube 自带的播放器会带侧边列表、上一首下一首，零代码。</p>
+
+    <pre class="code"><code><span class="tpl">{include file=comm/top.html}</span>
+
+&lt;div style="position:relative;max-width:960px;margin:0 auto;padding-top:56.25%;"&gt;
+  &lt;iframe
+    src="https://www.youtube.com/embed/videoseries?list=PLfhPbl0MgZYJsjQ2Gt-e-jd3CaMSrX6Tl"
+    style="position:absolute;top:0;left:0;width:100%;height:100%;"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    allowfullscreen&gt;&lt;/iframe&gt;
+&lt;/div&gt;
+
+<span class="tpl">{include file=comm/foot.html}</span></code></pre>
+
+    <div class="note"><b>适用场景：</b>你的频道每个「播放列表」正好对应一个栏目页，一个页面放一个 <code class="inline">iframe</code> 就完事。缺点：样式是 YouTube 原生播放器，没法自定义卡片外观。</div>
+  </section>
+
+  <!-- 4 方法三 -->
+  <section>
+    <h2><span class="num">4</span>方法三：模板里写一个视频清单（JS 数组，卡片+点击播放）<span style="color:var(--primary)">推荐</span></h2>
+    <p class="lead">在模板里维护一个视频数组（标题 + 视频 ID），用一段 JS 渲染成卡片，点击卡片在本页播放。能完全复刻之前那种卡片墙体验，但<b>数据只存在模板文件里，不进数据库</b>。</p>
+
+    <pre class="code"><code><span class="cmt">&lt;!-- 只要在这里加一行视频，不用动数据库 --&gt;</span>
+var videos = [
+  { title: "380-8 挖掘机演示", id: "DUOiRDZcIA4" },
+  { title: "另一条视频标题", id: "xxxxxxxxxxx" },
+  { title: "再一条",          id: "yyyyyyyyyyy" }
+];</code></pre>
+
+    <div class="note"><b>封面图是自动生成的：</b>每条视频的缩略图用 <code class="inline">https://i.ytimg.com/vi/视频ID/hqdefault.jpg</code>（YouTube 固定规则，视频 ID 拼上去即可，无需上传图片）。想更清晰可换成 <code class="inline">maxresdefault.jpg</code>。</div>
+  </section>
+
+  <!-- 5 完整模板 -->
+  <section>
+    <h2><span class="num">5</span>可直接用的完整模板（方法三）</h2>
+    <p class="lead">复制下面整段到你的 <code class="inline">videolist.html</code>（或新建的模板文件），改一下开头的 <code class="inline">videos</code> 数组即可。</p>
+
+    <pre class="code"><code><span class="tpl">{include file=comm/top.html}</span>
+
+<span class="cmt">&lt;!-- ============ 播放器（点击卡片后出现在这里） ============ --&gt;</span>
+&lt;div id="playerWrap" style="display:none;max-width:960px;margin:16px auto;"&gt;
+  &lt;div style="position:relative;padding-top:56.25%;background:#000;border-radius:10px;overflow:hidden;"&gt;
+    &lt;iframe id="player" src="" frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;"&gt;&lt;/iframe&gt;
+  &lt;/div&gt;
+  &lt;p id="playerTitle" style="text-align:center;color:#666;margin-top:10px;"&gt;&lt;/p&gt;
+&lt;/div&gt;
+
+<span class="cmt">&lt;!-- ============ 卡片墙 ============ --&gt;</span>
+&lt;div id="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:16px;"&gt;&lt;/div&gt;
+
+<span class="tpl">{include file=comm/foot.html}</span>
+
+&lt;script&gt;
+(function () {
+  <span class="cmt">/* 只在这里维护视频清单，不需要数据库 */</span>
+  var videos = [
+    { title: "380-8 挖掘机演示", id: "DUOiRDZcIA4" },
+    { title: "另一条视频标题", id: "xxxxxxxxxxx" },
+    { title: "再一条",          id: "yyyyyyyyyyy" }
+  ];
+
+  var grid = document.getElementById('grid');
+  var wrap = document.getElementById('playerWrap');
+  var player = document.getElementById('player');
+  var title = document.getElementById('playerTitle');
+
+  videos.forEach(function (v) {
+    var card = document.createElement('button');
+    card.type = 'button';
+    card.setAttribute('data-id', v.id);
+    card.setAttribute('data-title', v.title);
+    card.style.cssText =
+      'display:block;width:100%;padding:0;border:0;border-radius:10px;overflow:hidden;' +
+      'background:#fff;text-align:left;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.08);';
+    card.innerHTML =
+      '&lt;div style="position:relative;padding-top:56.25%;background:#000;"&gt;' +
+        '&lt;img src="https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg" alt="' + v.title + '" ' +
+             'loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" /&gt;' +
+        '&lt;span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"&gt;' +
+          '&lt;span style="width:52px;height:52px;background:rgba(220,38,38,.9);border-radius:50%;color:#fff;' +
+            'display:flex;align-items:center;justify-content:center;"&gt;▶&lt;/span&gt;' +
+        '&lt;/span&gt;' +
+      '&lt;/div&gt;' +
+      '&lt;div style="padding:12px 14px;"&gt;' +
+        '&lt;h3 style="margin:0;font-size:15px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"&gt;' + v.title + '&lt;/h3&gt;' +
+      '&lt;/div&gt;';
+
+    card.addEventListener('click', function () {
+      var id = card.getAttribute('data-id');
+      player.src = 'https://www.youtube.com/embed/' + id + '?autoplay=1';
+      title.textContent = card.getAttribute('data-title') || '';
+      wrap.style.display = 'block';
+      wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    grid.appendChild(card);
+  });
+})();
+&lt;/script&gt;</code></pre>
+  </section>
+
+  <!-- 6 拿 ID -->
+  <section>
+    <h2><span class="num">6</span>怎么拿到「视频 ID / 播放列表 ID」</h2>
+    <table>
+      <thead><tr><th>你手上的链接</th><th>ID 是哪一段</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">https://www.youtube.com/watch?v=DUOiRDZcIA4</code></td><td>视频 ID = <code class="inline">DUOiRDZcIA4</code></td></tr>
+        <tr><td><code class="inline">https://youtu.be/DUOiRDZcIA4</code></td><td>视频 ID = <code class="inline">DUOiRDZcIA4</code></td></tr>
+        <tr><td><code class="inline">https://www.youtube.com/playlist?list=PLfhPbl0MgZYJsjQ2Gt-e-jd3CaMSrX6Tl</code></td><td>播放列表 ID = <code class="inline">PLfhPbl0MgZYJsjQ2Gt-e-jd3CaMSrX6Tl</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 7 FAQ -->
+  <section>
+    <h2><span class="num">7</span>常见问题</h2>
+    <ul>
+      <li><b>需要在后台建栏目吗？</b>—— 需要一个空栏目来承载页面，把它的「列表模板」指向这个 <code class="inline">videolist.html</code>（或你新建的模板名）即可。视频内容本身不用在后台一条条添加。</li>
+      <li><b>封面不显示 / 视频加载慢？</b>—— 视频和封面都来自 YouTube 外链，国内网络可能打不开，属正常现象；若面向国内用户需另想办法（如用代理、或换 bilibili 等平台）。</li>
+      <li><b>能自动播放吗？</b>—— 在 <code class="inline">src</code> 后加 <code class="inline">?autoplay=1</code>（注意有些浏览器会拦截有声自动播放，需用户先点击一次）。</li>
+      <li><b>想一个页面放好几个播放列表？</b>—— 每个播放列表写一个 <code class="inline">iframe</code>，src 用 <code class="inline">videoseries?list=播放列表ID</code> 即可。</li>
+      <li><b>视频 ID 列表很长，写进模板会不会乱？</b>—— 可以单独建一个 <code class="inline">.js</code> 文件放 <code class="inline">videos</code> 数组，模板里 <code class="inline">&lt;script src="..."&gt;</code> 引入，维护更方便。</li>
+    </ul>
+  </section>
+
+  <p class="footer-note">模板文件位置：<code class="inline">template/&lt;语言&gt;/html/videolist.html</code>（或复制一份另起名，再在栏目里指定该模板）。</p>
+
+</div>
+</body>
+</html>

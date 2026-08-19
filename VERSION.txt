@@ -1,0 +1,6 @@
+Pboot Admin Portable
+Version: 2026.07.29
+Package manager: pnpm 9
+Scope: backend, frontend, config wizard, SEO tool, FTP tool
+Local database: generated automatically on first backend start
+PbootCMS database: selected from the current website data directory

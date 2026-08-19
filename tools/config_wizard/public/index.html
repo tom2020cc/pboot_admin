@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PbootCMS 配置向导</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: "Microsoft YaHei", Arial, sans-serif; background: #f3f6fb; color: #10233f; }
+      header { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 30px; background: #fff; border-bottom: 1px solid #e4e9f2; }
+      .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 800; }
+      .mark { width: 34px; height: 34px; border-radius: 8px; background: #1f7afc; color: #fff; display: grid; place-items: center; font-size: 14px; }
+      .tool-nav { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 5px 30px; border-bottom: 1px solid #e4e9f2; background: #fff; overflow-x: auto; }
+      .tool-nav a { flex: 0 0 auto; padding: 8px 13px; border-radius: 5px; color: #51627b; font-size: 14px; font-weight: 700; text-decoration: none; }
+      .tool-nav a:hover { color: #1f7afc; background: #f0f6ff; }
+      .tool-nav a.active { color: #fff; background: #1f7afc; }
+      main { padding: 24px 30px 48px; }
+      .card { background: #fff; border: 1px solid #e2e9f3; border-radius: 8px; padding: 18px; margin-bottom: 18px; }
+      h2 { margin: 0 0 14px; font-size: 18px; }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 12px; }
+      .grid.three { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
+      label { display: grid; gap: 6px; color: #64748b; font-size: 13px; }
+      input, select { height: 38px; border: 1px solid #d7e0ee; border-radius: 6px; padding: 0 12px; color: #10233f; background: #fff; }
+      input[type="checkbox"] { height: auto; }
+      .check { display: flex; align-items: center; gap: 8px; height: 38px; color: #334155; }
+      .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+      button { height: 38px; padding: 0 18px; border: 1px solid #d7e0ee; border-radius: 6px; background: #fff; color: #10233f; font-weight: 700; cursor: pointer; }
+      button.primary { background: #1f7afc; border-color: #1f7afc; color: #fff; }
+      button.success { background: #36a852; border-color: #36a852; color: #fff; }
+      .hint { color: #64748b; line-height: 1.8; font-size: 13px; }
+      .intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; background: #eef6ff; border-color: #bfdbfe; }
+      .intro strong { display: block; margin-bottom: 6px; color: #0f3f82; }
+      .diagnostics { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 10px; }
+      .diagnostic { min-height: 58px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc; }
+      .diagnostic.ok { border-color: #bbf7d0; background: #f0fdf4; }
+      .diagnostic.bad { border-color: #fecaca; background: #fff7f7; }
+      .diagnostic b { display: block; margin-bottom: 4px; color: #1e293b; }
+      .steps { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; counter-reset: setup; }
+      .step { padding: 14px; border-left: 3px solid #1f7afc; background: #f8fafc; line-height: 1.7; }
+      .step::before { counter-increment: setup; content: counter(setup); display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 8px; border-radius: 50%; background: #1f7afc; color: #fff; font-weight: 800; }
+      .status { color: #51627b; }
+      .ok { color: #16a34a; }
+      .error { color: #dc2626; }
+      .mini { font-size: 12px; color: #64748b; }
+      @media (max-width: 980px) { .grid, .grid.three, .diagnostics, .steps { grid-template-columns: 1fr; } header { padding: 0 18px; } main { padding: 18px; } .intro { display: block; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand"><div class="mark">SET</div><span>PbootCMS 配置向导</span></div>
+      <div class="status" id="status">准备中</div>
+    </header>
+    <nav class="tool-nav" id="toolNav" aria-label="项目工具导航"></nav>
+    <main>
+      <section class="card intro">
+        <div>
+          <strong>每个网站使用独立的一份管理项目</strong>
+          <div class="hint">把本目录放在目标 PbootCMS 网站根目录中。本向导只允许连接当前网站自己的 <code>data/*.db</code>，避免旧站路径和新站数据库混用。</div>
+        </div>
+        <button id="diagnoseBtn">运行一键自检</button>
+      </section>
+
+      <section class="card">
+        <h2>1. PbootCMS 网站配置</h2>
+        <div class="grid">
+          <label>网站根目录
+            <input id="pbootSiteRoot" placeholder="例如 D:/phpstudy_pro/WWW/your-site" />
+          </label>
+          <label>SQLite 数据库文件
+            <input id="pbootDbPath" placeholder="例如 D:/phpstudy_pro/WWW/your-site/data/xxx.db" />
+          </label>
+          <label>网站访问地址
+            <input id="publicBaseUrl" placeholder="真实线上地址，例如 https://www.your-domain.com" />
+          </label>
+          <label>本地测试地址
+            <input id="localTestBaseUrl" placeholder="例如 http://your-site.local" />
+          </label>
+          <label>后端数据库备份目录
+            <input id="backupDir" placeholder="当前 pboot_admin/backups/backend_database" />
+          </label>
+          <label>管理后台数据库文件
+            <input id="backendDb" value="dev.sqlite" placeholder="一般保持 dev.sqlite" />
+          </label>
+          <label>后端端口
+            <input id="backendPort" type="number" min="1024" max="65535" value="5000" />
+          </label>
+          <label>前端端口
+            <input id="frontendPort" type="number" min="1024" max="65535" value="5173" />
+          </label>
+          <label>接口请求大小上限
+            <input id="requestBodyLimit" value="10mb" placeholder="例如 10mb 或 20mb" />
+          </label>
+        </div>
+        <div class="toolbar">
+          <button id="detectDbBtn">自动查找数据库</button>
+          <button id="copyRootBtn">恢复为当前网站路径</button>
+        </div>
+        <div class="hint" id="dbHint">先填写网站根目录，再点自动查找数据库。</div>
+      </section>
+
+      <section class="card">
+        <h2>2. 翻译模型 Key（可选）</h2>
+        <div class="grid">
+          <label>OpenAI API Key
+            <input id="openaiKey" type="password" placeholder="没有就留空" autocomplete="new-password" />
+          </label>
+          <label>智谱 Zhipu API Key
+            <input id="zhipuKey" type="password" placeholder="没有就留空" autocomplete="new-password" />
+          </label>
+          <label>DeepSeek API Key
+            <input id="deepseekKey" type="password" placeholder="没有就留空" autocomplete="new-password" />
+          </label>
+          <label>阿里百炼 DashScope API Key
+            <input id="dashscopeKey" type="password" placeholder="没有就留空" autocomplete="new-password" />
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>3. 油管视频配置（可选）</h2>
+        <div class="grid">
+          <label>YouTube Data API Key
+            <input id="youtubeKey" type="password" placeholder="没有就留空" autocomplete="new-password" />
+          </label>
+          <label>油管频道 ID（视频同步来源）
+            <input id="youtubeChannelId" placeholder="UC 开头的频道 ID，例如 UCa10M55g3tNru5VTCqI4hww" />
+          </label>
+        </div>
+        <div class="hint">在后台「视频管理」点「同步油管分类」时，就从这里配置的频道拉取播放列表。</div>
+      </section>
+
+      <section class="card">
+        <h2>4. SEO 工具配置</h2>
+        <div class="grid">
+          <label>网站名称
+            <input id="seoSiteName" placeholder="例如 Shanbo" />
+          </label>
+          <label>正式域名
+            <input id="seoSiteBaseUrl" placeholder="例如 https://www.your-domain.com" />
+          </label>
+          <label>SEO 本地测试地址
+            <input id="seoLocalTestBaseUrl" placeholder="例如 http://your-site.local" />
+          </label>
+          <label>SEO 工具本地端口
+            <input id="seoLocalPort" type="number" min="1024" max="65535" value="5188" />
+          </label>
+          <label class="check"><input id="indexNowEnabled" type="checkbox" /> 启用 IndexNow</label>
+          <label>IndexNow Key
+            <input id="indexNowKey" type="password" placeholder="没有就留空，SEO 工具里也可以生成" autocomplete="new-password" />
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>5. FTP 上传工具配置</h2>
+        <div class="grid three">
+          <label>FTP 网页工具本地端口<input id="ftpLocalPort" type="number" min="1024" max="65535" value="5189" /></label>
+          <label>FTP 地址<input id="ftpHost" placeholder="ftp.example.com" /></label>
+          <label>远程 FTP 端口<input id="ftpPort" type="number" value="21" /></label>
+          <label>用户名<input id="ftpUser" /></label>
+          <label>密码<input id="ftpPassword" type="password" placeholder="留空则保留原密码" /></label>
+          <label>远程网站根目录<input id="ftpRemoteRoot" placeholder="wwwroot / public_html / htdocs / /" /></label>
+          <label>加密方式
+            <select id="ftpSecure"><option value="false">普通 FTP</option><option value="true">FTPS</option></select>
+          </label>
+          <label>上传模式
+            <select id="ftpUploadMode"><option value="quick">快速上传（日常推荐）</option><option value="full">完整校验（首次/大改）</option></select>
+          </label>
+          <label>最近图片天数<input id="ftpRecentImageDays" type="number" min="1" value="14" /></label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>6. 配置自检</h2>
+        <div class="diagnostics" id="diagnostics"><div class="hint">正在检查...</div></div>
+      </section>
+
+      <section class="card">
+        <h2>7. 新电脑三步启动</h2>
+        <div class="steps">
+          <div class="step"><b>安装依赖</b><br />安装 Node.js LTS 后，双击根目录的 <code>00-install.cmd</code>。</div>
+          <div class="step"><b>配置本站</b><br />双击 <code>01-config.cmd</code>，确认自动识别的网站根目录和数据库，保存。</div>
+          <div class="step"><b>启动项目</b><br />双击 <code>02-start.cmd</code>，保持前后端两个窗口打开。</div>
+        </div>
+        <p class="hint">完整教程见根目录 <code>README_FIRST.md</code> 和 <code>docs/NEW_PC_SETUP_ZH.md</code>。</p>
+      </section>
+
+      <section class="card">
+        <h2>8. 保存</h2>
+        <p class="hint">保存后会写入：<span class="mini">backend/.env、tools/seo_publish_tool/seo.config.json、tools/ftp_publish_tool/ftp.config.json</span></p>
+        <div class="toolbar">
+          <button class="primary" id="saveBtn">保存全部配置</button>
+          <button class="success" id="reloadBtn">重新读取配置</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let loadedConfig = null;
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function setStatus(text, kind = "") {
+        $("status").textContent = text;
+        $("status").className = `status ${kind}`;
+      }
+
+      async function api(path, options = {}) {
+        const response = await fetch(path, options);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "请求失败");
+        return data;
+      }
+
+      function fill(data) {
+        loadedConfig = data;
+        const backend = data.backend || {};
+        const ftp = data.ftp || {};
+        const seo = data.seo || {};
+        $("toolNav").innerHTML = (data.navigation || [])
+          .map((item) => `<a class="${item.active ? "active" : ""}" href="${item.url}">${item.label}</a>`)
+          .join("");
+        $("pbootSiteRoot").value = backend.pbootSiteRoot || "";
+        $("pbootDbPath").value = backend.pbootDbPath || "";
+        $("publicBaseUrl").value = backend.publicBaseUrl || "";
+        $("localTestBaseUrl").value = seo.localTestBaseUrl || "";
+        $("backupDir").value = backend.backupDir || "";
+        $("backendDb").value = backend.backendDb || "dev.sqlite";
+        $("backendPort").value = backend.backendPort || 5000;
+        $("frontendPort").value = backend.frontendPort || 5173;
+        $("requestBodyLimit").value = backend.requestBodyLimit || "10mb";
+        for (const [id, key] of [["openaiKey", "openai"], ["zhipuKey", "zhipu"], ["deepseekKey", "deepseek"], ["dashscopeKey", "dashscope"]]) {
+          $(id).value = "";
+          $(id).placeholder = backend.apiKeySet?.[key] ? "已配置，留空不修改" : "没有就留空";
+        }
+        $("youtubeKey").value = "";
+        $("youtubeKey").placeholder = backend.youtubeApiKeySet ? "已配置，留空不修改" : "没有就留空";
+        $("youtubeChannelId").value = backend.youtubeChannelId || "";
+        $("seoSiteName").value = seo.siteName || "Your Site";
+        $("seoSiteBaseUrl").value = seo.siteBaseUrl || backend.publicBaseUrl || "";
+        $("seoLocalTestBaseUrl").value = seo.localTestBaseUrl || "";
+        $("seoLocalPort").value = seo.localPort || 5188;
+        $("indexNowEnabled").checked = Boolean(seo.indexNowEnabled);
+        $("indexNowKey").value = "";
+        $("indexNowKey").placeholder = seo.indexNowKeySet ? "已配置，留空不修改" : "没有就留空，SEO 工具里也可以生成";
+        $("ftpHost").value = ftp.host || "";
+        $("ftpLocalPort").value = ftp.localPort || 5189;
+        $("ftpPort").value = ftp.port || 21;
+        $("ftpUser").value = ftp.user || "";
+        $("ftpPassword").placeholder = ftp.passwordSet ? "已保存，留空不修改" : "请输入 FTP 密码";
+        $("ftpRemoteRoot").value = ftp.remoteRoot || "wwwroot";
+        $("ftpSecure").value = String(Boolean(ftp.secure));
+        $("ftpUploadMode").value = ftp.uploadMode || "quick";
+        $("ftpRecentImageDays").value = ftp.recentImageDays || 14;
+        renderDbHint(data.detectedDatabases || []);
+        renderDiagnostics(data.diagnostics || { items: [] });
+      }
+
+      function renderDiagnostics(result) {
+        const items = result.items || [];
+        $("diagnostics").innerHTML = items.length
+          ? items.map((item) => `<div class="diagnostic ${item.ok ? "ok" : "bad"}"><b>${item.ok ? "正常" : "需处理"} · ${escapeHtml(item.label)}</b><span class="mini">${escapeHtml(item.detail || "")}</span></div>`).join("")
+          : '<div class="hint">尚未获得检查结果。</div>';
+      }
+
+      function renderDbHint(databases) {
+        if (!databases.length) {
+          $("dbHint").textContent = "没有自动找到数据库。请确认网站根目录是否正确，数据库一般在 data 文件夹里。";
+          return;
+        }
+        $("dbHint").textContent = `找到 ${databases.length} 个数据库，已优先使用最新的：${databases[0].path}`;
+      }
+
+      function payload() {
+        return {
+          backend: {
+            pbootSiteRoot: $("pbootSiteRoot").value,
+            pbootDbPath: $("pbootDbPath").value,
+            publicBaseUrl: $("publicBaseUrl").value,
+            backupDir: $("backupDir").value,
+            backendDb: $("backendDb").value || "dev.sqlite",
+            backendPort: Number($("backendPort").value || 5000),
+            frontendPort: Number($("frontendPort").value || 5173),
+            requestBodyLimit: $("requestBodyLimit").value || "10mb",
+            openaiKey: $("openaiKey").value,
+            zhipuKey: $("zhipuKey").value,
+            deepseekKey: $("deepseekKey").value,
+            dashscopeKey: $("dashscopeKey").value,
+            youtubeKey: $("youtubeKey").value,
+            youtubeChannelId: $("youtubeChannelId").value,
+          },
+          seo: {
+            localPort: Number($("seoLocalPort").value || 5188),
+            siteName: $("seoSiteName").value,
+            siteBaseUrl: $("seoSiteBaseUrl").value || $("publicBaseUrl").value,
+            localTestBaseUrl: $("seoLocalTestBaseUrl").value || $("localTestBaseUrl").value,
+            indexNowEnabled: $("indexNowEnabled").checked,
+            indexNowKey: $("indexNowKey").value,
+          },
+          ftp: {
+            localPort: Number($("ftpLocalPort").value || 5189),
+            host: $("ftpHost").value,
+            port: Number($("ftpPort").value || 21),
+            user: $("ftpUser").value,
+            password: $("ftpPassword").value,
+            remoteRoot: $("ftpRemoteRoot").value || "wwwroot",
+            secure: $("ftpSecure").value === "true",
+            uploadMode: $("ftpUploadMode").value,
+            recentImageDays: Number($("ftpRecentImageDays").value || 14),
+          },
+        };
+      }
+
+      async function load() {
+        setStatus("正在读取配置...");
+        fill(await api("/api/config"));
+        setStatus("配置已读取", "ok");
+      }
+
+      async function detectDb() {
+        setStatus("正在查找数据库...");
+        const siteRoot = encodeURIComponent($("pbootSiteRoot").value);
+        const result = await api(`/api/databases?siteRoot=${siteRoot}`);
+        if (result.databases && result.databases.length) {
+          $("pbootDbPath").value = result.databases[0].path;
+        }
+        renderDbHint(result.databases || []);
+        setStatus("数据库查找完成", "ok");
+      }
+
+      function fillCommonPaths() {
+        if (loadedConfig?.backend?.pbootSiteRoot) {
+          $("pbootSiteRoot").value = loadedConfig.backend.pbootSiteRoot;
+        }
+        const root = $("pbootSiteRoot").value.replace(/\\/g, "/").replace(/\/+$/, "");
+        if (!root) return;
+        $("backupDir").value = loadedConfig?.backend?.backupDir || `${loadedConfig?.packageRoot || `${root}/pboot_admin`}/backups/backend_database`;
+        if (!$("seoSiteBaseUrl").value && $("publicBaseUrl").value) $("seoSiteBaseUrl").value = $("publicBaseUrl").value;
+        setStatus("已恢复为当前项目自动识别的路径", "ok");
+      }
+
+      async function diagnose() {
+        setStatus("正在执行配置自检...");
+        const result = await api("/api/diagnose");
+        renderDiagnostics(result);
+        setStatus(result.summary, result.ok ? "ok" : "error");
+      }
+
+      async function save() {
+        setStatus("正在保存...");
+        const result = await api("/api/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload()),
+        });
+        $("ftpPassword").value = "";
+        fill(result.config);
+        setStatus("保存成功，可以启动前后端或独立工具了", "ok");
+      }
+
+      $("reloadBtn").onclick = () => load().catch((error) => setStatus(error.message, "error"));
+      $("detectDbBtn").onclick = () => detectDb().catch((error) => setStatus(error.message, "error"));
+      $("copyRootBtn").onclick = fillCommonPaths;
+      $("diagnoseBtn").onclick = () => diagnose().catch((error) => setStatus(error.message, "error"));
+      $("saveBtn").onclick = () => save().catch((error) => setStatus(error.message, "error"));
+
+      load().catch((error) => setStatus(error.message, "error"));
+    </script>
+  </body>
+</html>
