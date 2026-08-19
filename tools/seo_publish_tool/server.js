@@ -1104,6 +1104,9 @@ function getYandexSettings(config = readConfig()) {
     sitemapUrl: `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`,
     verification: yandex.verification?.filename ? { filename: yandex.verification.filename } : null,
     indexNowEnabled: Boolean(config.indexNow?.enabled),
+    webmasterTokenConfigured: Boolean(yandex.oauthToken),
+    webmasterUserId: String(yandex.userId || ""),
+    webmasterHostId: String(yandex.hostId || ""),
     links: {
       addSite: "https://webmaster.yandex.com/sites/add/",
       dashboard: "https://webmaster.yandex.com/sites/",
@@ -1177,6 +1180,102 @@ async function checkYandexPublicState() {
     verificationCheck,
     message: `${parts.join("；")}。`,
   };
+}
+
+// ===== Yandex Webmaster API（OAuth token；sitemap 提交，自动解析 user_id/host_id） =====
+
+function getYandexWebmasterConfig(config = readConfig()) {
+  const yw = config.yandexWebmaster || {};
+  const baseUrl = cleanBaseUrl(config.siteBaseUrl || "");
+  let host = "";
+  try {
+    host = new URL(baseUrl).hostname;
+  } catch (_error) {
+    host = "";
+  }
+  return {
+    oauthToken: String(yw.oauthToken || "").trim(),
+    userId: String(yw.userId || "").trim(),
+    hostId: String(yw.hostId || "").trim(),
+    host,
+    baseUrl,
+    sitemapUrl: `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`,
+  };
+}
+
+async function yandexApi(pathname, token, options = {}) {
+  const response = await fetch(`https://api.webmaster.yandex.net/v4${pathname}`, {
+    ...options,
+    headers: {
+      Authorization: `OAuth ${token}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    signal: AbortSignal.timeout(30000),
+  });
+  const text = await response.text();
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch (_error) {
+    data = null;
+  }
+  return { ok: response.ok, status: response.status, data, text };
+}
+
+function yandexApiError(result) {
+  if (result.data && (result.data.error_message || result.data.error_code)) {
+    return result.data.error_message || result.data.error_code;
+  }
+  return `HTTP ${result.status}`;
+}
+
+async function resolveYandexHost() {
+  const cfg = getYandexWebmasterConfig();
+  if (!cfg.oauthToken) throw new Error("请先配置 Yandex OAuth token。");
+
+  let userId = cfg.userId;
+  if (!userId) {
+    const u = await yandexApi("/user/", cfg.oauthToken);
+    if (!u.ok || !(u.data && u.data.user_id)) {
+      throw new Error(`获取 Yandex user_id 失败：${yandexApiError(u)}`);
+    }
+    userId = String(u.data.user_id);
+  }
+
+  const h = await yandexApi(`/user/${userId}/hosts/`, cfg.oauthToken);
+  if (!h.ok || !(h.data && Array.isArray(h.data.hosts))) {
+    throw new Error(`获取 Yandex 站点列表失败：${yandexApiError(h)}`);
+  }
+  const hosts = h.data.hosts || [];
+  const normalize = (v) => String(v || "").toLowerCase().replace(/^www\./, "").replace(/\/+$/, "");
+  const match = hosts.find((item) => normalize(item.ascii_host || item.unicode_host) === normalize(cfg.host));
+  if (!match) {
+    throw new Error(
+      `在 Yandex Webmaster 里没找到站点 ${cfg.host}。请先在 Yandex Webmaster 添加并验证该站点。已添加的主机：${hosts.map((x) => x.ascii_host || x.unicode_host).join("、") || "（空）"}。`,
+    );
+  }
+  const hostId = String(match.host_id);
+
+  const config = readConfig();
+  config.yandexWebmaster = { ...(config.yandexWebmaster || {}), userId, hostId };
+  writeJson(CONFIG_PATH, config);
+  return { userId, hostId, host: cfg.host, hosts };
+}
+
+async function submitYandexSitemap(sitemapUrl) {
+  const cfg = getYandexWebmasterConfig();
+  if (!cfg.oauthToken) throw new Error("请先配置 Yandex OAuth token。");
+  const { userId, hostId } = await resolveYandexHost();
+  const target = sitemapUrl || cfg.sitemapUrl;
+  const r = await yandexApi(`/user/${userId}/hosts/${hostId}/sitemaps/`, cfg.oauthToken, {
+    method: "POST",
+    body: JSON.stringify({ url: target }),
+  });
+  if (!r.ok) {
+    return { ok: false, status: r.status, message: `提交失败：${yandexApiError(r)}` };
+  }
+  return { ok: true, status: r.status, sitemapUrl: target, message: `已把 sitemap 提交给 Yandex：${target}` };
 }
 
 function defaultGoogleProperty(config) {
@@ -2089,6 +2188,41 @@ async function handleApi(req, res, pathname) {
     }
     if (req.method === "POST" && pathname === "/api/yandex/check") {
       sendJson(res, await checkYandexPublicState());
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/yandex/token") {
+      const body = await readRequestBody(req);
+      const config = readConfig();
+      if (body.clear) {
+        config.yandexWebmaster = { ...(config.yandexWebmaster || {}), oauthToken: "" };
+        writeJson(CONFIG_PATH, config);
+        sendJson(res, { ok: true, message: "已清除 Yandex OAuth token。" });
+        return;
+      }
+      const token = String(body.token || "").trim();
+      if (!token) throw new Error("请粘贴 Yandex OAuth token。");
+      config.yandexWebmaster = { ...(config.yandexWebmaster || {}), oauthToken: token };
+      writeJson(CONFIG_PATH, config);
+      sendJson(res, { ok: true, message: "已保存 Yandex OAuth token。" });
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/yandex/hosts") {
+      const result = await resolveYandexHost();
+      sendJson(res, {
+        ok: true,
+        userId: result.userId,
+        hostId: result.hostId,
+        host: result.host,
+        message: `已解析 Yandex 站点：${result.host}（host_id=${result.hostId}）。`,
+      });
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/yandex/sitemap") {
+      const body = await readRequestBody(req);
+      const cfg = getYandexWebmasterConfig();
+      const sitemapUrl = String(body.sitemapUrl || cfg.sitemapUrl).trim();
+      if (!sitemapUrl) throw new Error("缺少 sitemapUrl。");
+      sendJson(res, await submitYandexSitemap(sitemapUrl));
       return;
     }
     if (req.method === "GET" && pathname === "/api/bing/status") {

@@ -440,6 +440,16 @@
           <a class="action-link" id="yandexAddSiteLink" href="https://webmaster.yandex.com/sites/add/" target="_blank" rel="noopener">打开 Yandex Webmaster</a>
           <a class="action-link" id="yandexIndexNowHelpLink" href="https://yandex.com/support/webmaster/indexnow.html" target="_blank" rel="noopener">IndexNow 说明</a>
         </div>
+        <div class="google-actions">
+          <label class="inspect-field" style="flex: 1;"><span>Yandex OAuth token（用于 sitemap 提交，在 Yandex OAuth 里获取，需有 Webmaster API 权限）</span><input id="yandexOauthTokenInput" type="password" placeholder="粘贴 OAuth token" /></label>
+          <button id="saveYandexTokenBtn">保存 token</button>
+          <button id="clearYandexTokenBtn">清除</button>
+        </div>
+        <div class="google-actions">
+          <button id="testYandexApiBtn">测试 Yandex API 连接</button>
+          <button class="warn" id="submitYandexSitemapBtn">提交 Sitemap 到 Yandex</button>
+          <a class="action-link" href="https://yandex.com/dev/webmaster/" target="_blank" rel="noopener">Yandex Webmaster API 文档</a>
+        </div>
         <div id="yandexResult" class="google-result"></div>
       </section>
 
@@ -867,18 +877,65 @@
         }
         const meta = $("yandexMeta");
         if (yandexStatus.verification?.filename) {
-          meta.textContent = `验证文件：${yandexStatus.verification.filename}`;
+          meta.textContent = `验证文件：${yandexStatus.verification.filename}${yandexStatus.webmasterTokenConfigured ? " + OAuth token" : ""}`;
           meta.style.color = "#176b3a";
           if (!$("yandexVerificationFilenameInput").value) {
             $("yandexVerificationFilenameInput").value = yandexStatus.verification.filename;
           }
         } else {
-          meta.textContent = "未配置验证文件";
-          meta.style.color = "#d94b35";
+          meta.textContent = yandexStatus.webmasterTokenConfigured ? "OAuth token 已配置" : "未配置";
+          meta.style.color = yandexStatus.webmasterTokenConfigured ? "#176b3a" : "#d94b35";
         }
+        $("yandexOauthTokenInput").value = "";
+        $("yandexOauthTokenInput").placeholder = yandexStatus.webmasterTokenConfigured
+          ? "已配置（留空则不修改）"
+          : "粘贴 Yandex OAuth token";
         $("yandexAddSiteLink").href = yandexStatus.links?.addSite || "https://webmaster.yandex.com/sites/add/";
         $("yandexIndexNowHelpLink").href = yandexStatus.links?.indexNowHelp || "https://yandex.com/support/webmaster/indexnow.html";
       }
+
+      $("saveYandexTokenBtn").onclick = () => runAction(async () => {
+        const token = $("yandexOauthTokenInput").value.trim();
+        if (!token) throw new Error("请粘贴 Yandex OAuth token。");
+        const result = await api("/api/yandex/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        await loadYandexStatus();
+        setStatus(result.message);
+      });
+
+      $("clearYandexTokenBtn").onclick = () => runAction(async () => {
+        if (!confirm("确定清除 Yandex OAuth token 吗？")) return;
+        const result = await api("/api/yandex/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clear: true }),
+        });
+        await loadYandexStatus();
+        setStatus(result.message);
+      });
+
+      $("testYandexApiBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/yandex/hosts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        showYandexResult("Yandex API 连接正常", [result.message || ""], "success");
+        setStatus(result.message || "");
+      });
+
+      $("submitYandexSitemapBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/yandex/sitemap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        showYandexResult(result.ok ? "Sitemap 已提交给 Yandex" : "Sitemap 提交失败", [result.message || ""], result.ok ? "success" : "warning");
+        setStatus(result.message || "");
+      });
 
       function showYandexResult(title, lines = [], tone = "info") {
         const result = $("yandexResult");
