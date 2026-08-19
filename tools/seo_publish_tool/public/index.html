@@ -396,6 +396,27 @@
       <section class="band">
         <div class="band-title">
           <div>
+            <h2>Google Search Console（Sitemap 提交 + 收录查询）</h2>
+            <div class="note">复用同一份服务账号调用 Search Console API：一键把 sitemap 提交给 Google，并查询任意 URL「到底收没收录」。注意：收录查询（URL Inspection）只支持「网址前缀」属性（如 https://example.com/），不支持 sc-domain 域名属性；sitemap 提交两者都支持。首次使用需在 Google Cloud 额外启用 <b>Search Console API</b>（和 Indexing API 并列的那个）。</div>
+          </div>
+          <span class="note" id="searchConsoleMeta">未配置</span>
+        </div>
+        <div class="google-actions">
+          <label class="inspect-field"><span>Search Console 属性（siteUrl）</span><input id="gscSiteUrlInput" placeholder="sc-domain:example.com 或 https://example.com/" /></label>
+          <label class="inspect-field"><span>Sitemap 地址</span><input id="gscSitemapUrlInput" placeholder="https://example.com/sitemap.xml" /></label>
+          <button class="primary" id="gscSaveBtn">保存属性</button>
+        </div>
+        <div class="google-actions">
+          <button class="success" id="gscSubmitSitemapBtn">提交 Sitemap 到 Google</button>
+          <label class="inspect-field" style="flex: 1;"><span>查询收录状态（要查的完整 URL）</span><input id="gscInspectUrlInput" placeholder="https://example.com/your-page/" /></label>
+          <button id="gscInspectBtn">查询收录状态</button>
+        </div>
+        <div id="searchConsoleResult" class="google-result"></div>
+      </section>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
             <h2>Yandex 收录</h2>
             <div class="note">Yandex 是 IndexNow 的官方支持方：点「推送到 Yandex（IndexNow）」会把全部真实线上 URL 直提给 yandex.com/indexnow。要在 Yandex Webmaster 里查看收录状态，需先完成下面的网站验证。</div>
           </div>
@@ -838,6 +859,84 @@
           ${safeLines.length ? `<pre>${escapeHtml(safeLines.join("\n"))}</pre>` : ""}
         `;
       }
+
+      function showSearchConsoleResult(title, lines = [], tone = "info") {
+        const result = $("searchConsoleResult");
+        const safeLines = (Array.isArray(lines) ? lines : [lines]).filter((line) => line !== undefined && line !== null && line !== "");
+        result.style.display = "block";
+        result.dataset.tone = tone;
+        result.innerHTML = `
+          <div class="google-result-title">${escapeHtml(title)}</div>
+          ${safeLines.length ? `<pre>${escapeHtml(safeLines.join("\n"))}</pre>` : ""}
+        `;
+      }
+
+      async function loadSearchConsoleStatus() {
+        try {
+          const data = await api("/api/search-console/status");
+          $("gscSiteUrlInput").value = data.siteUrl || "";
+          $("gscSitemapUrlInput").value = data.sitemapUrl || "";
+          $("searchConsoleMeta").textContent = data.enabled ? `已配置 ${data.clientEmail}` : "未配置服务账号";
+          $("searchConsoleMeta").style.color = data.enabled ? "#176b3a" : "#d94b35";
+        } catch (_error) {
+          $("searchConsoleMeta").textContent = "加载失败";
+        }
+      }
+
+      $("gscSaveBtn").onclick = () => runAction(async () => {
+        await api("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            gscSiteUrl: $("gscSiteUrlInput").value.trim(),
+            gscSitemapUrl: $("gscSitemapUrlInput").value.trim(),
+          }),
+        });
+        await loadSearchConsoleStatus();
+        setStatus("已保存 Search Console 属性");
+      });
+
+      $("gscSubmitSitemapBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/search-console/sitemap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            siteUrl: $("gscSiteUrlInput").value.trim(),
+            sitemapUrl: $("gscSitemapUrlInput").value.trim(),
+          }),
+        });
+        showSearchConsoleResult(result.ok ? "Sitemap 已提交" : "Sitemap 提交失败", [result.message || ""], result.ok ? "success" : "warning");
+        setStatus(result.message || "");
+      });
+
+      $("gscInspectBtn").onclick = () => runAction(async () => {
+        const url = $("gscInspectUrlInput").value.trim();
+        if (!url) throw new Error("请输入要查询收录状态的完整 URL。");
+        const result = await api("/api/search-console/inspect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inspectionUrl: url,
+            siteUrl: $("gscSiteUrlInput").value.trim(),
+          }),
+        });
+        if (!result.ok) {
+          showSearchConsoleResult("收录查询失败", [result.message || ""], "warning");
+          setStatus(result.message || "查询失败");
+          return;
+        }
+        const indexed = /indexed/i.test(result.coverageState || "");
+        const lines = [
+          `收录状态 coverageState：${result.coverageState || "未知"}`,
+          `索引状态 indexingState：${result.indexingState || "未知"}`,
+          `抓取状态 pageFetchState：${result.pageFetchState || "未知"}`,
+          `robots 状态：${result.robotsTxtState || "未知"}`,
+          `Google 指定规范网址：${result.googleCanonical || "-"}`,
+          result.lastCrawlTime ? `上次抓取：${result.lastCrawlTime}` : "",
+        ].filter(Boolean);
+        showSearchConsoleResult(`收录状态：${url}`, lines, indexed ? "success" : "info");
+        setStatus(result.message || "");
+      });
 
       async function runIndexNowPush(triggerButton) {
         const retrying = indexNowRetryHosts.length > 0;
@@ -1880,7 +1979,7 @@
           setStatus("模型连接测试通过");
         });
 
-      Promise.all([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus()]).then(refresh).catch((error) => {
+      Promise.all([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus()]).then(refresh).catch((error) => {
         setStatus(error.message || String(error), true);
       });
       loadAiStatus();

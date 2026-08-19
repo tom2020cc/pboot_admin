@@ -1211,12 +1211,16 @@ function parseServiceAccount(input) {
   return { client_email: String(data.client_email), private_key: String(data.private_key) };
 }
 
-function buildGoogleServiceAccountJwt(serviceAccount) {
+const GOOGLE_INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing";
+const GOOGLE_SEARCH_CONSOLE_SCOPE = "https://www.googleapis.com/auth/webmasters";
+const GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
+
+function buildGoogleServiceAccountJwt(serviceAccount, scope) {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
   const payload = {
     iss: serviceAccount.client_email,
-    scope: "https://www.googleapis.com/auth/indexing",
+    scope,
     aud: "https://oauth2.googleapis.com/token",
     exp: now + 3600,
     iat: now,
@@ -1233,13 +1237,14 @@ function buildGoogleServiceAccountJwt(serviceAccount) {
   return `${unsigned}.${signature}`;
 }
 
-let cachedGoogleToken = null;
+const googleTokenCache = new Map();
 
-async function getGoogleIndexingAccessToken(serviceAccount) {
-  if (cachedGoogleToken && cachedGoogleToken.expire > Date.now() + 60000) {
-    return cachedGoogleToken.token;
+async function getGoogleAccessToken(serviceAccount, scope) {
+  const cached = googleTokenCache.get(scope);
+  if (cached && cached.expire > Date.now() + 60000) {
+    return cached.token;
   }
-  const assertion = buildGoogleServiceAccountJwt(serviceAccount);
+  const assertion = buildGoogleServiceAccountJwt(serviceAccount, scope);
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -1251,16 +1256,21 @@ async function getGoogleIndexingAccessToken(serviceAccount) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.access_token) {
-    cachedGoogleToken = null;
+    googleTokenCache.delete(scope);
     throw new Error(
       `Google 取 access_token 失败：${data.error_description || data.error || `HTTP ${response.status}`}`,
     );
   }
-  cachedGoogleToken = {
+  const entry = {
     token: data.access_token,
     expire: Date.now() + (Number(data.expires_in) || 3600) * 1000,
   };
+  googleTokenCache.set(scope, entry);
   return data.access_token;
+}
+
+async function getGoogleIndexingAccessToken(serviceAccount) {
+  return getGoogleAccessToken(serviceAccount, GOOGLE_INDEXING_SCOPE);
 }
 
 async function submitGoogleIndexingUrl(serviceAccount, url, type = "URL_UPDATED") {
@@ -1342,6 +1352,107 @@ async function getGoogleIndexingMetadata(serviceAccount, url) {
   };
 }
 
+
+// ===== Google Search Console API（sitemap 提交 + URL 收录状态查询，复用同一份服务账号） =====
+
+function getSearchConsoleConfig(config = readConfig()) {
+  const gi = getGoogleIndexingConfig(config);
+  const gsc = config.googleSearchConsole || {};
+  const baseUrl = cleanBaseUrl(config.siteBaseUrl || "");
+  let host = "";
+  try {
+    host = new URL(baseUrl).hostname;
+  } catch (_error) {
+    /* 无有效 baseUrl 时保持空 */
+  }
+  const siteUrl = String(gsc.siteUrl || (host ? `sc-domain:${host}` : "")).trim();
+  const sitemapUrl = String(
+    gsc.sitemapUrl || (baseUrl ? `${baseUrl}/${config.outputSitemap || "sitemap.xml"}` : ""),
+  ).trim();
+  return {
+    enabled: gi.enabled,
+    serviceAccount: gi.serviceAccount,
+    clientEmail: gi.clientEmail,
+    siteUrl,
+    sitemapUrl,
+    siteBaseUrl: baseUrl,
+  };
+}
+
+async function submitSearchConsoleSitemap(siteUrl, sitemapUrl) {
+  const cfg = getSearchConsoleConfig();
+  if (!cfg.enabled) throw new Error("请先配置 Google 服务账号（与 Google Indexing 用的是同一份 JSON）。");
+  const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_SCOPE);
+  const url = `https://searchconsole.googleapis.com/v1/sites/${encodeURIComponent(siteUrl)}/sitemaps/${encodeURIComponent(sitemapUrl)}`;
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(30000),
+  });
+  const body = await response.text();
+  let parsed = null;
+  try {
+    parsed = JSON.parse(body);
+  } catch (_error) {
+    /* non-JSON */
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      siteUrl,
+      sitemapUrl,
+      message: (parsed && parsed.error && parsed.error.message) || `HTTP ${response.status}`,
+    };
+  }
+  return {
+    ok: true,
+    status: response.status,
+    siteUrl,
+    sitemapUrl,
+    message: `已把 sitemap 提交给 Google Search Console：${sitemapUrl}`,
+  };
+}
+
+async function inspectSearchConsoleUrl(inspectionUrl, siteUrl) {
+  const cfg = getSearchConsoleConfig();
+  if (!cfg.enabled) throw new Error("请先配置 Google 服务账号（与 Google Indexing 用的是同一份 JSON）。");
+  const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
+  const response = await fetch("https://searchconsole.googleapis.com/v1/urlInspection/index:inspect", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ inspectionUrl, siteUrl, languageCode: "zh-CN" }),
+    signal: AbortSignal.timeout(30000),
+  });
+  const parsed = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      inspectionUrl,
+      siteUrl,
+      message: (parsed && parsed.error && parsed.error.message) || `HTTP ${response.status}`,
+    };
+  }
+  const result = (parsed && parsed.inspectionResult) || {};
+  const idx = result.indexStatusResult || {};
+  return {
+    ok: true,
+    inspectionUrl,
+    siteUrl,
+    verdict: result.verdict || "",
+    coverageState: idx.coverageState || "",
+    indexingState: idx.indexingState || "",
+    pageFetchState: idx.pageFetchState || "",
+    robotsTxtState: idx.robotsTxtState || "",
+    googleCanonical: idx.googleCanonical || "",
+    lastCrawlTime: idx.lastCrawlTime || "",
+    message: `收录状态：${idx.coverageState || result.verdict || "未知"}`,
+  };
+}
 
 // ===== Google 提交记录与每日配额（本地持久化，避免重复提交） =====
 
@@ -1567,6 +1678,15 @@ async function handleApi(req, res, pathname) {
             ? body.useLanguageSubdomains
             : current.useLanguageSubdomains,
         trailingSlash: typeof body.trailingSlash === "boolean" ? body.trailingSlash : current.trailingSlash,
+        googleSearchConsole: {
+          ...(current.googleSearchConsole || {}),
+          ...(typeof body.gscSiteUrl === "string" && body.gscSiteUrl.trim()
+            ? { siteUrl: body.gscSiteUrl.trim() }
+            : {}),
+          ...(typeof body.gscSitemapUrl === "string" && body.gscSitemapUrl.trim()
+            ? { sitemapUrl: body.gscSitemapUrl.trim() }
+            : {}),
+        },
       };
       if (!/^https?:\/\//i.test(next.siteBaseUrl)) {
         throw new Error("真实线上域名必须以 http:// 或 https:// 开头。");
@@ -1750,6 +1870,37 @@ async function handleApi(req, res, pathname) {
           message: `验证失败：${error.message || String(error)}。请确认 JSON 正确、已在 Search Console 添加该邮箱为所有者/用户、且已在 Google Cloud 启用 Indexing API。`,
         });
       }
+      return;
+    }
+    if (req.method === "GET" && pathname === "/api/search-console/status") {
+      const cfg = getSearchConsoleConfig();
+      sendJson(res, {
+        enabled: cfg.enabled,
+        clientEmail: cfg.clientEmail,
+        siteUrl: cfg.siteUrl,
+        sitemapUrl: cfg.sitemapUrl,
+        note: "siteUrl 为 Search Console 属性：域名属性填 sc-domain:example.com，网址前缀属性填 https://example.com/。URL 收录查询只支持网址前缀属性。",
+      });
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/search-console/sitemap") {
+      const cfg = getSearchConsoleConfig();
+      const body = await readRequestBody(req);
+      const siteUrl = String(body.siteUrl || cfg.siteUrl).trim();
+      const sitemapUrl = String(body.sitemapUrl || cfg.sitemapUrl).trim();
+      if (!siteUrl) throw new Error("缺少 siteUrl（Search Console 属性）。");
+      if (!sitemapUrl) throw new Error("缺少 sitemapUrl。");
+      sendJson(res, await submitSearchConsoleSitemap(siteUrl, sitemapUrl));
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/search-console/inspect") {
+      const cfg = getSearchConsoleConfig();
+      const body = await readRequestBody(req);
+      const inspectionUrl = String(body.inspectionUrl || "").trim();
+      const siteUrl = String(body.siteUrl || cfg.siteUrl).trim();
+      if (!inspectionUrl) throw new Error("缺少 inspectionUrl（要查询的完整 URL）。");
+      if (!siteUrl) throw new Error("缺少 siteUrl（Search Console 属性，URL 收录查询需网址前缀属性，如 https://example.com/）。");
+      sendJson(res, await inspectSearchConsoleUrl(inspectionUrl, siteUrl));
       return;
     }
     if (req.method === "GET" && pathname === "/api/yandex/status") {
