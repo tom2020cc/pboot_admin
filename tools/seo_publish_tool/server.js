@@ -942,6 +942,153 @@ async function pushIndexNow(options = {}) {
   };
 }
 
+// ===== Bing Webmaster（验证文件 + sitemap 提交 + 收录查询，需在 Bing Webmaster 生成 API Key） =====
+
+function getBingSettings(config = readConfig()) {
+  const bing = config.bingWebmaster || {};
+  const baseUrl = cleanBaseUrl(config.siteBaseUrl || "");
+  let host = "";
+  try {
+    host = new URL(baseUrl).hostname;
+  } catch (_error) {
+    host = "";
+  }
+  return {
+    host,
+    baseUrl,
+    siteUrl: String(bing.siteUrl || (baseUrl ? `${baseUrl}/` : "")).trim(),
+    sitemapUrl: `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`,
+    apiKeyConfigured: Boolean(bing.apiKey),
+    verification: bing.verification?.code ? { code: bing.verification.code } : null,
+    links: {
+      addSite: "https://www.bing.com/webmasters/home/addsite",
+      dashboard: "https://www.bing.com/webmasters/home",
+      apiAccess: "https://www.bing.com/webmasters/settings/apikey",
+    },
+  };
+}
+
+function buildBingSiteAuthXml(code) {
+  return `<?xml version="1.0"?>\n<users>\n  <user>${String(code).trim()}</user>\n</users>\n`;
+}
+
+function getBingApiKey(config = readConfig()) {
+  return String((config.bingWebmaster && config.bingWebmaster.apiKey) || "").trim();
+}
+
+async function checkBingPublicState() {
+  const report = await inspectSite();
+  if (isSuspiciousPublicUrl(report.config.siteBaseUrl)) {
+    throw new Error("当前站点网址看起来不是线上真实域名，无法检查线上文件。请先修改真实线上域名。");
+  }
+  const settings = getBingSettings(report.config);
+  const result = {
+    ok: true,
+    verification: null,
+    sitemapUrl: settings.sitemapUrl,
+    apiKeyConfigured: settings.apiKeyConfigured,
+    parts: [],
+  };
+  if (settings.verification?.code) {
+    const filename = "BingSiteAuth.xml";
+    const localFile = path.join(report.siteRoot, filename);
+    const expected = fs.existsSync(localFile) ? fs.readFileSync(localFile, "utf8").trim() : "";
+    const url = `${settings.baseUrl}/${filename}`;
+    try {
+      const response = await fetch(url, {
+        headers: { "User-Agent": "PbootCMS-SEO-Tool/1.0" },
+        signal: AbortSignal.timeout(10000),
+      });
+      const body = (await response.text()).trim();
+      const contentOk = !expected || body === expected;
+      result.verification = {
+        url,
+        filename,
+        status: response.status,
+        ok: response.ok && contentOk,
+        reason: !response.ok
+          ? `验证文件返回 HTTP ${response.status}（若被重写成首页说明还没上传）`
+          : contentOk
+            ? ""
+            : "线上验证文件内容与本地保存的不一致，请重新上传",
+      };
+      result.parts.push(result.verification.ok ? "Bing 验证文件线上正常" : "Bing 验证文件线上不可用");
+    } catch (error) {
+      result.verification = {
+        url,
+        filename,
+        status: 0,
+        ok: false,
+        reason: `无法访问验证文件：${error.message || String(error)}`,
+      };
+      result.parts.push("Bing 验证文件线上不可用");
+    }
+    result.ok = result.ok && Boolean(result.verification.ok);
+  } else {
+    result.parts.push("尚未配置 Bing 验证码");
+  }
+  result.parts.push(settings.apiKeyConfigured ? "Bing Webmaster API Key 已配置" : "Bing Webmaster API Key 未配置（sitemap 提交和收录查询需要）");
+  return result;
+}
+
+async function submitBingSitemap(siteUrl, sitemapUrl, apiKey) {
+  const key = String(apiKey || getBingApiKey()).trim();
+  if (!key) throw new Error("请先配置 Bing Webmaster API Key。");
+  const url = `https://ssl.bing.com/webmaster/api.svc/json/SubmitSitemap?apikey=${encodeURIComponent(key)}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ siteUrl, sitemapUrl }),
+    signal: AbortSignal.timeout(30000),
+  });
+  const text = await response.text();
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch (_error) {
+    /* non-JSON */
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      siteUrl,
+      sitemapUrl,
+      message: (parsed && (parsed.Message || parsed.message)) || `HTTP ${response.status}`,
+    };
+  }
+  return { ok: true, status: response.status, siteUrl, sitemapUrl, message: `已把 sitemap 提交给 Bing：${sitemapUrl}` };
+}
+
+async function inspectBingUrl(siteUrl, targetUrl, apiKey) {
+  const key = String(apiKey || getBingApiKey()).trim();
+  if (!key) throw new Error("请先配置 Bing Webmaster API Key。");
+  const url = `https://ssl.bing.com/webmaster/api.svc/json/GetUrlDetail?apikey=${encodeURIComponent(key)}&siteUrl=${encodeURIComponent(siteUrl)}&url=${encodeURIComponent(targetUrl)}`;
+  const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(30000) });
+  const text = await response.text();
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch (_error) {
+    /* non-JSON */
+  }
+  if (!response.ok) {
+    return { ok: false, status: response.status, message: (parsed && (parsed.Message || parsed.message)) || `HTTP ${response.status}` };
+  }
+  const d = (parsed && parsed.d) || {};
+  const indexed = Boolean(d.IsIndexed === true || d.isIndexed === true || d.Indexed === true);
+  return {
+    ok: true,
+    inspectionUrl: targetUrl,
+    siteUrl,
+    indexed,
+    lastCrawled: d.DateLastCrawled || d.LastCrawled || d.lastCrawled || "",
+    httpCode: d.HttpStatusCode || d.HttpCode || d.httpCode || "",
+    message: `Bing 收录状态：${indexed ? "已收录" : "未收录或未知"}`,
+    raw: d,
+  };
+}
+
 function getYandexSettings(config = readConfig()) {
   const yandex = config.yandexWebmaster || {};
   const baseUrl = cleanBaseUrl(config.siteBaseUrl);
@@ -1942,6 +2089,77 @@ async function handleApi(req, res, pathname) {
     }
     if (req.method === "POST" && pathname === "/api/yandex/check") {
       sendJson(res, await checkYandexPublicState());
+      return;
+    }
+    if (req.method === "GET" && pathname === "/api/bing/status") {
+      sendJson(res, getBingSettings());
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/bing/verification") {
+      const body = await readRequestBody(req);
+      const config = readConfig();
+      if (body.clear) {
+        config.bingWebmaster = { ...(config.bingWebmaster || {}), verification: null };
+        writeJson(CONFIG_PATH, config);
+        sendJson(res, { ok: true, message: "已清除 Bing 验证码配置（网站根目录里的 BingSiteAuth.xml 不会自动删除）。" });
+        return;
+      }
+      const code = String(body.code || "").trim();
+      if (!/^[0-9a-zA-Z._-]{8,}$/.test(code)) {
+        throw new Error("Bing 验证码格式不对，应是 Bing Webmaster 给出的 8 位以上字母数字串。");
+      }
+      const filename = "BingSiteAuth.xml";
+      const siteRoot = resolveSiteRoot(config);
+      const target = path.join(siteRoot, filename);
+      fs.writeFileSync(target, buildBingSiteAuthXml(code), "utf8");
+      config.bingWebmaster = { ...(config.bingWebmaster || {}), verification: { code, savedAt: new Date().toISOString() } };
+      writeJson(CONFIG_PATH, config);
+      sendJson(res, {
+        ok: true,
+        filename,
+        filePath: target,
+        message: `已把 ${filename} 写入网站根目录。请点击「上传 SEO 文件到 FTP」把它传到线上，然后回到 Bing Webmaster 点「验证」。`,
+      });
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/bing/check") {
+      sendJson(res, await checkBingPublicState());
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/bing/apikey") {
+      const body = await readRequestBody(req);
+      const config = readConfig();
+      if (body.clear) {
+        config.bingWebmaster = { ...(config.bingWebmaster || {}), apiKey: "" };
+        writeJson(CONFIG_PATH, config);
+        sendJson(res, { ok: true, message: "已清除 Bing Webmaster API Key。" });
+        return;
+      }
+      const apiKey = String(body.apiKey || "").trim();
+      if (!apiKey) throw new Error("请粘贴 Bing Webmaster API Key。");
+      config.bingWebmaster = { ...(config.bingWebmaster || {}), apiKey };
+      writeJson(CONFIG_PATH, config);
+      sendJson(res, { ok: true, message: "已保存 Bing Webmaster API Key。" });
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/bing/sitemap") {
+      const body = await readRequestBody(req);
+      const cfg = getBingSettings();
+      const siteUrl = String(body.siteUrl || cfg.siteUrl).trim();
+      const sitemapUrl = String(body.sitemapUrl || cfg.sitemapUrl).trim();
+      if (!siteUrl) throw new Error("缺少 siteUrl。");
+      if (!sitemapUrl) throw new Error("缺少 sitemapUrl。");
+      sendJson(res, await submitBingSitemap(siteUrl, sitemapUrl, body.apiKey));
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/bing/inspect") {
+      const body = await readRequestBody(req);
+      const cfg = getBingSettings();
+      const targetUrl = String(body.inspectionUrl || "").trim();
+      const siteUrl = String(body.siteUrl || cfg.siteUrl).trim();
+      if (!targetUrl) throw new Error("缺少 inspectionUrl（要查询的 URL）。");
+      if (!siteUrl) throw new Error("缺少 siteUrl。");
+      sendJson(res, await inspectBingUrl(siteUrl, targetUrl, body.apiKey));
       return;
     }
     sendJson(res, { message: "API not found" }, 404);

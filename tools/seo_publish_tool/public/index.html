@@ -446,6 +446,37 @@
       <section class="band">
         <div class="band-title">
           <div>
+            <h2>Bing 收录</h2>
+            <div class="note">Bing 的 URL 提交已经通过 IndexNow 在做（点上面的「推送 IndexNow」）。这个面板补三件事：Bing 站点验证（BingSiteAuth.xml）、sitemap 提交、查询 URL 是否被 Bing 收录。后两件需要 Bing Webmaster API Key（Bing Webmaster → 设置 → API 访问 里生成）。</div>
+          </div>
+          <span class="note" id="bingMeta">未配置</span>
+        </div>
+        <div class="google-actions">
+          <label class="inspect-field"><span>Bing 验证码（Bing Webmaster 添加站点 → XML 文件验证 给出的那串码）</span><input id="bingVerificationCodeInput" placeholder="粘贴 Bing 验证码" /></label>
+          <button class="primary" id="saveBingVerificationBtn">保存并生成 BingSiteAuth.xml</button>
+          <button id="clearBingVerificationBtn">清除配置</button>
+        </div>
+        <div class="google-actions">
+          <label class="inspect-field" style="flex: 1;"><span>Bing Webmaster API Key（设置 → API 访问 → 生成 API 密钥）</span><input id="bingApiKeyInput" type="password" placeholder="粘贴 API Key" /></label>
+          <button id="saveBingApiKeyBtn">保存 API Key</button>
+          <button id="clearBingApiKeyBtn">清除</button>
+        </div>
+        <div class="google-actions">
+          <button id="checkBingBtn">检查线上验证 / 状态</button>
+          <button class="warn" id="bingSubmitSitemapBtn">提交 Sitemap 到 Bing</button>
+          <label class="inspect-field" style="flex: 1;"><span>查询收录状态（要查的完整 URL）</span><input id="bingInspectUrlInput" placeholder="https://example.com/your-page/" /></label>
+          <button id="bingInspectBtn">查询收录状态</button>
+        </div>
+        <div class="google-actions">
+          <a class="action-link" id="bingAddSiteLink" href="https://www.bing.com/webmasters/home/addsite" target="_blank" rel="noopener">打开 Bing Webmaster</a>
+          <a class="action-link" id="bingApiKeyLink" href="https://www.bing.com/webmasters/settings/apikey" target="_blank" rel="noopener">生成 API Key</a>
+        </div>
+        <div id="bingResult" class="google-result"></div>
+      </section>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
             <h2>Google 后续操作教程</h2>
             <div class="note">普通新闻和产品页没有可用的 Google 强制收录接口，以下步骤需要在 Search Console 官方页面完成。</div>
           </div>
@@ -935,6 +966,125 @@
           result.lastCrawlTime ? `上次抓取：${result.lastCrawlTime}` : "",
         ].filter(Boolean);
         showSearchConsoleResult(`收录状态：${url}`, lines, indexed ? "success" : "info");
+        setStatus(result.message || "");
+      });
+
+      function showBingResult(title, lines = [], tone = "info") {
+        const result = $("bingResult");
+        const safeLines = (Array.isArray(lines) ? lines : [lines]).filter((line) => line !== undefined && line !== null && line !== "");
+        result.style.display = "block";
+        result.dataset.tone = tone;
+        result.innerHTML = `
+          <div class="google-result-title">${escapeHtml(title)}</div>
+          ${safeLines.length ? `<pre>${escapeHtml(safeLines.join("\n"))}</pre>` : ""}
+        `;
+      }
+
+      async function loadBingStatus() {
+        try {
+          const data = await api("/api/bing/status");
+          $("bingApiKeyInput").value = "";
+          $("bingApiKeyInput").placeholder = data.apiKeyConfigured ? "已配置（留空则不修改）" : "粘贴 Bing Webmaster API Key";
+          if (data.verification?.code) {
+            $("bingVerificationCodeInput").value = data.verification.code;
+            $("bingMeta").textContent = `验证码已配置（${data.host}）${data.apiKeyConfigured ? " + API Key" : ""}`;
+            $("bingMeta").style.color = "#176b3a";
+          } else {
+            $("bingMeta").textContent = data.apiKeyConfigured ? "API Key 已配置" : "未配置";
+            $("bingMeta").style.color = data.apiKeyConfigured ? "#176b3a" : "#d94b35";
+          }
+        } catch (_error) {
+          $("bingMeta").textContent = "加载失败";
+        }
+      }
+
+      $("saveBingVerificationBtn").onclick = () => runAction(async () => {
+        const code = $("bingVerificationCodeInput").value.trim();
+        if (!code) throw new Error("请粘贴 Bing 验证码。");
+        const result = await api("/api/bing/verification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        await loadBingStatus();
+        setStatus(result.message);
+      });
+
+      $("clearBingVerificationBtn").onclick = () => runAction(async () => {
+        if (!confirm("确定清除 Bing 验证码配置吗？")) return;
+        const result = await api("/api/bing/verification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clear: true }),
+        });
+        await loadBingStatus();
+        setStatus(result.message);
+      });
+
+      $("saveBingApiKeyBtn").onclick = () => runAction(async () => {
+        const apiKey = $("bingApiKeyInput").value.trim();
+        if (!apiKey) throw new Error("请粘贴 Bing Webmaster API Key。");
+        const result = await api("/api/bing/apikey", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apiKey }),
+        });
+        await loadBingStatus();
+        setStatus(result.message);
+      });
+
+      $("clearBingApiKeyBtn").onclick = () => runAction(async () => {
+        if (!confirm("确定清除 Bing Webmaster API Key 吗？")) return;
+        const result = await api("/api/bing/apikey", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clear: true }),
+        });
+        await loadBingStatus();
+        setStatus(result.message);
+      });
+
+      $("checkBingBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/bing/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const lines = [...(result.parts || [])];
+        if (result.verification) lines.push(`${result.verification.filename} → HTTP ${result.verification.status}${result.verification.ok ? "" : `（${result.verification.reason}）`}`);
+        showBingResult("Bing 状态检查", lines, result.ok ? "success" : "warning");
+        setStatus(result.ok ? "Bing 验证文件线上正常" : "Bing 检查未通过");
+      });
+
+      $("bingSubmitSitemapBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/bing/sitemap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        showBingResult(result.ok ? "Sitemap 已提交给 Bing" : "Sitemap 提交失败", [result.message || ""], result.ok ? "success" : "warning");
+        setStatus(result.message || "");
+      });
+
+      $("bingInspectBtn").onclick = () => runAction(async () => {
+        const url = $("bingInspectUrlInput").value.trim();
+        if (!url) throw new Error("请输入要查询收录状态的完整 URL。");
+        const result = await api("/api/bing/inspect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inspectionUrl: url }),
+        });
+        if (!result.ok) {
+          showBingResult("收录查询失败", [result.message || ""], "warning");
+          setStatus(result.message || "查询失败");
+          return;
+        }
+        const lines = [
+          result.message || "",
+          result.lastCrawled ? `上次抓取：${result.lastCrawled}` : "",
+          result.httpCode ? `HTTP 状态码：${result.httpCode}` : "",
+        ].filter(Boolean);
+        showBingResult(`Bing 收录状态：${url}`, lines, result.indexed ? "success" : "info");
         setStatus(result.message || "");
       });
 
@@ -1979,7 +2129,7 @@
           setStatus("模型连接测试通过");
         });
 
-      Promise.all([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus()]).then(refresh).catch((error) => {
+      Promise.all([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus()]).then(refresh).catch((error) => {
         setStatus(error.message || String(error), true);
       });
       loadAiStatus();
