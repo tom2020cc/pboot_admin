@@ -226,6 +226,30 @@
       .gi-row.is-done .gi-url { color: var(--el-text-color-secondary); }
       .gi-time { flex: 0 0 auto; color: var(--el-text-color-secondary); font-size: 11px; white-space: nowrap; }
 
+      /* ---------- 收录总览 ---------- */
+      .ov-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+      .ov-stat { background: var(--el-fill-color-light); border: 1px solid var(--el-border-color-light); border-radius: 8px; padding: 12px; }
+      .ov-stat .k { color: var(--el-text-color-secondary); font-size: 12px; }
+      .ov-stat .v { font-size: 18px; font-weight: 700; margin-top: 4px; word-break: break-all; }
+      .engine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+      .engine-card { border: 1px solid var(--el-border-color-light); border-radius: 10px; padding: 14px; background: var(--el-bg-color); }
+      .engine-card .ec-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .engine-card .ec-flag { font-size: 20px; line-height: 1; }
+      .engine-card .ec-name { font-weight: 700; font-size: 15px; }
+      .engine-card .ec-channel { color: var(--el-text-color-secondary); font-size: 11px; margin-left: 2px; }
+      .engine-card .ec-badge { margin-left: auto; font-size: 11px; padding: 2px 9px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+      .ec-badge.success { background: #e8f7ee; color: #176b3a; }
+      .ec-badge.warning { background: #fff7e6; color: #ad6800; }
+      .ec-badge.error { background: #fdeceb; color: #c0392b; }
+      .ec-badge.info { background: #e8f1fd; color: #1677ff; }
+      .engine-card .ec-stats { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+      .ec-stats .row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+      .ec-stats .row .k { color: var(--el-text-color-secondary); flex: 0 0 auto; }
+      .ec-stats .row .v { font-weight: 600; text-align: right; word-break: break-all; }
+      .engine-card .ec-next { font-size: 12px; color: var(--el-color-primary); border-top: 1px dashed var(--el-border-color-light); padding-top: 8px; }
+      .ov-inspect { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+      .ov-inspect .inspect-field { flex: 1; min-width: 320px; }
+
       /* ---------- 通用装饰 ---------- */
       .band h2 { display: flex; align-items: center; gap: 9px; }
       .band h2::before { content: ""; width: 5px; height: 20px; border-radius: 3px; background: var(--el-color-primary); flex: 0 0 auto; }
@@ -292,6 +316,23 @@
           <button id="copyProjectSummaryBtn">复制项目摘要</button>
         </div>
         <div id="projectIdentity" class="identity-grid"></div>
+      </section>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
+            <h2>收录状态总览</h2>
+            <div class="note">一屏看清各搜索引擎的配置、提交与收录入口状态。绿色=已就绪可用，橙色=部分配置，红色=待配置，蓝色=需手动。</div>
+          </div>
+          <button id="refreshOverviewBtn">刷新总览</button>
+        </div>
+        <div class="ov-stats" id="ovStats"></div>
+        <div class="engine-grid" id="engineGrid"></div>
+        <div class="ov-inspect">
+          <label class="inspect-field"><span>查询某 URL 在各平台的收录情况（Google + Bing）</span><input id="ovInspectUrlInput" placeholder="https://shanbo.cc/xxx/" /></label>
+          <button class="primary" id="ovInspectBtn">查询收录</button>
+        </div>
+        <div id="ovInspectResult" class="google-result"></div>
       </section>
 
       <section class="band">
@@ -482,6 +523,44 @@
           <a class="action-link" id="bingApiKeyLink" href="https://www.bing.com/webmasters/settings/apikey" target="_blank" rel="noopener">生成 API Key</a>
         </div>
         <div id="bingResult" class="google-result"></div>
+      </section>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
+            <h2>百度收录（中文站）</h2>
+            <div class="note">百度不认 IndexNow，是中文站 cn.shanbo.cc 最大的独立入口。百度提供「主动推送」实时 API：把 token 填进来即可一键推送全部中文站 URL，重复推送会被当作内容更新。注意：未备案的 .cc 域名百度收录会偏慢，推送能提交上去但不保证立即收录。</div>
+          </div>
+          <span class="note" id="baiduMeta">未配置</span>
+        </div>
+        <div class="google-workflow">
+          <div class="google-step"><strong>1. 添加站点</strong><span>打开百度搜索资源平台(ziyuan.baidu.com)，添加 cn.shanbo.cc 并完成验证。</span></div>
+          <div class="google-step"><strong>2. 获取 token</strong><span>进入「普通收录 → 主动推送」，复制接口地址里的 token，粘贴到下方保存。</span></div>
+          <div class="google-step"><strong>3. 推送 URL</strong><span>点「推送中文站全部 URL」，工具会把中文站 URL 直提给 data.zz.baidu.com。</span></div>
+          <div class="google-step"><strong>4. 每日运行</strong><span>可每日运行一次 auto-submit-baidu.js，或在这里手动点推送。</span></div>
+        </div>
+        <div class="google-actions">
+          <label class="inspect-field" style="flex: 1;"><span>百度推送 token（ziyuan.baidu.com → 普通收录 → 主动推送 接口地址里的 token）</span><input id="baiduTokenInput" type="password" placeholder="粘贴百度推送 token" /></label>
+          <button class="primary" id="saveBaiduBtn">保存 token</button>
+          <button id="clearBaiduBtn">清除</button>
+        </div>
+        <div class="google-actions">
+          <label class="inspect-field"><span>推送站点（site，默认中文站）</span><input id="baiduSiteInput" placeholder="https://cn.shanbo.cc" /></label>
+          <button class="warn" id="baiduPushBtn">推送中文站全部 URL</button>
+          <a class="action-link" id="baiduPlatformLink" href="https://ziyuan.baidu.com/" target="_blank" rel="noopener">打开百度搜索资源平台</a>
+        </div>
+        <div id="baiduResult" class="google-result"></div>
+      </section>
+
+      <section class="band">
+        <div class="band-title">
+          <div>
+            <h2>国内其它搜索引擎</h2>
+            <div class="note">360、搜狗、神马、头条没有稳定的公开实时推送 API，标准做法是在各自站长平台验证站点后提交一次 sitemap（下方会列出当前 sitemap 地址）。</div>
+          </div>
+          <span class="note" id="cnEnginesMeta">加载中</span>
+        </div>
+        <div class="guide-grid" id="cnEnginesList"></div>
       </section>
 
       <section class="band">
@@ -1143,6 +1222,200 @@
         ].filter(Boolean);
         showBingResult(`Bing 收录状态：${url}`, lines, result.indexed ? "success" : "info");
         setStatus(result.message || "");
+      });
+
+      function showBaiduResult(title, lines = [], tone = "info") {
+        const result = $("baiduResult");
+        const safeLines = (Array.isArray(lines) ? lines : [lines]).filter((line) => line !== undefined && line !== null && line !== "");
+        result.style.display = "block";
+        result.dataset.tone = tone;
+        result.innerHTML = `
+          <div class="google-result-title">${escapeHtml(title)}</div>
+          ${safeLines.length ? `<pre>${escapeHtml(safeLines.join("\n"))}</pre>` : ""}
+        `;
+      }
+
+      async function loadBaiduStatus() {
+        try {
+          const data = await api("/api/baidu/status");
+          $("baiduSiteInput").value = data.site || "https://cn.shanbo.cc";
+          $("baiduTokenInput").value = "";
+          $("baiduTokenInput").placeholder = data.tokenConfigured ? "已配置（留空则不修改）" : "粘贴百度推送 token";
+          $("baiduMeta").textContent = data.tokenConfigured ? `token 已配置（站点：${data.site || "未填"}）` : "未配置 token";
+          $("baiduMeta").style.color = data.tokenConfigured ? "#176b3a" : "#d94b35";
+        } catch (_error) {
+          $("baiduMeta").textContent = "加载失败";
+        }
+      }
+
+      $("saveBaiduBtn").onclick = () => runAction(async () => {
+        const token = $("baiduTokenInput").value.trim();
+        if (!token) throw new Error("请粘贴百度推送 token。");
+        const result = await api("/api/baidu/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, site: $("baiduSiteInput").value.trim() }),
+        });
+        await loadBaiduStatus();
+        setStatus(result.message);
+      });
+
+      $("clearBaiduBtn").onclick = () => runAction(async () => {
+        if (!confirm("确定清除百度推送配置吗？")) return;
+        const result = await api("/api/baidu/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clear: true }),
+        });
+        await loadBaiduStatus();
+        setStatus(result.message);
+      });
+
+      $("baiduPushBtn").onclick = () => runAction(async () => {
+        const site = ($("baiduSiteInput").value || "https://cn.shanbo.cc").trim().replace(/\/+$/, "");
+        if (!site) throw new Error("请填写推送站点，例如 https://cn.shanbo.cc。");
+        let host = "";
+        try {
+          host = new URL(site).hostname;
+        } catch (_error) {
+          throw new Error("推送站点地址格式不正确。");
+        }
+        const urls = currentUrls
+          .map((item) => item.url)
+          .filter((u) => {
+            if (!u) return false;
+            try {
+              return new URL(u).hostname === host;
+            } catch (_error) {
+              return false;
+            }
+          });
+        const all = [...new Set([`${site}/`, ...urls])];
+        if (!all.length) throw new Error(`report 中没有 ${host} 的 URL，请先点「刷新检查」。`);
+        const result = await api("/api/baidu/push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls: all, site }),
+        });
+        const lines = [result.message || ""];
+        if (result.notSameSite && result.notSameSite.length) lines.push(`不在当前站点下：${result.notSameSite.length} 个（已忽略）`);
+        if (result.notValid && result.notValid.length) lines.push(`格式无效：${result.notValid.length} 个（已忽略）`);
+        showBaiduResult(result.ok ? "百度推送结果" : "百度推送失败", lines, result.ok ? "success" : "warning");
+        setStatus(result.message || "");
+      });
+
+      async function loadChineseEngines() {
+        try {
+          const data = await api("/api/chinese-engines");
+          $("cnEnginesMeta").textContent = `sitemap：${data.sitemapUrl || ""}`;
+          $("cnEnginesList").innerHTML = (data.engines || []).map((engine) => `
+            <div class="guide">
+              <h3>${escapeHtml(engine.name)}</h3>
+              <ul>
+                <li>平台：<a href="${escapeHtml(engine.platform)}" target="_blank" rel="noopener">${escapeHtml(engine.platform)}</a></li>
+                ${engine.sitemapSubmit ? `<li>sitemap 提交：<a href="${escapeHtml(engine.sitemapSubmit)}" target="_blank" rel="noopener">${escapeHtml(engine.sitemapSubmit)}</a></li>` : ""}
+                <li>${escapeHtml(engine.note || "")}</li>
+              </ul>
+            </div>
+          `).join("");
+        } catch (_error) {
+          $("cnEnginesMeta").textContent = "加载失败";
+        }
+      }
+
+      const TONE_LABEL = { success: "已就绪", warning: "部分配置", error: "待配置", info: "需手动" };
+
+      async function loadOverview() {
+        try {
+          const data = await api("/api/indexing-overview");
+          $("ovStats").innerHTML = `
+            <div class="ov-stat"><div class="k">收录 URL 总数</div><div class="v">${data.urlCount}</div></div>
+            <div class="ov-stat"><div class="k">已就绪引擎</div><div class="v">${data.readyCount}</div></div>
+            <div class="ov-stat"><div class="k">待完善引擎</div><div class="v">${data.pendingCount}</div></div>
+            <div class="ov-stat"><div class="k">Sitemap 地址</div><div class="v">${escapeHtml(data.sitemapUrl || "-")}</div></div>
+          `;
+          $("engineGrid").innerHTML = (data.engines || []).map((e) => {
+            const badge = `<span class="ec-badge ${e.tone}">${TONE_LABEL[e.tone] || e.tone}</span>`;
+            const stats = (e.stats || []).map((s) => `<div class="row"><span class="k">${escapeHtml(s.label)}</span><span class="v">${escapeHtml(s.value)}</span></div>`).join("");
+            const link = e.link ? `<a href="${escapeHtml(e.link)}" target="_blank" rel="noopener" style="margin-left:6px;font-size:11px;white-space:nowrap;">打开 ↗</a>` : "";
+            return `
+              <div class="engine-card">
+                <div class="ec-head">
+                  <span class="ec-flag">${escapeHtml(e.flag || "🔎")}</span>
+                  <span class="ec-name">${escapeHtml(e.name)}</span>
+                  ${badge}
+                </div>
+                <div class="ec-channel">${escapeHtml(e.channel || "")}</div>
+                <div class="ec-stats">${stats}</div>
+                <div class="ec-next">${escapeHtml(e.nextAction || "")}${link}</div>
+              </div>
+            `;
+          }).join("");
+        } catch (_error) {
+          $("engineGrid").innerHTML = `<div class="note">总览加载失败：${escapeHtml(_error.message || String(_error))}</div>`;
+        }
+      }
+
+      $("refreshOverviewBtn").onclick = () => runAction(async () => {
+        await loadOverview();
+        setStatus("收录总览已刷新");
+      });
+
+      function showOvInspectResult(title, lines = [], tone = "info") {
+        const el = $("ovInspectResult");
+        const safe = (Array.isArray(lines) ? lines : [lines]).filter((line) => line !== undefined && line !== null && line !== "");
+        el.style.display = "block";
+        el.dataset.tone = tone;
+        el.innerHTML = `<div class="google-result-title">${escapeHtml(title)}</div>${safe.length ? `<pre>${escapeHtml(safe.join("\n"))}</pre>` : ""}`;
+      }
+
+      $("ovInspectBtn").onclick = () => runAction(async () => {
+        const url = $("ovInspectUrlInput").value.trim();
+        if (!url) throw new Error("请输入要查询收录状态的完整 URL。");
+        const lines = [];
+        let overallTone = "info";
+
+        try {
+          const g = await api("/api/search-console/inspect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ inspectionUrl: url, siteUrl: $("gscSiteUrlInput").value.trim() }),
+          });
+          if (g.ok) {
+            const indexed = /indexed/i.test(g.coverageState || "");
+            lines.push(`【Google】${g.coverageState || "未知"}（${indexed ? "已收录" : "未收录 / 待处理"}）`);
+            if (g.indexingState) lines.push(`  索引状态：${g.indexingState}`);
+            if (g.lastCrawlTime) lines.push(`  上次抓取：${g.lastCrawlTime}`);
+            if (indexed) overallTone = "success";
+          } else {
+            lines.push(`【Google】查询失败：${g.message || ""}`);
+          }
+        } catch (error) {
+          lines.push(`【Google】查询失败：${error.message || String(error)}`);
+        }
+
+        try {
+          const b = await api("/api/bing/inspect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ inspectionUrl: url }),
+          });
+          if (b.ok) {
+            lines.push(`【Bing】${b.indexed ? "已收录" : "未收录或未知"}`);
+            if (b.lastCrawled) lines.push(`  上次抓取：${b.lastCrawled}`);
+            if (b.httpCode) lines.push(`  HTTP 状态：${b.httpCode}`);
+            if (b.indexed) overallTone = "success";
+          } else {
+            lines.push(`【Bing】查询失败：${b.message || ""}`);
+          }
+        } catch (error) {
+          lines.push(`【Bing】查询失败：${error.message || String(error)}`);
+        }
+
+        lines.push("");
+        lines.push("【百度 / Yandex】暂无公开收录查询 API，请到各自平台「收录」页手动查。");
+        showOvInspectResult(`收录情况：${url}`, lines, overallTone);
+        setStatus("查询完成");
       });
 
       async function runIndexNowPush(triggerButton) {
@@ -2186,7 +2459,7 @@
           setStatus("模型连接测试通过");
         });
 
-      Promise.all([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus()]).then(refresh).catch((error) => {
+      Promise.all([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus(), loadBaiduStatus(), loadChineseEngines(), loadOverview()]).then(refresh).catch((error) => {
         setStatus(error.message || String(error), true);
       });
       loadAiStatus();

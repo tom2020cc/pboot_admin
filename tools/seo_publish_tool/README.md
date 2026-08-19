@@ -69,6 +69,32 @@ IndexNow 通知 Bing 等支持该协议的搜索引擎，不等于提交给 Goog
 - 确保每个提交域名都能公开访问对应的 Key 文件。
 - Key 文件内容与工具当前生成的 IndexNow Key 完全一致。
 
+## 百度收录（中文站）
+
+百度不认 IndexNow，是中文站 cn.shanbo.cc 的独立入口。工具内置了百度「主动推送」实时 API：
+
+1. 打开百度搜索资源平台(ziyuan.baidu.com)，添加 cn.shanbo.cc 并完成验证。
+2. 进入「普通收录 → 主动推送」，复制接口地址里的 token。
+3. 在工具「百度收录」面板粘贴 token 保存，点「推送中文站全部 URL」。
+4. 也可每日运行 `node auto-submit-baidu.js` 自动推送中文站 URL（重复推送会被当作内容更新，无需去重）。
+
+注意：未备案的 .cc 域名百度收录会偏慢，主动推送能提交上去但不保证立即收录。每日配额以百度返回的 remain 为准。
+
+## 国内其它搜索引擎
+
+360、搜狗、神马、头条没有稳定的公开实时推送 API，需在各自站长平台验证后提交一次 sitemap：
+
+- 360 搜索：zhanzhang.so.com
+- 搜狗搜索：zhanzhang.sogou.com
+- 神马搜索：zhanzhang.sm.cn（移动端）
+- 头条搜索：zhanzhang.toutiao.com
+
+工具「国内其它搜索引擎」面板会列出各平台入口和当前 sitemap 地址。
+
+## 多语言 hreflang（sitemap）
+
+工具生成 sitemap.xml 时，会为每个 URL 输出跨语言的 `<xhtml:link rel="alternate" hreflang="...">` 与 `x-default`，声明 7 个语言版本之间的对应关系（英文主域无前缀，其余语言以 `{lang}-` 前缀区分）。这是 Google/Bing 多语言收录的标准声明方式，无需在页面里再写 hreflang。
+
 ## 安全和迁移
 
 - `seo.config.json` 保存当前网站路径、端口和公开域名。

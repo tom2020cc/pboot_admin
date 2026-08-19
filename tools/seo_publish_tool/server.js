@@ -94,6 +94,7 @@ function readConfig() {
     indexNow: { enabled: true, key: "", endpoint: "https://api.indexnow.org/indexnow" },
     googleSearchConsole: { sitemapUrl: "" },
     googleIndexing: { serviceAccount: null, clientEmail: "" },
+    baidu: { enabled: true, token: "", site: "" },
     robots: { disallow: [] },
     ...config,
   };
@@ -613,14 +614,64 @@ async function inspectSite() {
   }
 }
 
+const HREFLANG_LANGS = ["en", "cn", "es", "fr", "ru", "ar", "pt"];
+
+function hreflangCode(lang) {
+  const map = { en: "en", cn: "zh-CN", es: "es", fr: "fr", ru: "ru", ar: "ar", pt: "pt" };
+  return map[lang] || lang || "x-default";
+}
+
+// 计算跨语言等价页面的分组键：同一内容的各语言版本会得到相同 key
+function sitemapGroupKey(item) {
+  let pathname = "/";
+  try {
+    pathname = new URL(item.url).pathname || "/";
+  } catch (_error) {
+    /* keep "/" */
+  }
+  pathname = pathname.replace(/\/+$/, "");
+  if (!pathname) return "@home";
+  const segs = pathname.split("/").filter(Boolean);
+  if (segs.length >= 2 && HREFLANG_LANGS.includes(segs[0])) {
+    // 内容页 /{lang}/{id}/...：按语言段之后的部分分组
+    return `c:${segs.slice(1).join("/")}`;
+  }
+  // 栏目/单页：去掉开头的 {lang}- 前缀
+  let first = segs[0];
+  const match = first.match(/^([a-z]{2})-(.+)$/);
+  if (match && HREFLANG_LANGS.includes(match[1])) first = match[2];
+  return `s:${[first].concat(segs.slice(1)).join("/")}`;
+}
+
 function generateSitemapXml(urls) {
-  const lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'];
+  const groups = new Map();
+  for (const item of urls) {
+    const key = sitemapGroupKey(item);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+
+  const lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">',
+  ];
   for (const item of urls) {
     lines.push("  <url>");
     lines.push(`    <loc>${escapeXml(item.url)}</loc>`);
     if (item.lastmod) lines.push(`    <lastmod>${escapeXml(item.lastmod)}</lastmod>`);
     lines.push(`    <changefreq>${escapeXml(item.changefreq || "weekly")}</changefreq>`);
     lines.push(`    <priority>${escapeXml(item.priority || "0.70")}</priority>`);
+    const group = groups.get(sitemapGroupKey(item)) || [item];
+    const seen = new Set();
+    for (const alt of group) {
+      if (!alt.url || seen.has(alt.lang)) continue;
+      seen.add(alt.lang);
+      lines.push(`    <xhtml:link rel="alternate" hreflang="${hreflangCode(alt.lang)}" href="${escapeXml(alt.url)}"/>`);
+    }
+    const xDefault = group.find((entry) => entry.lang === "en") || group[0];
+    if (xDefault && xDefault.url) {
+      lines.push(`    <xhtml:link rel="alternate" hreflang="x-default" href="${escapeXml(xDefault.url)}"/>`);
+    }
     lines.push("  </url>");
   }
   lines.push("</urlset>");
@@ -1086,6 +1137,239 @@ async function inspectBingUrl(siteUrl, targetUrl, apiKey) {
     httpCode: d.HttpStatusCode || d.HttpCode || d.httpCode || "",
     message: `Bing 收录状态：${indexed ? "已收录" : "未收录或未知"}`,
     raw: d,
+  };
+}
+
+// ===== 百度搜索资源平台（主动推送 API，token 在 ziyuan.baidu.com 生成） =====
+
+function getBaiduSettings(config = readConfig()) {
+  const baidu = config.baidu || {};
+  const baseUrl = cleanBaseUrl(config.siteBaseUrl || "");
+  return {
+    enabled: baidu.enabled !== false,
+    token: String(baidu.token || "").trim(),
+    site: String(baidu.site || baseUrl).trim(),
+    tokenConfigured: Boolean(baidu.token),
+    sitemapUrl: `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`,
+    links: {
+      platform: "https://ziyuan.baidu.com/",
+      addSite: "https://ziyuan.baidu.com/linksubmit/index",
+      sitemapSubmit: "https://ziyuan.baidu.com/linksubmit/index",
+    },
+  };
+}
+
+async function submitBaiduUrls(urls, options = {}) {
+  const cfg = getBaiduSettings();
+  if (!cfg.token) throw new Error("请先配置百度推送 token（百度搜索资源平台 → 普通收录 → 主动推送）。");
+  const site = String(options.site || cfg.site || "").trim();
+  if (!site) throw new Error("缺少百度推送站点（site），请在配置中填写，例如 https://cn.shanbo.cc。");
+  const list = (Array.isArray(urls) ? urls : [urls])
+    .map((value) => String(value || "").trim())
+    .filter((value) => /^https?:\/\//i.test(value));
+  if (!list.length) return { ok: true, submitted: 0, success: 0, message: "没有可提交的 URL。" };
+
+  const endpoint = `http://data.zz.baidu.com/urls?site=${encodeURIComponent(site)}&token=${encodeURIComponent(cfg.token)}`;
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: list.join("\n"),
+      signal: AbortSignal.timeout(60000),
+    });
+  } catch (error) {
+    throw new Error(`百度接口请求失败：${error.message || String(error)}。请确认服务器能访问 data.zz.baidu.com。`);
+  }
+  const text = await response.text();
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch (_error) {
+    parsed = null;
+  }
+  const success = parsed ? Number(parsed.success) : 0;
+  const remain = parsed ? Number(parsed.remain) : null;
+  return {
+    ok: response.ok && parsed && typeof parsed.success !== "undefined",
+    status: response.status,
+    submitted: list.length,
+    success: Number.isFinite(success) ? success : 0,
+    remain: Number.isFinite(remain) ? remain : null,
+    notValid: parsed?.not_valid || [],
+    notSameSite: parsed?.not_same_site || [],
+    message: parsed
+      ? `百度推送：成功 ${success}/${list.length}${remain != null ? `，剩余配额 ${remain}` : ""}`
+      : `百度接口返回异常：HTTP ${response.status} ${text.slice(0, 160)}`,
+  };
+}
+
+// 国内搜索引擎站长平台入口（360/搜狗/神马/头条没有标准主动推送 API，需在各自平台提交 sitemap）
+function getChineseEnginesInfo(config = readConfig()) {
+  const baseUrl = cleanBaseUrl(config.siteBaseUrl || "");
+  const sitemapUrl = `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`;
+  return {
+    sitemapUrl,
+    engines: [
+      {
+        id: "baidu",
+        name: "百度",
+        submitApi: true,
+        platform: "https://ziyuan.baidu.com/",
+        note: "主动推送 API 已内置，填 token 即可；另建议在平台提交一次 sitemap。",
+      },
+      {
+        id: "360",
+        name: "360 搜索",
+        platform: "https://zhanzhang.so.com/",
+        sitemapSubmit: "https://zhanzhang.so.com/sitetool/sitemap",
+        note: "在 360 站长平台验证站点后提交 sitemap（无稳定公开的实时推送 API）。",
+      },
+      {
+        id: "sogou",
+        name: "搜狗搜索",
+        platform: "https://zhanzhang.sogou.com/",
+        sitemapSubmit: "https://zhanzhang.sogou.com/",
+        note: "搜狗站长平台验证后提交 sitemap。",
+      },
+      {
+        id: "shenma",
+        name: "神马搜索",
+        platform: "https://zhanzhang.sm.cn/",
+        sitemapSubmit: "https://zhanzhang.sm.cn/",
+        note: "阿里旗下移动端搜索，移动流量才有价值，可选。",
+      },
+      {
+        id: "toutiao",
+        name: "头条搜索",
+        platform: "https://zhanzhang.toutiao.com/",
+        sitemapSubmit: "https://zhanzhang.toutiao.com/",
+        note: "字节跳动旗下，可选。",
+      },
+    ],
+  };
+}
+
+// 收录状态总览：聚合各搜索引擎的配置/提交/验证状态，供顶部总览卡片展示
+async function getIndexingOverview() {
+  const config = readConfig();
+  const report = await inspectSite();
+  const baseUrl = cleanBaseUrl(config.siteBaseUrl || "");
+  const sitemapUrl = `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`;
+
+  const google = getGoogleIndexingConfig(config);
+  const gstore = loadGoogleSubmitted();
+  const gquota = googleQuotaInfo(gstore, config);
+  const sc = getSearchConsoleConfig(config);
+  const bing = getBingSettings(config);
+  const yandex = getYandexSettings(config);
+  const baidu = getBaiduSettings(config);
+  const indexNow = config.indexNow || {};
+  const indexNowKeyCount = Object.keys(indexNow.keys || {}).length;
+
+  const engines = [
+    {
+      id: "google",
+      name: "Google",
+      flag: "🔍",
+      channel: "Indexing API + Search Console",
+      configured: google.enabled,
+      tone: google.enabled ? "success" : "error",
+      stats: [
+        { label: "服务账号", value: google.enabled ? "已配置" : "未配置" },
+        { label: "已提交", value: `${Object.keys(gstore.submitted).length} 条` },
+        { label: "今日配额", value: `${gquota.dailyUsed} / ${gquota.dailyLimit}` },
+      ],
+      nextAction: google.enabled ? "可查单页收录 / 继续每日提交" : "粘贴服务账号 JSON",
+      queryable: google.enabled,
+      link: "https://search.google.com/search-console",
+    },
+    {
+      id: "bing",
+      name: "Bing",
+      flag: "🔎",
+      channel: "IndexNow + Bing Webmaster",
+      configured: bing.apiKeyConfigured || Boolean(bing.verification),
+      tone: bing.apiKeyConfigured ? "success" : "warning",
+      stats: [
+        { label: "API Key", value: bing.apiKeyConfigured ? "已配置" : "未配置" },
+        { label: "站点验证", value: bing.verification ? "已配置" : "未配置" },
+        { label: "URL 提交", value: "IndexNow 覆盖" },
+      ],
+      nextAction: bing.apiKeyConfigured ? "可查单页收录状态" : "生成 API Key 后可查收录",
+      queryable: bing.apiKeyConfigured,
+      link: "https://www.bing.com/webmasters/home",
+    },
+    {
+      id: "yandex",
+      name: "Yandex",
+      flag: "🇷🇺",
+      channel: "IndexNow + Yandex Webmaster",
+      configured: Boolean(yandex.verification) || yandex.webmasterTokenConfigured,
+      tone: yandex.webmasterTokenConfigured ? "success" : "warning",
+      stats: [
+        { label: "验证文件", value: yandex.verification?.filename ? "已配置" : "未配置" },
+        { label: "OAuth token", value: yandex.webmasterTokenConfigured ? "已配置" : "未配置" },
+        { label: "URL 提交", value: "IndexNow 覆盖" },
+      ],
+      nextAction: yandex.webmasterTokenConfigured ? "可提交 sitemap" : "配置 OAuth 后可提交 sitemap",
+      queryable: false,
+      link: "https://webmaster.yandex.com/sites/",
+    },
+    {
+      id: "baidu",
+      name: "百度",
+      flag: "🇨🇳",
+      channel: "主动推送 API（中文站）",
+      configured: baidu.tokenConfigured,
+      tone: baidu.tokenConfigured ? "success" : "error",
+      stats: [
+        { label: "推送 token", value: baidu.tokenConfigured ? "已配置" : "未配置" },
+        { label: "站点", value: baidu.site || "未填" },
+      ],
+      nextAction: baidu.tokenConfigured ? "可推送中文站全部 URL" : "去 ziyuan.baidu.com 拿 token",
+      queryable: false,
+      link: "https://ziyuan.baidu.com/",
+    },
+    {
+      id: "indexnow",
+      name: "IndexNow",
+      flag: "⚡",
+      channel: "Bing / DDG / Naver / Seznam / Yep / Yandex",
+      configured: Boolean(indexNow.enabled),
+      tone: indexNow.enabled ? "success" : "warning",
+      stats: [
+        { label: "状态", value: indexNow.enabled ? "已启用" : "未启用" },
+        { label: "Key 域名", value: `${indexNowKeyCount} 个` },
+      ],
+      nextAction: "点「推送 IndexNow」一次通吃多家",
+      queryable: false,
+      link: "https://www.indexnow.org/",
+    },
+    {
+      id: "cn",
+      name: "360 / 搜狗 / 神马 / 头条",
+      flag: "🏮",
+      channel: "站长平台 sitemap（手动）",
+      configured: true,
+      tone: "info",
+      stats: [
+        { label: "方式", value: "各平台提交 sitemap" },
+        { label: "sitemap", value: sitemapUrl },
+      ],
+      nextAction: "在各站长平台提交一次 sitemap",
+      queryable: false,
+      link: "https://zhanzhang.so.com/",
+    },
+  ];
+
+  return {
+    siteBaseUrl: baseUrl,
+    sitemapUrl,
+    urlCount: report.urls.length,
+    readyCount: engines.filter((item) => item.tone === "success").length,
+    pendingCount: engines.filter((item) => item.tone === "warning" || item.tone === "error").length,
+    engines,
   };
 }
 
@@ -2294,6 +2578,52 @@ async function handleApi(req, res, pathname) {
       if (!targetUrl) throw new Error("缺少 inspectionUrl（要查询的 URL）。");
       if (!siteUrl) throw new Error("缺少 siteUrl。");
       sendJson(res, await inspectBingUrl(siteUrl, targetUrl, body.apiKey));
+      return;
+    }
+    if (req.method === "GET" && pathname === "/api/baidu/status") {
+      sendJson(res, getBaiduSettings());
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/baidu/config") {
+      const body = await readRequestBody(req);
+      const config = readConfig();
+      if (body.clear) {
+        config.baidu = { enabled: true, token: "", site: "" };
+        writeJson(CONFIG_PATH, config);
+        sendJson(res, { ok: true, message: "已清除百度推送配置。" });
+        return;
+      }
+      const token = String(body.token || "").trim();
+      if (!token) throw new Error("请粘贴百度推送 token。");
+      config.baidu = {
+        enabled: body.enabled !== false,
+        token,
+        site: String(body.site || "").trim(),
+      };
+      writeJson(CONFIG_PATH, config);
+      sendJson(res, { ok: true, message: "已保存百度推送配置。" });
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/baidu/push") {
+      const body = await readRequestBody(req);
+      const urls = Array.isArray(body.urls)
+        ? body.urls.map((value) => String(value || "").trim()).filter(Boolean)
+        : body.url
+          ? [String(body.url).trim()]
+          : [];
+      if (!urls.length) throw new Error("没有可提交的 URL。");
+      if (urls.length > 2000) throw new Error("百度单次最多提交 2000 个 URL，请分批提交。");
+      const result = await submitBaiduUrls(urls, { site: body.site });
+      result.urlCount = urls.length;
+      sendJson(res, result);
+      return;
+    }
+    if (req.method === "GET" && pathname === "/api/chinese-engines") {
+      sendJson(res, getChineseEnginesInfo());
+      return;
+    }
+    if (req.method === "GET" && pathname === "/api/indexing-overview") {
+      sendJson(res, await getIndexingOverview());
       return;
     }
     sendJson(res, { message: "API not found" }, 404);
