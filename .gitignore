@@ -20,6 +20,8 @@ ftp.config.json
 ai.config.json
 google-submitted.json
 .runtime.json
+git.token
+*.token
 
 # 本地上传与备份
 uploads/
