@@ -97,7 +97,7 @@ function normalizeConfigInput(body, current) {
     user: typeof body.user === "string" ? body.user.trim() : current.user,
     secure: Boolean(body.secure),
     remoteRoot: typeof body.remoteRoot === "string" ? body.remoteRoot.trim() || "/" : current.remoteRoot,
-    uploadScope: body.uploadScope === "seo" ? "seo" : "site",
+    uploadScope: body.uploadScope === "seo" || body.uploadScope === "full" ? body.uploadScope : "site",
     uploadMode: body.uploadMode === "full" ? "full" : "quick",
     recentImageDays: Math.max(1, Number(body.recentImageDays || current.recentImageDays || 14)),
     skipSameSizeAssets: body.skipSameSizeAssets !== false,
@@ -200,7 +200,9 @@ function startUpload(scopeOverride = "") {
   pushLog(
     config.uploadScope === "seo"
       ? "Upload scope: SEO files only."
-      : `Upload mode: ${config.uploadMode === "full" ? "full check" : `quick, recent ${config.recentImageDays || 14} days`}.`,
+      : config.uploadScope === "full"
+        ? "Upload scope: 整站上传（代码/文本始终覆盖，图片等同大小跳过）。"
+        : `Upload mode: ${config.uploadMode === "full" ? "full check" : `quick, recent ${config.recentImageDays || 14} days`}.`,
   );
 
   uploadFiles(config, files, {

@@ -130,14 +130,14 @@
           <label>密码<input id="password" type="password" placeholder="留空则保留原密码" /></label>
           <label>远程网站根目录<input id="remoteRoot" placeholder="/ 或 /wwwroot" /></label>
           <label>加密方式<select id="secure"><option value="false">普通 FTP</option><option value="true">FTPS</option></select></label>
-          <label>上传范围<select id="uploadScope"><option value="site">网站数据与图片</option><option value="seo">仅 SEO 文件</option></select></label>
+          <label>上传范围<select id="uploadScope"><option value="site">网站数据与图片</option><option value="seo">仅 SEO 收录文件</option><option value="full">整站上传</option></select></label>
           <label>上传模式<select id="uploadMode"><option value="quick">快速上传（日常推荐）</option><option value="full">完整校验（首次/大改）</option></select></label>
           <label>最近图片天数<input id="recentImageDays" type="number" min="1" value="14" /></label>
         </div>
         <div class="checks">
           <label><input id="uploadDatabase" type="checkbox" checked /> 上传数据库</label>
           <label><input id="uploadImages" type="checkbox" checked /> 上传图片目录</label>
-          <label><input id="skipSameSizeAssets" type="checkbox" checked /> 图片同大小自动跳过</label>
+          <label><input id="skipSameSizeAssets" type="checkbox" checked /> 图片/二进制文件同大小自动跳过</label>
         </div>
         <div class="mode-note" id="modeNote">快速上传只传数据库、sitemap/robots/IndexNow，以及最近改动的图片；完整校验才会检查全部图片。</div>
         <div class="toolbar">
@@ -312,8 +312,10 @@
         $("fileCount").textContent = plan.total;
         $("totalSize").textContent = plan.totalSizeText;
         const modeText = plan.uploadScope === "seo"
-          ? "仅 SEO 文件：sitemap.xml、robots.txt、根目录验证文件"
-          : plan.uploadMode === "full" ? "完整校验：检查全部图片" : `快速上传：只选最近 ${plan.recentImageDays} 天图片`;
+          ? "仅 SEO 收录文件：sitemap、robots、IndexNow key、验证文件"
+          : plan.uploadScope === "full"
+            ? "整站上传：代码始终覆盖，图片等同大小跳过"
+            : plan.uploadMode === "full" ? "完整校验：检查全部图片" : `快速上传：只选最近 ${plan.recentImageDays} 天图片`;
         $("planMeta").textContent = `本地根目录：${plan.localRoot}，远程根目录：${plan.remoteRoot}，${modeText}。${plan.truncated ? "文件预览只显示前 300 条。" : ""}`;
         $("groups").innerHTML = plan.groups.map((item) => `<tr><td>${item.name}</td><td>${item.count}</td><td>${item.sizeText}</td></tr>`).join("");
         $("files").innerHTML = plan.files.map((item) => `<tr><td>${item.relativePath}</td><td>${item.sizeText}</td></tr>`).join("");
@@ -328,10 +330,12 @@
       }
 
       async function startUpload() {
-        const seoOnly = $("uploadScope").value === "seo";
-        const question = seoOnly
-          ? "确定只上传 sitemap.xml、robots.txt 和根目录验证文件吗？"
-          : "确定开始上传到 FTP 吗？数据库会覆盖线上同路径文件。";
+        const scope = $("uploadScope").value;
+        const question = scope === "seo"
+          ? "确定只上传 sitemap.xml、robots.txt 和根目录收录/验证文件吗？"
+          : scope === "full"
+            ? "确定整站上传吗？代码/模板会覆盖线上同路径文件，图片/视频等同大小会自动跳过。"
+            : "确定开始上传到 FTP 吗？数据库会覆盖线上同路径文件。";
         if (!confirm(question)) return;
         setStatus("正在启动上传...");
         setResult("running", "上传准备中", "正在连接 FTP 并准备上传文件。");
@@ -375,14 +379,19 @@
       $("testBtn").onclick = () => testConnection().catch((error) => setStatus(error.message, true));
       $("uploadBtn").onclick = () => startUpload().catch((error) => { setBusy(false); setStatus(error.message, true); });
       $("uploadScope").onchange = () => {
-        const seoOnly = $("uploadScope").value === "seo";
-        $("uploadMode").disabled = seoOnly;
-        $("recentImageDays").disabled = seoOnly;
-        $("uploadDatabase").disabled = seoOnly;
-        $("uploadImages").disabled = seoOnly;
+        const scope = $("uploadScope").value;
+        const seoOnly = scope === "seo";
+        const fullSite = scope === "full";
+        $("uploadMode").disabled = seoOnly || fullSite;
+        $("recentImageDays").disabled = seoOnly || fullSite;
+        $("uploadDatabase").disabled = seoOnly || fullSite;
+        $("uploadImages").disabled = seoOnly || fullSite;
+        $("skipSameSizeAssets").disabled = seoOnly;
         $("modeNote").textContent = seoOnly
-          ? "仅上传 sitemap.xml、robots.txt 和网站根目录的搜索引擎验证 .txt 文件，不上传数据库和图片。"
-          : "快速上传只传数据库、sitemap/robots/IndexNow，以及最近改动的图片；完整校验才会检查全部图片。";
+          ? "仅上传 sitemap.xml、robots.txt、IndexNow key（*.txt）、搜索引擎验证文件（*.html/*.xml）等收录文件。"
+          : fullSite
+            ? "整站上传：代码/模板/文本文件（php/html/js/css/json/xml/txt 等）始终覆盖上传；图片/视频/字体/压缩包等二进制文件在远端同大小时自动跳过。"
+            : "快速上传只传数据库、sitemap/robots/IndexNow，以及最近改动的图片；完整校验才会检查全部图片。";
       };
 
       loadConfig().then(() => {

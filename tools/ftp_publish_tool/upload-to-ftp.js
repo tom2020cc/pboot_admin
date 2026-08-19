@@ -54,6 +54,26 @@ function isImageAssetFile(relativePath, config) {
   });
 }
 
+// 二进制/静态资源扩展名：这些文件「同大小即视为未变」，可跳过；其余（php/html/js/css/json/txt 等代码与文本）始终覆盖上传
+const BINARY_ASSET_EXTENSIONS = new Set([
+  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico", ".bmp", ".tif", ".tiff", ".avif",
+  ".pdf", ".mp4", ".mp3", ".avi", ".mov", ".mkv", ".flv", ".rmvb", ".wmv", ".webm", ".m4v", ".wav", ".ogg",
+  ".zip", ".rar", ".7z", ".gz", ".tar", ".bz2", ".tgz",
+  ".ttf", ".otf", ".woff", ".woff2", ".eot",
+  ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+  ".exe", ".dll", ".so", ".dylib", ".psd", ".ai", ".eps", ".apk",
+]);
+
+function isBinaryAssetFile(relativePath) {
+  const normalized = toPosix(relativePath).toLowerCase();
+  const dotIndex = normalized.lastIndexOf(".");
+  if (dotIndex >= 0) {
+    const ext = normalized.slice(dotIndex);
+    if (BINARY_ASSET_EXTENSIONS.has(ext)) return true;
+  }
+  return false;
+}
+
 function toPosix(value) {
   return value.replace(/\\/g, "/").replace(/^\/+/, "");
 }
@@ -151,7 +171,10 @@ function collectPath(localRoot, entryPath, excludeRules, output) {
 function collectFiles(config) {
   const localRoot = path.resolve(__dirname, config.localRoot);
   const files = [];
-  if (config.uploadScope === "seo") {
+  if (config.uploadScope === "full") {
+    // 整站上传：递归收集本地根目录全部文件，依赖 exclude 排除 admin 工具/缓存/备份等
+    collectDirectory(localRoot, ".", config.exclude, files);
+  } else if (config.uploadScope === "seo") {
     for (const seoPath of config.seoPaths || ["sitemap.xml", "robots.txt", "*.txt"]) {
       collectPath(localRoot, seoPath, config.exclude, files);
     }
@@ -173,7 +196,7 @@ function collectFiles(config) {
     return true;
   });
 
-  if (config.uploadScope === "seo" || config.uploadMode !== "quick") return deduped;
+  if (config.uploadScope === "seo" || config.uploadScope === "full" || config.uploadMode !== "quick") return deduped;
 
   const days = Math.max(1, Number(config.recentImageDays || 14));
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
@@ -295,7 +318,7 @@ async function uploadFiles(config, files, hooks = {}) {
             await connectWithRetry("scheduled", { index: index + 1, total: files.length, file });
           }
           const remotePath = joinRemote(config.remoteRoot, file.relativePath);
-          if (config.skipSameSizeAssets && !isDatabaseFile(file.relativePath)) {
+          if (config.skipSameSizeAssets && isBinaryAssetFile(file.relativePath)) {
             try {
               if (baseDir) await client.cd(baseDir);
               const remoteSize = await client.size(remotePath);
