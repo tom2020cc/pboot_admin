@@ -80,12 +80,15 @@ function buildNavigation() {
   }
   const backendPort = Number(env.BACKEND_PORT || 5000);
   const frontendPort = Number(env.FRONTEND_PORT || 5173);
+  const seoPort = Number(seo.localPort || 5188);
   return [
-    { id: "admin", label: "管理后台", url: `http://localhost:${frontendPort}/#/` },
-    { id: "backend", label: "后端接口", url: `http://localhost:${backendPort}/api-docs` },
-    { id: "config", label: "项目配置", url: `http://localhost:${Number(env.CONFIG_WIZARD_PORT || 5190)}` },
-    { id: "seo", label: "SEO 检查", url: `http://localhost:${Number(seo.localPort || 5188)}` },
-    { id: "ftp", label: "FTP 发布", url: `http://localhost:${PORT}`, active: true },
+    { id: "admin", label: "🖥️ 管理后台", url: `http://localhost:${frontendPort}/#/` },
+    { id: "backend", label: "🔌 后端接口", url: `http://localhost:${backendPort}/api-docs` },
+    { id: "config", label: "⚙️ 项目配置", url: `http://localhost:${Number(env.CONFIG_WIZARD_PORT || 5190)}` },
+    { id: "seo", label: "📊 SEO 检查", url: `http://localhost:${seoPort}` },
+    { id: "models", label: "🧠 模型总览", url: `http://localhost:${seoPort}/models.html` },
+    { id: "models-config", label: "🔑 模型配置", url: `http://localhost:${seoPort}/models-config.html` },
+    { id: "ftp", label: "📤 FTP 发布", url: `http://localhost:${PORT}`, active: true },
   ];
 }
 

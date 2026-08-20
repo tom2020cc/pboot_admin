@@ -10,5 +10,6 @@ cd /d "%~dp0"
 if not exist node_modules (
   call pnpm install
 )
-node launch.js
-pause
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\start-hidden.ps1" -Exe "node" -CmdArgs "launch.js" -Dir "%CD%" -Log "%CD%\logs\run"
+echo FTP 工具已在后台启动。日志：%CD%\logs\run.out.log
+timeout /t 2 /nobreak >nul

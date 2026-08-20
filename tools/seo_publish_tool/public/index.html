@@ -66,10 +66,10 @@
       .brand { display: flex; align-items: center; gap: 11px; font-size: 22px; font-weight: 700; }
       .brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; color: #fff; background: var(--el-color-primary); font-size: 16px; }
       .runtime { max-width: 62%; color: var(--el-text-color-regular); text-align: right; font-size: 12px; }
-      .tool-nav { position: sticky; top: 64px; z-index: 9; display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 5px 20px; border-bottom: 1px solid var(--el-border-color-light); background: var(--el-bg-color); overflow-x: auto; }
-      .tool-nav a { flex: 0 0 auto; padding: 8px 13px; border-radius: 6px; color: var(--el-text-color-regular); font-size: 14px; font-weight: 600; }
+      .tool-nav { position: sticky; top: 64px; z-index: 9; display: flex; align-items: center; gap: 6px; min-height: 48px; padding: 6px 20px; border-bottom: 1px solid var(--el-border-color-light); background: var(--el-bg-color); overflow-x: auto; box-shadow: 0 1px 3px rgba(16, 24, 40, .03); }
+      .tool-nav a { flex: 0 0 auto; padding: 7px 14px; border-radius: 999px; color: var(--el-text-color-regular); font-size: 13.5px; font-weight: 600; transition: all .15s ease; }
       .tool-nav a:hover { background: var(--el-color-primary-light-9); color: var(--el-color-primary); }
-      .tool-nav a.active { background: var(--el-color-primary); color: #fff; }
+      .tool-nav a.active { background: var(--el-color-primary); color: #fff; box-shadow: 0 2px 6px rgba(22, 119, 255, .28); }
       main { padding: 18px var(--space-page) 36px; }
       .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
 
@@ -626,7 +626,11 @@
         <section class="band">
           <div class="band-title">
             <h2>SEO 问题</h2>
-            <span id="issueTotal" class="note"></span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <a class="action-link" href="/models.html" target="_blank" rel="noopener">📊 模型总览</a>
+              <a class="action-link" href="/models-config.html" target="_blank" rel="noopener">⚙️ 模型配置</a>
+              <span id="issueTotal" class="note"></span>
+            </div>
           </div>
           <div class="ai-fix-bar">
             <label>
@@ -1708,7 +1712,12 @@
             renderAiLogs(job.logs || []);
             if (!aiPolling) pollAiJob();
           } else if (job.state === "completed" && job.result) {
-            showAiResult(true, "上次修复已完成", buildAiResultLines(job.result));
+            if (job.result.dryRun) {
+              renderAiPreview(job.result);
+              setStatus("预览完成，请检查后点「确认写入」或「取消」");
+            } else {
+              showAiResult(true, "上次修复已完成", buildAiResultLines(job.result));
+            }
           } else if (job.state === "stopped") {
             showAiResult(false, "上次任务已停止", [job.message || "数据库未写入"]);
           } else if (job.state === "failed") {

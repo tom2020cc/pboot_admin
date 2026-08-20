@@ -69,11 +69,13 @@ function getProjectSettings() {
 function buildNavigation(active = "seo") {
   const ports = getProjectSettings();
   return [
-    { id: "admin", label: "管理后台", url: `http://localhost:${ports.frontendPort}/#/` },
-    { id: "backend", label: "后端接口", url: `http://localhost:${ports.backendPort}/api-docs` },
-    { id: "config", label: "项目配置", url: `http://localhost:${ports.configPort}` },
-    { id: "seo", label: "SEO 检查", url: `http://localhost:${ports.seoPort}` },
-    { id: "ftp", label: "FTP 发布", url: `http://localhost:${ports.ftpPort}` },
+    { id: "admin", label: "🖥️ 管理后台", url: `http://localhost:${ports.frontendPort}/#/` },
+    { id: "backend", label: "🔌 后端接口", url: `http://localhost:${ports.backendPort}/api-docs` },
+    { id: "config", label: "⚙️ 项目配置", url: `http://localhost:${ports.configPort}` },
+    { id: "seo", label: "📊 SEO 检查", url: `http://localhost:${ports.seoPort}` },
+    { id: "models", label: "🧠 模型总览", url: `http://localhost:${ports.seoPort}/models.html` },
+    { id: "models-config", label: "🔑 模型配置", url: `http://localhost:${ports.seoPort}/models-config.html` },
+    { id: "ftp", label: "📤 FTP 发布", url: `http://localhost:${ports.ftpPort}` },
   ].map((item) => ({ ...item, active: item.id === active }));
 }
 

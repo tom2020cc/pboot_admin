@@ -26,32 +26,35 @@ const seoPort = numberEnv(import.meta.env.VITE_SEO_TOOL_PORT, 5188);
 const ftpPort = numberEnv(import.meta.env.VITE_FTP_TOOL_PORT, 5189);
 
 const items = [
-  { id: "admin", label: "管理后台", url: `http://localhost:${frontendPort}/#/` },
-  { id: "backend", label: "后端接口", url: `http://localhost:${backendPort}/api-docs` },
-  { id: "config", label: "项目配置", url: `http://localhost:${configPort}` },
-  { id: "seo", label: "SEO 检查", url: `http://localhost:${seoPort}` },
-  { id: "ftp", label: "FTP 发布", url: `http://localhost:${ftpPort}` },
+  { id: "admin", label: "🖥️ 管理后台", url: `http://localhost:${frontendPort}/#/` },
+  { id: "backend", label: "🔌 后端接口", url: `http://localhost:${backendPort}/api-docs` },
+  { id: "config", label: "⚙️ 项目配置", url: `http://localhost:${configPort}` },
+  { id: "seo", label: "📊 SEO 检查", url: `http://localhost:${seoPort}` },
+  { id: "models", label: "🧠 模型总览", url: `http://localhost:${seoPort}/models.html` },
+  { id: "models-config", label: "🔑 模型配置", url: `http://localhost:${seoPort}/models-config.html` },
+  { id: "ftp", label: "📤 FTP 发布", url: `http://localhost:${ftpPort}` },
 ];
 </script>
 
 <style scoped>
 .tool-nav {
   display: flex;
-  min-height: 44px;
+  min-height: 48px;
   align-items: center;
-  gap: 4px;
-  padding: 5px 20px;
+  gap: 6px;
+  padding: 6px 20px;
   overflow-x: auto;
   border-bottom: 1px solid var(--el-border-color-light);
   background: var(--el-bg-color);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.03);
 }
 
 .tool-nav a {
   flex: 0 0 auto;
-  padding: 8px 13px;
-  border-radius: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
   color: var(--el-text-color-regular);
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   text-decoration: none;
   transition:
@@ -67,5 +70,6 @@ const items = [
 .tool-nav a.active {
   color: #fff;
   background: var(--el-color-primary);
+  box-shadow: 0 2px 6px rgba(22, 119, 255, 0.28);
 }
 </style>

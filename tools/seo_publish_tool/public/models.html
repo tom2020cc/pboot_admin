@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 模型总览</title>
+    <style>
+      :root {
+        --el-color-primary: #1677ff;
+        --el-color-primary-light-5: #69b1ff;
+        --el-color-primary-light-7: #91caff;
+        --el-color-primary-light-9: #e6f4ff;
+        --el-color-primary-dark-2: #0958d9;
+        --el-color-success: #2f9e5b;
+        --el-color-success-light-8: #d6f0e0;
+        --el-color-success-light-9: #edf9f1;
+        --el-color-warning: #ee9418;
+        --el-color-warning-light-8: #fdeccd;
+        --el-color-warning-light-9: #fff8ed;
+        --el-color-warning-dark-2: #be7613;
+        --el-color-danger: #f04438;
+        --el-color-danger-light-8: #fdcfcc;
+        --el-color-danger-light-9: #fff1f0;
+        --text-success: #176b3a;
+        --text-warning: #b25e09;
+        --text-danger: #d94b35;
+        --el-text-color-primary: #303133;
+        --el-text-color-regular: #606266;
+        --el-text-color-secondary: #909399;
+        --el-border-color: #dcdfe6;
+        --el-border-color-light: #e4e7ed;
+        --el-border-color-lighter: #ebeef5;
+        --el-bg-color: #ffffff;
+        --el-bg-color-page: #f5f7fa;
+        --el-fill-color-light: #f5f7fa;
+        --radius-card: 10px;
+        --shadow-card: 0 1px 2px rgba(16, 24, 40, .04), 0 2px 6px rgba(16, 24, 40, .06);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: var(--el-text-color-primary); background: var(--el-bg-color-page); font: 14px/1.6 "PingFang SC", "Microsoft YaHei", Inter, Arial, sans-serif; }
+      button { height: 32px; padding: 0 13px; border: 1px solid var(--el-border-color); border-radius: 7px; color: var(--el-text-color-primary); background: var(--el-bg-color); cursor: pointer; font-weight: 600; transition: all .15s ease; }
+      button:hover:not(:disabled) { border-color: var(--el-color-primary-light-5); color: var(--el-color-primary); }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+      a { color: var(--el-color-primary); text-decoration: none; }
+
+      .topbar { position: sticky; top: 0; z-index: 20; background: linear-gradient(135deg, #1677ff 0%, #4d8dff 55%, #69b1ff 100%); color: #fff; box-shadow: 0 2px 10px rgba(22, 119, 255, .25); }
+      .topbar-inner { max-width: 1180px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; min-height: 66px; padding: 12px 24px; }
+      .topbar .title { display: flex; align-items: center; gap: 13px; font-size: 21px; font-weight: 700; letter-spacing: .3px; }
+      .topbar .logo { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: rgba(255, 255, 255, .18); font-size: 19px; backdrop-filter: blur(4px); }
+      .topbar .sub { font-size: 12px; font-weight: 500; opacity: .9; }
+      .topbar .nav a { color: #fff; font-size: 13px; font-weight: 600; padding: 7px 13px; border: 1px solid rgba(255, 255, 255, .35); border-radius: 8px; background: rgba(255, 255, 255, .12); transition: background .15s ease; }
+      .topbar .nav a:hover { background: rgba(255, 255, 255, .22); }
+
+      main { max-width: 1180px; margin: 0 auto; padding: 22px 24px 56px; }
+
+      .banner { display: none; margin-bottom: 14px; padding: 12px 14px; border-left: 4px solid var(--el-color-danger); color: var(--text-danger); background: var(--el-color-danger-light-9); border-radius: 6px; }
+
+      .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+      .metric { display: flex; align-items: center; gap: 13px; padding: 15px 17px; border: 1px solid var(--el-border-color-light); border-radius: var(--radius-card); background: var(--el-bg-color); box-shadow: var(--shadow-card); }
+      .metric .ico { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 10px; font-size: 20px; background: var(--el-color-primary-light-9); }
+      .metric .ico.ok { background: var(--el-color-success-light-9); }
+      .metric .ico.warn { background: var(--el-color-warning-light-9); }
+      .metric .ico.bad { background: var(--el-color-danger-light-9); }
+      .metric .lbl { color: var(--el-text-color-secondary); font-size: 12px; }
+      .metric strong { display: block; font-size: 24px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+      .metric strong.ok { color: var(--text-success); }
+      .metric strong.warn { color: var(--text-warning); }
+      .metric strong.bad { color: var(--text-danger); }
+
+      .legend { display: flex; flex-wrap: wrap; gap: 7px 18px; margin-bottom: 6px; padding: 11px 15px; border: 1px dashed var(--el-border-color-light); border-radius: 8px; background: var(--el-fill-color-light); font-size: 12px; color: var(--el-text-color-regular); }
+      .legend .tag { margin-right: 3px; }
+
+      .group { margin-top: 24px; }
+      .group-head { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 9px; background: var(--el-bg-color); box-shadow: var(--shadow-card); }
+      .group-head .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+      .group-head h2 { margin: 0; font-size: 16px; }
+      .group-head .note { font-size: 12px; color: var(--el-text-color-secondary); }
+      .group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+
+      .card { position: relative; padding: 15px 17px; border: 1px solid var(--el-border-color-light); border-radius: var(--radius-card); background: var(--el-bg-color); box-shadow: var(--shadow-card); transition: transform .12s ease, box-shadow .12s ease; }
+      .card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16, 24, 40, .09); }
+      .card.off { opacity: .82; }
+      .card-head { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+      .card-head .name { font-size: 15px; font-weight: 700; }
+      .card-head .id { font-family: ui-monospace, Consolas, monospace; color: var(--el-text-color-secondary); font-size: 11.5px; }
+      .tag { padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid var(--el-border-color-light); color: var(--el-text-color-regular); background: var(--el-fill-color-light); white-space: nowrap; }
+      .tag.rec { color: var(--text-success); background: var(--el-color-success-light-9); border-color: var(--el-color-success-light-8); }
+      .tag.batch { color: var(--el-color-primary-dark-2); background: var(--el-color-primary-light-9); border-color: var(--el-color-primary-light-7); }
+      .tag.free { color: var(--text-success); background: var(--el-color-success-light-9); border-color: var(--el-color-success-light-8); }
+      .tag.paid { color: var(--text-warning); background: var(--el-color-warning-light-9); border-color: var(--el-color-warning-light-8); }
+      .tag.ready { color: var(--text-success); background: var(--el-color-success-light-9); border-color: var(--el-color-success-light-8); }
+      .tag.nokey { color: var(--el-text-color-secondary); background: var(--el-fill-color-light); border-color: var(--el-border-color-light); }
+      .tag.out { color: var(--text-danger); background: var(--el-color-danger-light-9); border-color: var(--el-color-danger-light-8); }
+      .card-body { margin-top: 9px; color: var(--el-text-color-regular); font-size: 13px; }
+      .card-body .purpose { margin-top: 4px; color: var(--el-text-color-secondary); font-size: 12px; }
+      .card-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+      .card-foot a { font-size: 12.5px; font-weight: 600; }
+      .test-result { display: none; margin-top: 10px; padding: 9px 11px; border-radius: 7px; font-size: 12.5px; }
+      .test-result.ok { display: block; color: var(--text-success); background: var(--el-color-success-light-9); border: 1px solid var(--el-color-success-light-8); }
+      .test-result.err { display: block; color: var(--text-danger); background: var(--el-color-danger-light-9); border: 1px solid var(--el-color-danger-light-8); }
+
+      @media (max-width: 760px) {
+        .summary { grid-template-columns: 1fr 1fr; }
+        .group-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div class="title"><span class="logo">🧠</span><div>AI 模型总览<div class="sub">了解每个模型的免费/付费、额度与当前可用状态</div></div></div>
+        <div class="nav"><a href="/models-config.html">⚙️ 模型配置</a><a href="/">← 返回工具</a></div>
+      </div>
+    </div>
+
+    <main>
+      <div class="banner" id="errBanner"></div>
+
+      <div class="summary">
+        <div class="metric"><span class="ico">🧩</span><div><span class="lbl">模型总数</span><strong id="mTotal">—</strong></div></div>
+        <div class="metric"><span class="ico ok">✅</span><div><span class="lbl">已配置 Key（可选）</span><strong class="ok" id="mReady">—</strong></div></div>
+        <div class="metric"><span class="ico warn">🔑</span><div><span class="lbl">未配置 Key（置灰）</span><strong class="warn" id="mNoKey">—</strong></div></div>
+        <div class="metric"><span class="ico bad">⚠️</span><div><span class="lbl">免费额度耗尽</span><strong class="bad" id="mOut">—</strong></div></div>
+      </div>
+
+      <div class="legend">
+        <span><span class="tag rec">推荐</span>首选</span>
+        <span><span class="tag free">免费额度</span>有免费额度、有上限</span>
+        <span><span class="tag paid">付费</span>按量计费</span>
+        <span><span class="tag ready">Key 已配置</span>下拉可选</span>
+        <span><span class="tag nokey">未配置 Key</span>下拉置灰</span>
+        <span><span class="tag out">额度耗尽</span>需充值/关免费模式</span>
+      </div>
+
+      <div id="groups"></div>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      const PROVIDER = {
+        qwen:     { name: "千问 · 阿里云百炼", icon: "☁️", color: "#7c3aed", keyUrl: "https://bailian.console.aliyun.com/" },
+        zhipu:    { name: "智谱 GLM",          icon: "🧠", color: "#0ea5e9", keyUrl: "https://open.bigmodel.cn/" },
+        deepseek: { name: "DeepSeek",           icon: "🐋", color: "#2563eb", keyUrl: "https://platform.deepseek.com/" },
+        openai:   { name: "OpenAI",             icon: "✨", color: "#10a37f", keyUrl: "https://platform.openai.com/" },
+        google:   { name: "Google 翻译（免费回退）", icon: "🌐", color: "#4285f4", keyUrl: null },
+        mymemory: { name: "MyMemory（免费回退）",   icon: "📚", color: "#6b7280", keyUrl: null },
+      };
+
+      const EXTRA = {
+        "qwen3.6-flash-2026-04-16": { cost: "免费额度", note: "默认首选。免费额度有上限，用尽返回 403，需充值或关闭「仅使用免费额度」。" },
+        "qwen-mt-lite":             { cost: "免费额度", note: "翻译专用，短文本/标题/描述更快。" },
+        "qwen3.6-27b":              { cost: "免费额度", note: "高质量备选。" },
+        "qwen3-30b-a3b":            { cost: "免费额度", note: "长文/技术内容备选。" },
+        "qwen-plus-2025-01-25":     { cost: "免费额度", note: "稳定版备选。" },
+        "qwen3.7-max-2026-05-17":   { cost: "免费额度", note: "质量优先，更慢更贵。" },
+        "qwen3-235b-a22b":          { cost: "免费额度", note: "大模型备选，不建议日常批量用。" },
+        "qwen-turbo":               { cost: "付费（便宜）", note: "老通用快模型。" },
+        "qwen-plus":                { cost: "付费", note: "老通用质量模型。" },
+        "qwen-coder-plus":          { cost: "免费额度", note: "代码向，仅其他千问不可用时兜底。" },
+        "qwen3-vl-plus":            { cost: "免费额度", note: "视觉模型，不适合批量文本翻译。" },
+        "glm-4-flash-250414":       { cost: "免费额度", note: "非推理，快（实测 ~0.2 秒/次）。千问额度耗尽后的推荐替代。" },
+        "deepseek-chat":            { cost: "付费（极便宜）", note: "中文理解好、单价低；新用户历史上有送免费 token。需 Key。" },
+        "gpt-5.6-luna":             { cost: "付费（便宜）", note: "GPT-5.6 系列最快最便宜，批量 SEO/翻译首选。需 OpenAI Key + 绑卡。" },
+        "gpt-5.6-terra":            { cost: "付费（中等）", note: "GPT-5.6 中档，质量与速度均衡。需 Key + 绑卡。" },
+        "gpt-5.6-sol":              { cost: "付费（较贵）", note: "GPT-5.6 最高质量，更慢更贵。需 Key + 绑卡。" },
+        "google-free":              { cost: "免费（无 Key）", note: "非官方接口，不稳定，仅翻译流程兜底，不在 SEO 修复模型列表里。" },
+        "mymemory-free":            { cost: "免费（无 Key）", note: "公共免费额度有限，仅翻译流程兜底，不在 SEO 修复模型列表里。" },
+      };
+
+      const QWEN_EXHAUSTED = true;
+
+      const RESET = {
+        qwen: "免费额度限时/限次，非每日固定重置；耗尽需充值或关闭「仅使用免费额度」",
+        zhipu: "免费开放（零成本），无需重置",
+        deepseek: "按余额计费，无重置",
+        openai: "按余额计费，无重置",
+      };
+      const RESET_OVERRIDE = {
+        "qwen-turbo": "按量计费，无重置",
+        "qwen-plus": "按量计费，无重置",
+      };
+
+      const costOf = (m) => (EXTRA[m.value] || {}).cost || "—";
+      const noteOf = (m) => (EXTRA[m.value] || {}).note || "";
+      const resetOf = (m) => RESET_OVERRIDE[m.value] || RESET[m.provider] || "—";
+      const isFree = (m) => /免费/.test(costOf(m));
+      const keyUrlOf = (m) => (PROVIDER[m.provider] || {}).keyUrl || null;
+      const isQwenExhausted = (m) => QWEN_EXHAUSTED && m.provider === "qwen";
+
+      async function load() {
+        try {
+          const res = await fetch("/api/ai/status");
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          render((await res.json()).models || []);
+        } catch (e) {
+          $("errBanner").style.display = "block";
+          $("errBanner").textContent = "读取模型状态失败：" + (e.message || e) + "（请确认 SEO 工具在运行）";
+        }
+      }
+
+      function render(models) {
+        const list = [...models];
+        $("mTotal").textContent = list.length;
+        $("mReady").textContent = list.filter((m) => m.available).length;
+        $("mNoKey").textContent = list.filter((m) => !m.available && keyUrlOf(m)).length;
+        $("mOut").textContent = list.filter(isQwenExhausted).length;
+
+        const order = ["qwen", "zhipu", "deepseek", "openai"];
+        const groups = {};
+        for (const m of list) (groups[m.provider] = groups[m.provider] || []).push(m);
+
+        const html = [];
+        for (const provider of [...order, ...Object.keys(groups).filter((k) => !order.includes(k))]) {
+          const arr = groups[provider];
+          if (!arr || !arr.length) continue;
+          const p = PROVIDER[provider] || { name: provider, icon: "🔹", color: "#909399" };
+          const pnote = provider === "qwen" && QWEN_EXHAUSTED ? "免费额度已耗尽" : "";
+          html.push(`
+            <div class="group">
+              <div class="group-head">
+                <span class="dot" style="background:${p.color}"></span>
+                <span>${p.icon}</span>
+                <h2>${esc(p.name)}</h2>
+                ${pnote ? `<span class="note" style="color:var(--text-danger)">（${esc(pnote)}）</span>` : ""}
+              </div>
+              <div class="group-grid">${arr.map(card).join("")}</div>
+            </div>`);
+        }
+        $("groups").innerHTML = html.join("");
+      }
+
+      function statusTag(m) {
+        if (!m.available) return `<span class="tag nokey">未配置 Key</span>`;
+        if (isQwenExhausted(m)) return `<span class="tag out">额度耗尽</span>`;
+        return `<span class="tag ready">Key 已配置</span>`;
+      }
+
+      function card(m) {
+        const cost = costOf(m);
+        const costTag = isFree(m) ? `<span class="tag free">${esc(cost)}</span>` : `<span class="tag paid">${esc(cost)}</span>`;
+        const rec = m.recommended ? `<span class="tag rec">推荐</span>` : "";
+        const batch = m.batch ? `<span class="tag batch">适合批量</span>` : "";
+        const pri = `<span class="tag">#${m.priority}</span>`;
+        const keyUrl = keyUrlOf(m);
+        const testBtn = m.available ? `<button data-model="${esc(m.value)}" data-label="${esc(m.label)}" onclick="testModel(this)">测试连接</button>` : "";
+        const keyLink = keyUrl ? `<a href="${esc(keyUrl)}" target="_blank" rel="noopener">获取 Key →</a>` : "";
+        const quotaLink = m.quotaUrl ? `<a href="${esc(m.quotaUrl)}" target="_blank" rel="noopener">查看额度 →</a>` : "";
+        return `
+          <div class="card${m.available ? "" : " off"}">
+            <div class="card-head">
+              <span class="name">${esc(m.label)}</span>
+              <span class="id">${esc(m.value)}</span>
+              ${rec}${batch}${pri}${costTag}${statusTag(m)}
+            </div>
+            <div class="card-body">
+              <div>${esc(noteOf(m))}</div>
+              <div class="purpose">用途：${esc(m.purpose || "—")}</div>
+              <div class="purpose">额度：${esc(m.quotaText || "—")}</div>
+              <div class="purpose">额度重置：${esc(resetOf(m))}</div>
+            </div>
+            <div class="card-foot">${testBtn}${keyLink}${quotaLink}</div>
+            <div class="test-result" id="tr-${esc(m.value)}"></div>
+          </div>`;
+      }
+
+      async function testModel(btn) {
+        const model = btn.dataset.model, label = btn.dataset.label;
+        const box = $("tr-" + model), orig = btn.textContent;
+        btn.disabled = true; btn.textContent = "测试中…";
+        box.className = "test-result"; box.textContent = "";
+        try {
+          const res = await fetch("/api/ai/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }) });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.ok) {
+            box.className = "test-result ok";
+            box.textContent = `✅ ${label} 连接正常，${data.elapsedMs ? (data.elapsedMs / 1000).toFixed(1) + " 秒" : ""} 返回。`;
+          } else {
+            box.className = "test-result err";
+            box.textContent = `❌ ${label}：${esc(data.message || ("HTTP " + res.status))}`;
+          }
+        } catch (e) {
+          box.className = "test-result err";
+          box.textContent = `❌ ${label}：请求失败 ${esc(e.message || e)}`;
+        } finally {
+          btn.disabled = false; btn.textContent = orig;
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>

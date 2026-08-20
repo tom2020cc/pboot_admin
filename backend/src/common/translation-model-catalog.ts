@@ -139,21 +139,12 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     quotaUrl: QWEN_QUOTA_URL,
   },
   {
-    value: 'glm-4.7-flash',
-    label: 'Zhipu GLM-4.7-Flash',
-    provider: 'zhipu',
-    priority: 20,
-    recommended: true,
-    purpose: 'Domestic fallback for retrying failed items.',
-    quotaText: 'Open the Zhipu console to view the live free quota.',
-  },
-  {
     value: 'glm-4-flash-250414',
     label: 'Zhipu GLM-4-Flash',
     provider: 'zhipu',
-    priority: 21,
-    recommended: false,
-    purpose: 'Alternate GLM model for retrying failed items.',
+    priority: 20,
+    recommended: true,
+    purpose: 'Fast non-reasoning GLM fallback; recommended domestic alternative when Qwen quota is exhausted.',
     quotaText: 'Open the Zhipu console to view the live free quota.',
   },
   {
@@ -166,21 +157,30 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     quotaText: 'Billed against the DeepSeek account balance.',
   },
   {
-    value: 'gpt-4o-mini',
-    label: 'OpenAI gpt-4o-mini',
+    value: 'gpt-5.6-luna',
+    label: 'OpenAI GPT-5.6 Luna',
     provider: 'openai',
     priority: 40,
-    recommended: false,
-    purpose: 'Stable paid fallback model.',
+    recommended: true,
+    purpose: 'Fastest and cheapest of the GPT-5.6 family; good for batch SEO and translation.',
     quotaText: 'Billed against the OpenAI project balance and usage.',
   },
   {
-    value: 'gpt-4.1-mini',
-    label: 'OpenAI gpt-4.1-mini',
+    value: 'gpt-5.6-terra',
+    label: 'OpenAI GPT-5.6 Terra',
     provider: 'openai',
     priority: 41,
     recommended: false,
-    purpose: 'High-quality paid fallback model.',
+    purpose: 'Mid-tier GPT-5.6 model; balances quality and speed.',
+    quotaText: 'Billed against the OpenAI project balance and usage.',
+  },
+  {
+    value: 'gpt-5.6-sol',
+    label: 'OpenAI GPT-5.6 Sol',
+    provider: 'openai',
+    priority: 42,
+    recommended: false,
+    purpose: 'Highest-quality GPT-5.6 model; slower and more expensive.',
     quotaText: 'Billed against the OpenAI project balance and usage.',
   },
   {
@@ -203,6 +203,19 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
   },
 ];
 
+// \u9002\u5408\u6279\u91cf\u64cd\u4f5c\u7684\u6a21\u578b\uff08\u5feb\u3001\u4fbf\u5b9c\u3001\u975e\u63a8\u7406\u3001\u7ed3\u6784\u5316\u8f93\u51fa\u7a33\u5b9a\uff09\uff0c\u5217\u8868\u91cc\u7f6e\u9876 + \u6253\u300c\u9002\u5408\u6279\u91cf\u300d\u6807\u3002
+const BATCH_SUITABLE = new Set([
+  'qwen3.6-flash-2026-04-16',
+  'qwen-mt-lite',
+  'qwen3.6-27b',
+  'qwen3-30b-a3b',
+  'qwen-plus-2025-01-25',
+  'qwen-turbo',
+  'glm-4-flash-250414',
+  'deepseek-chat',
+  'gpt-5.6-luna',
+]);
+
 export function buildTranslationModelCatalog(availability: ProviderAvailability) {
   return MODEL_DEFINITIONS.map((definition) => {
     const requiresKey = ['qwen', 'zhipu', 'deepseek', 'openai'].includes(definition.provider);
@@ -222,11 +235,12 @@ export function buildTranslationModelCatalog(availability: ProviderAvailability)
         : '\u516c\u5171\u514d\u8d39';
     return {
       ...definition,
+      batch: BATCH_SUITABLE.has(definition.value),
       available,
       quotaStatus,
       quotaText,
       remainingQuota: null,
-      displayLabel: `#${definition.priority}${definition.recommended ? ' \u63a8\u8350' : ''} | ${definition.label} | \u989d\u5ea6: ${quotaLabel}`,
+      displayLabel: `#${definition.priority}${BATCH_SUITABLE.has(definition.value) ? ' \u9002\u5408\u6279\u91cf' : ''}${definition.recommended ? ' \u63a8\u8350' : ''} | ${definition.label} | \u989d\u5ea6: ${quotaLabel}`,
     };
-  }).sort((left, right) => left.priority - right.priority);
+  }).sort((left, right) => (left.batch === right.batch ? left.priority - right.priority : left.batch ? -1 : 1));
 }

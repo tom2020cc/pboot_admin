@@ -10,10 +10,10 @@
       header { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 30px; background: #fff; border-bottom: 1px solid #e4e9f2; }
       .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 800; }
       .mark { width: 34px; height: 34px; border-radius: 8px; background: #1f7afc; color: #fff; display: grid; place-items: center; font-size: 14px; }
-      .tool-nav { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 5px 30px; border-bottom: 1px solid #e4e9f2; background: #fff; overflow-x: auto; }
-      .tool-nav a { flex: 0 0 auto; padding: 8px 13px; border-radius: 5px; color: #51627b; font-size: 14px; font-weight: 700; text-decoration: none; }
+      .tool-nav { display: flex; align-items: center; gap: 6px; min-height: 48px; padding: 6px 30px; border-bottom: 1px solid #e4e9f2; background: #fff; overflow-x: auto; box-shadow: 0 1px 3px rgba(16, 24, 40, .03); }
+      .tool-nav a { flex: 0 0 auto; padding: 7px 14px; border-radius: 999px; color: #51627b; font-size: 13.5px; font-weight: 700; text-decoration: none; transition: all .15s ease; }
       .tool-nav a:hover { color: #1f7afc; background: #f0f6ff; }
-      .tool-nav a.active { color: #fff; background: #1f7afc; }
+      .tool-nav a.active { color: #fff; background: #1f7afc; box-shadow: 0 2px 6px rgba(31, 122, 252, .28); }
       main { padding: 24px 30px 48px; }
       .card { background: #fff; border: 1px solid #e2e9f3; border-radius: 8px; padding: 18px; margin-bottom: 18px; }
       h2 { margin: 0 0 14px; font-size: 18px; }
@@ -99,25 +99,7 @@
       </section>
 
       <section class="card">
-        <h2>2. 翻译模型 Key（可选）</h2>
-        <div class="grid">
-          <label>OpenAI API Key
-            <input id="openaiKey" type="password" placeholder="没有就留空" autocomplete="new-password" />
-          </label>
-          <label>智谱 Zhipu API Key
-            <input id="zhipuKey" type="password" placeholder="没有就留空" autocomplete="new-password" />
-          </label>
-          <label>DeepSeek API Key
-            <input id="deepseekKey" type="password" placeholder="没有就留空" autocomplete="new-password" />
-          </label>
-          <label>阿里百炼 DashScope API Key
-            <input id="dashscopeKey" type="password" placeholder="没有就留空" autocomplete="new-password" />
-          </label>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>3. 油管视频配置（可选）</h2>
+        <h2>2. 油管视频配置（可选）</h2>
         <div class="grid">
           <label>YouTube Data API Key
             <input id="youtubeKey" type="password" placeholder="没有就留空" autocomplete="new-password" />
@@ -130,7 +112,7 @@
       </section>
 
       <section class="card">
-        <h2>4. SEO 工具配置</h2>
+        <h2>3. SEO 工具配置</h2>
         <div class="grid">
           <label>网站名称
             <input id="seoSiteName" placeholder="例如 Shanbo" />
@@ -152,7 +134,7 @@
       </section>
 
       <section class="card">
-        <h2>5. FTP 上传工具配置</h2>
+        <h2>4. FTP 上传工具配置</h2>
         <div class="grid three">
           <label>FTP 网页工具本地端口<input id="ftpLocalPort" type="number" min="1024" max="65535" value="5189" /></label>
           <label>FTP 地址<input id="ftpHost" placeholder="ftp.example.com" /></label>
@@ -237,10 +219,6 @@
         $("backendPort").value = backend.backendPort || 5000;
         $("frontendPort").value = backend.frontendPort || 5173;
         $("requestBodyLimit").value = backend.requestBodyLimit || "10mb";
-        for (const [id, key] of [["openaiKey", "openai"], ["zhipuKey", "zhipu"], ["deepseekKey", "deepseek"], ["dashscopeKey", "dashscope"]]) {
-          $(id).value = "";
-          $(id).placeholder = backend.apiKeySet?.[key] ? "已配置，留空不修改" : "没有就留空";
-        }
         $("youtubeKey").value = "";
         $("youtubeKey").placeholder = backend.youtubeApiKeySet ? "已配置，留空不修改" : "没有就留空";
         $("youtubeChannelId").value = backend.youtubeChannelId || "";
@@ -290,10 +268,6 @@
             backendPort: Number($("backendPort").value || 5000),
             frontendPort: Number($("frontendPort").value || 5173),
             requestBodyLimit: $("requestBodyLimit").value || "10mb",
-            openaiKey: $("openaiKey").value,
-            zhipuKey: $("zhipuKey").value,
-            deepseekKey: $("deepseekKey").value,
-            dashscopeKey: $("dashscopeKey").value,
             youtubeKey: $("youtubeKey").value,
             youtubeChannelId: $("youtubeChannelId").value,
           },

@@ -167,12 +167,6 @@ function loadBackendEnv() {
     backupDir: env.BACKEND_DB_BACKUP_DIR || normalizeSlash(DEFAULT_BACKUP_DIR),
     youtubeApiKeySet: Boolean(env.YOUTUBE_API_KEY),
     youtubeChannelId: env.YOUTUBE_CHANNEL_ID || "",
-    apiKeySet: {
-      openai: Boolean(env.OPENAI_API_KEY),
-      zhipu: Boolean(env.ZHIPU_API_KEY),
-      deepseek: Boolean(env.DEEPSEEK_API_KEY),
-      dashscope: Boolean(env.DASHSCOPE_API_KEY),
-    },
   };
 }
 
@@ -258,12 +252,15 @@ function loadConfig(withDiagnostics = true) {
   if (!backend.pbootDbPath && dbs.length > 0) {
     backend.pbootDbPath = dbs[0].path;
   }
+  const seoPort = Number(seo.localPort || 5188);
   const navigation = [
-    { id: "admin", label: "管理后台", url: `http://localhost:${backend.frontendPort}/#/` },
-    { id: "backend", label: "后端接口", url: `http://localhost:${backend.backendPort}/api-docs` },
-    { id: "config", label: "项目配置", url: `http://localhost:${PORT}`, active: true },
-    { id: "seo", label: "SEO 检查", url: `http://localhost:${Number(seo.localPort || 5188)}` },
-    { id: "ftp", label: "FTP 发布", url: `http://localhost:${Number(ftp.localPort || 5189)}` },
+    { id: "admin", label: "🖥️ 管理后台", url: `http://localhost:${backend.frontendPort}/#/` },
+    { id: "backend", label: "🔌 后端接口", url: `http://localhost:${backend.backendPort}/api-docs` },
+    { id: "config", label: "⚙️ 项目配置", url: `http://localhost:${PORT}`, active: true },
+    { id: "seo", label: "📊 SEO 检查", url: `http://localhost:${seoPort}` },
+    { id: "models", label: "🧠 模型总览", url: `http://localhost:${seoPort}/models.html` },
+    { id: "models-config", label: "🔑 模型配置", url: `http://localhost:${seoPort}/models-config.html` },
+    { id: "ftp", label: "📤 FTP 发布", url: `http://localhost:${Number(ftp.localPort || 5189)}` },
   ];
   const result = {
     packageRoot: normalizeSlash(PACKAGE_ROOT),

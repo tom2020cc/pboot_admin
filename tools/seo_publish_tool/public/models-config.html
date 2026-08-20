@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 模型配置</title>
+    <style>
+      :root {
+        --el-color-primary: #1677ff;
+        --el-color-primary-light-5: #69b1ff;
+        --el-color-primary-light-9: #e6f4ff;
+        --el-color-primary-dark-2: #0958d9;
+        --el-color-success: #2f9e5b;
+        --el-color-success-light-8: #d6f0e0;
+        --el-color-success-light-9: #edf9f1;
+        --el-color-warning: #ee9418;
+        --el-color-warning-light-9: #fff8ed;
+        --el-color-danger: #f04438;
+        --el-color-danger-light-9: #fff1f0;
+        --text-success: #176b3a;
+        --text-warning: #b25e09;
+        --text-danger: #d94b35;
+        --el-text-color-primary: #303133;
+        --el-text-color-regular: #606266;
+        --el-text-color-secondary: #909399;
+        --el-border-color: #dcdfe6;
+        --el-border-color-light: #e4e7ed;
+        --el-bg-color: #ffffff;
+        --el-bg-color-page: #f5f7fa;
+        --el-fill-color-light: #f5f7fa;
+        --radius-card: 10px;
+        --shadow-card: 0 1px 2px rgba(16, 24, 40, .04), 0 2px 6px rgba(16, 24, 40, .06);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: var(--el-text-color-primary); background: var(--el-bg-color-page); font: 14px/1.6 "PingFang SC", "Microsoft YaHei", Inter, Arial, sans-serif; }
+      button { height: 34px; padding: 0 15px; border: 1px solid var(--el-border-color); border-radius: 7px; color: var(--el-text-color-primary); background: var(--el-bg-color); cursor: pointer; font-weight: 600; transition: all .15s ease; }
+      button:hover:not(:disabled) { border-color: var(--el-color-primary-light-5); color: var(--el-color-primary); }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+      button.primary { color: #fff; border-color: var(--el-color-primary); background: var(--el-color-primary); }
+      input { width: 100%; height: 36px; padding: 0 11px; border: 1px solid var(--el-border-color); border-radius: 7px; color: var(--el-text-color-primary); background: var(--el-bg-color); outline: none; font: inherit; }
+      input:focus { border-color: var(--el-color-primary); }
+      a { color: var(--el-color-primary); text-decoration: none; }
+
+      .topbar { position: sticky; top: 0; z-index: 20; background: linear-gradient(135deg, #1677ff 0%, #4d8dff 55%, #69b1ff 100%); color: #fff; box-shadow: 0 2px 10px rgba(22, 119, 255, .25); }
+      .topbar-inner { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; min-height: 66px; padding: 12px 24px; }
+      .topbar .title { display: flex; align-items: center; gap: 13px; font-size: 21px; font-weight: 700; }
+      .topbar .logo { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: rgba(255, 255, 255, .18); font-size: 19px; }
+      .topbar .sub { font-size: 12px; font-weight: 500; opacity: .9; }
+      .topbar .nav a { color: #fff; font-size: 13px; font-weight: 600; padding: 7px 13px; border: 1px solid rgba(255, 255, 255, .35); border-radius: 8px; background: rgba(255, 255, 255, .12); transition: background .15s ease; }
+      .topbar .nav a:hover { background: rgba(255, 255, 255, .22); }
+
+      main { max-width: 1080px; margin: 0 auto; padding: 22px 24px 56px; }
+      .banner { display: none; margin-bottom: 14px; padding: 12px 14px; border-left: 4px solid var(--el-color-danger); color: var(--text-danger); background: var(--el-color-danger-light-9); border-radius: 6px; }
+      .hint { margin-bottom: 16px; padding: 12px 15px; border: 1px solid var(--el-color-primary-light-9); border-radius: 8px; color: var(--el-color-primary-dark-2); background: var(--el-color-primary-light-9); font-size: 13px; }
+      .hint b { color: var(--el-text-color-primary); }
+
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .prov { display: flex; flex-direction: column; padding: 18px 19px; border: 1px solid var(--el-border-color-light); border-radius: var(--radius-card); background: var(--el-bg-color); box-shadow: var(--shadow-card); }
+      .prov-head { display: flex; align-items: center; gap: 11px; }
+      .prov-head .ico { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 11px; font-size: 21px; background: var(--el-fill-color-light); }
+      .prov-head .meta { flex: 1; min-width: 0; }
+      .prov-head .name { font-size: 16px; font-weight: 700; }
+      .prov-head .models { color: var(--el-text-color-secondary); font-size: 12px; }
+      .tag { padding: 1px 9px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+      .tag.ok { color: var(--text-success); background: var(--el-color-success-light-9); border: 1px solid var(--el-color-success-light-8); }
+      .tag.none { color: var(--text-warning); background: var(--el-color-warning-light-9); border: 1px solid #f3d9b0; }
+      .prov .desc { margin-top: 10px; color: var(--el-text-color-regular); font-size: 13px; }
+      .prov .row { display: flex; gap: 8px; margin-top: 14px; }
+      .prov .row input { flex: 1; }
+      .prov .links { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 11px; font-size: 12.5px; }
+      .prov .links a { font-weight: 600; }
+      .prov .msg { display: none; margin-top: 10px; padding: 8px 11px; border-radius: 7px; font-size: 12.5px; }
+      .prov .msg.ok { display: block; color: var(--text-success); background: var(--el-color-success-light-9); }
+      .prov .msg.err { display: block; color: var(--text-danger); background: var(--el-color-danger-light-9); }
+
+      @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div class="title"><span class="logo">⚙️</span><div>AI 模型配置<div class="sub">填写各厂商 API Key，保存即生效（写入 ai.config.json）</div></div></div>
+        <div class="nav"><a href="/models.html">🧠 模型总览</a><a href="/">← 返回工具</a></div>
+      </div>
+    </div>
+
+    <main>
+      <div class="banner" id="errBanner"></div>
+      <div class="hint">💡 填了 Key 的厂商，其模型在「SEO 问题 → AI 模型」下拉里才可选；没填的会置灰。Key 保存在 <b>ai.config.json</b>（千问也可写在 backend/.env 的 DASHSCOPE_API_KEY）。</div>
+      <div class="grid" id="providers"></div>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      const PROVIDERS = [
+        { id: "qwen", icon: "☁️", color: "#7c3aed", name: "千问 · 阿里云百炼", keyUrl: "https://bailian.console.aliyun.com/", desc: "免费额度有上限，用尽返回 403。恢复：充值或关闭「仅使用免费额度」。", reset: "免费额度限时/限次，非每日固定重置" },
+        { id: "zhipu", icon: "🧠", color: "#0ea5e9", name: "智谱 GLM", keyUrl: "https://open.bigmodel.cn/", desc: "有免费额度，GLM-4-Flash 快且免费（当前推荐替代）。", reset: "免费开放（零成本）" },
+        { id: "deepseek", icon: "🐋", color: "#2563eb", name: "DeepSeek", keyUrl: "https://platform.deepseek.com/", desc: "付费但极便宜，中文理解好；新用户历史上有送免费 token。", reset: "按余额计费" },
+        { id: "openai", icon: "✨", color: "#10a37f", name: "OpenAI", keyUrl: "https://platform.openai.com/", desc: "付费，需绑卡。已加入 GPT-5.6 系列（Luna / Terra / Sol）。", reset: "按余额计费" },
+      ];
+
+      let aiModels = [];
+
+      async function load() {
+        try {
+          const res = await fetch("/api/ai/status");
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          aiModels = (await res.json()).models || [];
+          render();
+        } catch (e) {
+          $("errBanner").style.display = "block";
+          $("errBanner").textContent = "读取模型状态失败：" + (e.message || e) + "（请确认 SEO 工具在运行）";
+        }
+      }
+
+      function render() {
+        $("providers").innerHTML = PROVIDERS.map((p) => {
+          const models = aiModels.filter((m) => m.provider === p.id);
+          const configured = models.some((m) => m.available);
+          const names = models.map((m) => m.label.replace(/^Qwen\s+/i, "").replace(/^OpenAI\s+/i, "")).join("、");
+          return `
+            <div class="prov" data-provider="${p.id}">
+              <div class="prov-head">
+                <span class="ico" style="background:${p.color}22">${p.icon}</span>
+                <div class="meta">
+                  <div class="name">${p.name}</div>
+                  <div class="models">${models.length ? esc(names) : "（无模型）"}</div>
+                </div>
+                <span class="tag ${configured ? "ok" : "none"}">${configured ? "已配置" : "未配置"}</span>
+              </div>
+              <div class="desc">${esc(p.desc)}</div>
+              <div class="desc" style="margin-top:4px;color:var(--el-text-color-secondary)">额度重置：${esc(p.reset || "—")}</div>
+              <div class="row">
+                <input type="password" placeholder="粘贴 ${p.name} 的 API Key" autocomplete="off" />
+                <button class="primary" data-save>保存</button>
+              </div>
+              <div class="links">
+                <a href="${p.keyUrl}" target="_blank" rel="noopener">获取 Key →</a>
+              </div>
+              <div class="msg" id="msg-${p.id}"></div>
+            </div>`;
+        }).join("");
+      }
+
+      document.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-save]");
+        if (!btn) return;
+        const prov = btn.closest(".prov");
+        const pid = prov.dataset.provider;
+        const input = prov.querySelector("input");
+        const key = input.value.trim();
+        const msg = $("msg-" + pid);
+        const model = aiModels.find((m) => m.provider === pid);
+        if (!key) { msg.className = "msg err"; msg.textContent = "请输入 API Key。"; return; }
+        if (!model) { msg.className = "msg err"; msg.textContent = "该厂商没有可选模型。"; return; }
+        btn.disabled = true; btn.textContent = "保存中…";
+        try {
+          const res = await fetch("/api/ai/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: model.value, apiKey: key }) });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
+          input.value = "";
+          msg.className = "msg ok";
+          msg.textContent = `✅ 已保存 ${model.label} 的 API Key，模型列表已更新。`;
+          await load();
+        } catch (err) {
+          msg.className = "msg err";
+          msg.textContent = "❌ " + (err.message || err);
+        } finally {
+          btn.disabled = false; btn.textContent = "保存";
+        }
+      });
+
+      load();
+    </script>
+  </body>
+</html>

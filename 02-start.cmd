@@ -64,11 +64,11 @@ if "%PORT_BUSY%"=="1" (
 
 echo.
 echo Starting backend and frontend with pnpm...
-start "Pboot Admin Backend %BACKEND_PORT%" /D "%ROOT%backend" cmd /k "pnpm run start:dev"
-start "Pboot Admin Frontend %FRONTEND_PORT%" /D "%ROOT%frontend" cmd /k "pnpm run dev -- --host 0.0.0.0 --port %FRONTEND_PORT%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\start-hidden.ps1" -Exe "cmd" -CmdArgs "/c pnpm run start:dev" -Dir "%ROOT%backend" -Log "%ROOT%logs\backend"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\start-hidden.ps1" -Exe "cmd" -CmdArgs "/c pnpm run dev -- --host 0.0.0.0 --port %FRONTEND_PORT%" -Dir "%ROOT%frontend" -Log "%ROOT%logs\frontend"
 
 echo.
-echo Keep both windows open.
+echo Services run in the background (no terminal windows). Logs: %ROOT%logs\backend.out.log and frontend.out.log
 echo Backend docs: http://localhost:%BACKEND_PORT%/api-docs
 echo Frontend:     http://localhost:%FRONTEND_PORT%
 timeout /t 4 /nobreak >nul

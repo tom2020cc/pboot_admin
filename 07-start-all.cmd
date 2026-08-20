@@ -34,7 +34,7 @@ call :check_port %BACKEND_PORT%
 if "%PORT_BUSY%"=="1" (
   echo       Already running - skip.
 ) else (
-  start "Pboot Admin Backend %BACKEND_PORT%" /D "%ROOT%backend" cmd /k "pnpm run start:dev"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\start-hidden.ps1" -Exe "cmd" -CmdArgs "/c pnpm run start:dev" -Dir "%ROOT%backend" -Log "%ROOT%logs\backend"
   echo       Starting...
 )
 
@@ -43,7 +43,7 @@ call :check_port %FRONTEND_PORT%
 if "%PORT_BUSY%"=="1" (
   echo       Already running - skip.
 ) else (
-  start "Pboot Admin Frontend %FRONTEND_PORT%" /D "%ROOT%frontend" cmd /k "pnpm run dev -- --host 0.0.0.0 --port %FRONTEND_PORT%"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\start-hidden.ps1" -Exe "cmd" -CmdArgs "/c pnpm run dev -- --host 0.0.0.0 --port %FRONTEND_PORT%" -Dir "%ROOT%frontend" -Log "%ROOT%logs\frontend"
   echo       Starting...
 )
 
@@ -52,7 +52,7 @@ call :check_port %SEO_PORT%
 if "%PORT_BUSY%"=="1" (
   echo       Already running - skip.
 ) else (
-  start "SEO Publish Tool" /D "%ROOT%tools\seo_publish_tool" cmd /k "node launch.js"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\start-hidden.ps1" -Exe "node" -CmdArgs "launch.js" -Dir "%ROOT%tools\seo_publish_tool" -Log "%ROOT%logs\seo"
   echo       Starting...
 )
 
@@ -61,7 +61,7 @@ call :check_port %FTP_PORT%
 if "%PORT_BUSY%"=="1" (
   echo       Already running - skip.
 ) else (
-  start "FTP Publish Tool" /D "%ROOT%tools\ftp_publish_tool" cmd /k "node launch.js"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\start-hidden.ps1" -Exe "node" -CmdArgs "launch.js" -Dir "%ROOT%tools\ftp_publish_tool" -Log "%ROOT%logs\ftp"
   echo       Starting...
 )
 
@@ -70,13 +70,14 @@ call :check_port %CONFIG_WIZARD_PORT%
 if "%PORT_BUSY%"=="1" (
   echo       Already running - skip.
 ) else (
-  start "Pboot Config Wizard %CONFIG_WIZARD_PORT%" /D "%ROOT%tools\config_wizard" cmd /k "node server.js"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\start-hidden.ps1" -Exe "node" -CmdArgs "server.js" -Dir "%ROOT%tools\config_wizard" -Log "%ROOT%logs\config"
   echo       Starting...
 )
 
 echo.
 echo --------------------------------------------
-echo  All services requested. Keep the windows open.
+echo  All services requested. Running in background (no terminal windows).
+echo  Logs are in %ROOT%logs\*.out.log / *.err.log
 echo  Frontend:      http://localhost:%FRONTEND_PORT%
 echo  Backend API:   http://localhost:%BACKEND_PORT%/api-docs
 echo  SEO tool:      http://localhost:%SEO_PORT%

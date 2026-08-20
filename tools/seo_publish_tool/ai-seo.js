@@ -146,21 +146,12 @@ const MODEL_DEFINITIONS = [
     quotaUrl: QWEN_QUOTA_URL,
   },
   {
-    value: "glm-4.7-flash",
-    label: "Zhipu GLM-4.7-Flash",
-    provider: "zhipu",
-    priority: 20,
-    recommended: true,
-    purpose: "Domestic fallback for retrying failed items.",
-    quotaText: "Open the Zhipu console to view the live free quota.",
-  },
-  {
     value: "glm-4-flash-250414",
     label: "Zhipu GLM-4-Flash",
     provider: "zhipu",
-    priority: 21,
-    recommended: false,
-    purpose: "Alternate GLM model for retrying failed items.",
+    priority: 20,
+    recommended: true,
+    purpose: "Fast non-reasoning GLM fallback; recommended domestic alternative when Qwen quota is exhausted.",
     quotaText: "Open the Zhipu console to view the live free quota.",
   },
   {
@@ -173,24 +164,46 @@ const MODEL_DEFINITIONS = [
     quotaText: "Billed against the DeepSeek account balance.",
   },
   {
-    value: "gpt-4o-mini",
-    label: "OpenAI gpt-4o-mini",
+    value: "gpt-5.6-luna",
+    label: "OpenAI GPT-5.6 Luna",
     provider: "openai",
     priority: 40,
-    recommended: false,
-    purpose: "Stable paid fallback model.",
+    recommended: true,
+    purpose: "Fastest and cheapest of the GPT-5.6 family; good for batch SEO and translation.",
     quotaText: "Billed against the OpenAI project balance and usage.",
   },
   {
-    value: "gpt-4.1-mini",
-    label: "OpenAI gpt-4.1-mini",
+    value: "gpt-5.6-terra",
+    label: "OpenAI GPT-5.6 Terra",
     provider: "openai",
     priority: 41,
     recommended: false,
-    purpose: "High-quality paid fallback model.",
+    purpose: "Mid-tier GPT-5.6 model; balances quality and speed.",
+    quotaText: "Billed against the OpenAI project balance and usage.",
+  },
+  {
+    value: "gpt-5.6-sol",
+    label: "OpenAI GPT-5.6 Sol",
+    provider: "openai",
+    priority: 42,
+    recommended: false,
+    purpose: "Highest-quality GPT-5.6 model; slower and more expensive.",
     quotaText: "Billed against the OpenAI project balance and usage.",
   },
 ];
+
+// 适合批量操作的模型（快、便宜、非推理、结构化输出稳定），列表里置顶 + 打「适合批量」标。
+const BATCH_SUITABLE = new Set([
+  "qwen3.6-flash-2026-04-16",
+  "qwen-mt-lite",
+  "qwen3.6-27b",
+  "qwen3-30b-a3b",
+  "qwen-plus-2025-01-25",
+  "qwen-turbo",
+  "glm-4-flash-250414",
+  "deepseek-chat",
+  "gpt-5.6-luna",
+]);
 
 let SQL_PROMISE;
 let currentJob = createIdleJob();
@@ -286,14 +299,46 @@ function getAiSettings(toolRoot) {
     const quotaLabel = available ? "实时查看" : "未配置";
     return {
       ...definition,
+      batch: BATCH_SUITABLE.has(definition.value),
       available,
       quotaStatus,
       quotaText,
       remainingQuota: null,
-      displayLabel: `#${definition.priority}${definition.recommended ? " 推荐" : ""} | ${definition.label} | 额度: ${quotaLabel}`,
+      displayLabel: `#${definition.priority}${BATCH_SUITABLE.has(definition.value) ? " 适合批量" : ""}${definition.recommended ? " 推荐" : ""} | ${definition.label} | 额度: ${quotaLabel}`,
     };
-  }).sort((left, right) => left.priority - right.priority);
+  }).sort((left, right) => (left.batch === right.batch ? left.priority - right.priority : left.batch ? -1 : 1));
   return { envPath, localConfigPath, env, models };
+}
+
+const ENV_KEY_BY_PROVIDER = {
+  qwen: "DASHSCOPE_API_KEY",
+  zhipu: "ZHIPU_API_KEY",
+  deepseek: "DEEPSEEK_API_KEY",
+  openai: "OPENAI_API_KEY",
+};
+
+function updateEnvKey(envPath, key, value) {
+  let text = "";
+  try {
+    if (fs.existsSync(envPath)) text = fs.readFileSync(envPath, "utf8");
+  } catch (_error) {
+    text = "";
+  }
+  const lines = text.split(/\r?\n/);
+  const re = new RegExp(`^\\s*${key}\\s*=`);
+  let replaced = false;
+  const out = lines.map((line) => {
+    if (re.test(line)) {
+      replaced = true;
+      return `${key}=${value}`;
+    }
+    return line;
+  });
+  if (!replaced) {
+    while (out.length && !out[out.length - 1].trim()) out.pop();
+    out.push(`${key}=${value}`);
+  }
+  fs.writeFileSync(envPath, `${out.join("\n")}\n`, "utf8");
 }
 
 function saveAiKey(toolRoot, modelName, apiKey) {
@@ -319,6 +364,9 @@ function saveAiKey(toolRoot, modelName, apiKey) {
     `${JSON.stringify(config, null, 2)}\n`,
     "utf8",
   );
+  // 同步写入 backend/.env，让管理后台的翻译功能也能用到同一个 Key。
+  const envKey = ENV_KEY_BY_PROVIDER[model.provider];
+  if (envKey) updateEnvKey(settings.envPath, envKey, key);
   return {
     provider: model.provider,
     models: getAiSettings(toolRoot).models,
@@ -1687,6 +1735,7 @@ async function runJob(toolRoot, dbPath, mode, model, targetAcode = "", problems 
         dryRun: true,
         message: "预览完成，尚未写入数据库。",
       };
+      updateJob(totalRecords, totalRecords, "预览完成，尚未写入数据库。");
       return;
     }
 
