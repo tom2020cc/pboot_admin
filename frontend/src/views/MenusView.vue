@@ -29,7 +29,7 @@
 
     <div class="summary-row">
       <el-radio-group v-model="selectedLang" class="language-tabs">
-        <el-radio-button v-for="item in languageOptions" :key="item.code" :label="item.code">
+        <el-radio-button v-for="item in languageOptions" :key="item.code" :value="item.code">
           {{ item.label }} {{ item.count }}
         </el-radio-button>
       </el-radio-group>
@@ -128,7 +128,7 @@ const translating = ref(false);
 const pushingAll = ref(false);
 const syncingMenuId = ref<string | number | null>(null);
 const selectedLang = ref("cn");
-const translateModel = ref("google-free");
+const translateModel = ref("");
 const translationModels = ref<MenuTranslationModel[]>([]);
 const { allMenus, loading, handleDelete, getAllMenus } = useMenus();
 
@@ -247,11 +247,9 @@ const getRowClassName = ({ row }: { row: MenuTreeItem }) => {
 const loadTranslationModels = async () => {
   try {
     const res = await getMenuTranslationModels();
-    translationModels.value = [...res.data].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+    translationModels.value = [...res.data];
     const preferred = translationModels.value.find((item) => item.available);
-    if (preferred && !translationModels.value.some((item) => item.value === translateModel.value && item.available)) {
-      translateModel.value = preferred.value;
-    }
+    translateModel.value = preferred?.value || "";
   } catch (e) {
     ElMessage.error(getErrorMessage(e, "获取翻译模型失败"));
   }

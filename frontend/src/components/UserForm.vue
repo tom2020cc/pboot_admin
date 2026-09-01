@@ -1,7 +1,7 @@
 <template>
   <el-form ref="formRef" :model="form" :rules="rules" label-width="86px" class="entity-form">
     <el-form-item label="邮箱" prop="email">
-      <el-input v-model="form.email" placeholder="tom9@qq.com" />
+      <el-input v-model="form.email" placeholder="name@example.com" />
     </el-form-item>
     <el-form-item label="密码" prop="password">
       <el-input

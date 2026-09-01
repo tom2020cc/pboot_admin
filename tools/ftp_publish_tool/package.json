@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "upload": "node upload-to-ftp.js",
-    "dry-run": "node upload-to-ftp.js --dry-run"
+    "dry-run": "node upload-to-ftp.js --dry-run",
+    "test": "node --test *.test.js"
   },
   "dependencies": {
     "basic-ftp": "^5.0.5"

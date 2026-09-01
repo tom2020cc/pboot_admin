@@ -39,7 +39,7 @@ pboot_admin_backup_xxxx/
 | 服务 | 端口 |
 |---|---|
 | 管理后台后端 | 5008（`backend/.env` 的 `BACKEND_PORT`） |
-| 管理后台前端 | 5173 |
+| 管理后台前端 | 5178 |
 | SEO 工具 | 5288（端口被占时自动换 5289+） |
 | FTP 工具 | 5189（端口被占时自动换 5190+） |
 
@@ -50,9 +50,9 @@ pboot_admin_backup_xxxx/
    - 复制 `backend/.env.example` → `backend/.env`，填写数据库路径、AI Key（DASHSCOPE_API_KEY / ZHIPU_API_KEY / DEEPSEEK_API_KEY / OPENAI_API_KEY）、`YOUTUBE_API_KEY` 等。
    - 复制 `frontend/.env.example` → `frontend/.env.local`（如需）。
    - SEO/FTP 工具的 `seo.config.json` / `ftp.config.json` 用各自页面的配置界面生成（不在仓库里）。
-3. **启动**：双击 `07-start-all.cmd`（一键拉起全部服务并自动跳过已运行的），或单独 `02-start.cmd` / `05-start-seo-tool.cmd` / `06-start-ftp-tool.cmd`。
+3. **启动**：双击 `07-start-all.cmd`（后端使用可见常驻终端，前端、SEO、FTP 在后台运行），或单独运行 `02-start.cmd` / `05-start-seo-tool.cmd` / `06-start-ftp-tool.cmd`。配置向导只在修改配置时运行。
 4. **创建管理员**：双击 `03-create-admin.cmd`。
-5. 访问前端 `http://localhost:5173`、SEO 工具 `http://localhost:5288`。
+5. 访问前端 `http://localhost:5178`、SEO 工具 `http://localhost:5288`。
 
 ## 脚本速查
 
@@ -60,12 +60,12 @@ pboot_admin_backup_xxxx/
 |---|---|
 | `00-install.cmd` | 安装前后端依赖 |
 | `01-config.cmd` | 打开配置向导 |
-| `02-start.cmd` | 启动管理后台（后端 + 前端） |
+| `02-start.cmd` | 启动管理后台（后端可见终端 + 前端后台） |
 | `03-create-admin.cmd` | 创建管理员账号 |
 | `04-stop-ports.cmd` | 停止所有相关端口 |
 | `05-start-seo-tool.cmd` | 启动 SEO 收录工具 |
 | `06-start-ftp-tool.cmd` | 启动 FTP 发布工具 |
-| `07-start-all.cmd` | 一键启动全部服务 |
+| `07-start-all.cmd` | 启动日常四项服务，不常驻配置向导 |
 
 ## 包含 / 排除清单
 

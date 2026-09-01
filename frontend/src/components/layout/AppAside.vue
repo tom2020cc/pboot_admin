@@ -62,6 +62,7 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from "vue-router";
 import { isCollapse } from "@/components/layout/isCollapse";
+import { Document, Goods, House, Menu, Picture, Setting, Tickets, User, VideoCamera } from "@element-plus/icons-vue";
 
 const route = useRoute();
 </script>

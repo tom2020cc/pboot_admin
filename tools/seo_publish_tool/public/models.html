@@ -104,23 +104,34 @@
         .group-grid { grid-template-columns: 1fr; }
       }
     </style>
+    <link rel="stylesheet" href="/seo-shell.css" />
+    <script defer src="/seo-model-shell.js"></script>
   </head>
   <body>
     <div class="topbar">
       <div class="topbar-inner">
-        <div class="title"><span class="logo">🧠</span><div>AI 模型总览<div class="sub">了解每个模型的免费/付费、额度与当前可用状态</div></div></div>
-        <div class="nav"><a href="/models-config.html">⚙️ 模型配置</a><a href="/">← 返回工具</a></div>
+        <div class="title"><span class="logo">AI</span><div>AI 模型总览<div class="sub">查看模型费用、用途、额度与当前可用状态</div></div></div>
+        <div class="nav"><a href="/models-config.html">模型配置</a><a href="/">SEO 总览</a></div>
       </div>
     </div>
+    <nav class="tool-nav" id="toolNav" aria-label="项目工具导航"></nav>
 
     <main>
+      <nav class="section-nav workspace-nav" aria-label="SEO 工作区导航">
+        <a href="/models.html" data-workspace-page="models" class="active" aria-current="page">模型总览</a>
+        <a href="/models-config.html" data-workspace-page="models-config">模型配置</a>
+      </nav>
+      <div class="workspace-intro model-intro">
+        <div><h1>模型总览</h1><p>比较可用状态、使用成本和适用场景，并在当前页面测试连接。</p></div>
+        <a class="workspace-action" href="/models-config.html">管理 API Key</a>
+      </div>
       <div class="banner" id="errBanner"></div>
 
       <div class="summary">
-        <div class="metric"><span class="ico">🧩</span><div><span class="lbl">模型总数</span><strong id="mTotal">—</strong></div></div>
-        <div class="metric"><span class="ico ok">✅</span><div><span class="lbl">已配置 Key（可选）</span><strong class="ok" id="mReady">—</strong></div></div>
-        <div class="metric"><span class="ico warn">🔑</span><div><span class="lbl">未配置 Key（置灰）</span><strong class="warn" id="mNoKey">—</strong></div></div>
-        <div class="metric"><span class="ico bad">⚠️</span><div><span class="lbl">免费额度耗尽</span><strong class="bad" id="mOut">—</strong></div></div>
+        <div class="metric"><span class="ico">ALL</span><div><span class="lbl">模型总数</span><strong id="mTotal">-</strong></div></div>
+        <div class="metric"><span class="ico ok">KEY</span><div><span class="lbl">已配置 Key</span><strong class="ok" id="mReady">-</strong></div></div>
+        <div class="metric"><span class="ico warn">OFF</span><div><span class="lbl">未配置 Key</span><strong class="warn" id="mNoKey">-</strong></div></div>
+        <div class="metric"><span class="ico test">TEST</span><div><span class="lbl">可测试模型</span><strong id="mOut">-</strong></div></div>
       </div>
 
       <div class="legend">
@@ -129,10 +140,19 @@
         <span><span class="tag paid">付费</span>按量计费</span>
         <span><span class="tag ready">Key 已配置</span>下拉可选</span>
         <span><span class="tag nokey">未配置 Key</span>下拉置灰</span>
-        <span><span class="tag out">额度耗尽</span>需充值/关免费模式</span>
+        <span><span class="tag out">测试失败</span>按测试结果检查额度或配置</span>
+      </div>
+
+      <div class="model-filters" aria-label="模型筛选">
+        <label><span>搜索模型</span><input id="modelSearch" type="search" placeholder="名称、模型 ID 或用途" /></label>
+        <label><span>模型厂商</span><select id="providerFilter"><option value="">全部厂商</option><option value="qwen">千问</option><option value="zhipu">智谱 GLM</option><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="google">Google</option><option value="mymemory">MyMemory</option></select></label>
+        <label><span>可用状态</span><select id="availabilityFilter"><option value="">全部状态</option><option value="ready">已配置</option><option value="off">未配置</option></select></label>
+        <button id="reloadModelsBtn" type="button">刷新状态</button>
+        <span class="filter-meta" id="filterMeta"></span>
       </div>
 
       <div id="groups"></div>
+      <div class="model-empty" id="modelEmpty">没有符合当前条件的模型。</div>
     </main>
 
     <script>
@@ -140,13 +160,15 @@
       const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
       const PROVIDER = {
-        qwen:     { name: "千问 · 阿里云百炼", icon: "☁️", color: "#7c3aed", keyUrl: "https://bailian.console.aliyun.com/" },
-        zhipu:    { name: "智谱 GLM",          icon: "🧠", color: "#0ea5e9", keyUrl: "https://open.bigmodel.cn/" },
-        deepseek: { name: "DeepSeek",           icon: "🐋", color: "#2563eb", keyUrl: "https://platform.deepseek.com/" },
-        openai:   { name: "OpenAI",             icon: "✨", color: "#10a37f", keyUrl: "https://platform.openai.com/" },
-        google:   { name: "Google 翻译（免费回退）", icon: "🌐", color: "#4285f4", keyUrl: null },
-        mymemory: { name: "MyMemory（免费回退）",   icon: "📚", color: "#6b7280", keyUrl: null },
+        qwen:     { name: "千问 · 阿里云百炼", icon: "QW", color: "#7c3aed", keyUrl: "https://bailian.console.aliyun.com/" },
+        zhipu:    { name: "智谱 GLM",          icon: "GLM", color: "#0ea5e9", keyUrl: "https://open.bigmodel.cn/" },
+        deepseek: { name: "DeepSeek",           icon: "DS", color: "#2563eb", keyUrl: "https://platform.deepseek.com/" },
+        openai:   { name: "OpenAI",             icon: "GPT", color: "#10a37f", keyUrl: "https://platform.openai.com/" },
+        google:   { name: "Google 翻译（免费回退）", icon: "GO", color: "#4285f4", keyUrl: null },
+        mymemory: { name: "MyMemory（免费回退）",   icon: "MM", color: "#6b7280", keyUrl: null },
       };
+
+      let allModels = [];
 
       const EXTRA = {
         "qwen3.6-flash-2026-04-16": { cost: "免费额度", note: "默认首选。免费额度有上限，用尽返回 403，需充值或关闭「仅使用免费额度」。" },
@@ -165,11 +187,10 @@
         "gpt-5.6-luna":             { cost: "付费（便宜）", note: "GPT-5.6 系列最快最便宜，批量 SEO/翻译首选。需 OpenAI Key + 绑卡。" },
         "gpt-5.6-terra":            { cost: "付费（中等）", note: "GPT-5.6 中档，质量与速度均衡。需 Key + 绑卡。" },
         "gpt-5.6-sol":              { cost: "付费（较贵）", note: "GPT-5.6 最高质量，更慢更贵。需 Key + 绑卡。" },
+        "chat-latest":              { cost: "付费", note: "跟随 ChatGPT 当前 Instant 模型；需要与 ChatGPT 表现接近时使用，正式批量任务优先固定版本。" },
         "google-free":              { cost: "免费（无 Key）", note: "非官方接口，不稳定，仅翻译流程兜底，不在 SEO 修复模型列表里。" },
         "mymemory-free":            { cost: "免费（无 Key）", note: "公共免费额度有限，仅翻译流程兜底，不在 SEO 修复模型列表里。" },
       };
-
-      const QWEN_EXHAUSTED = true;
 
       const RESET = {
         qwen: "免费额度限时/限次，非每日固定重置；耗尽需充值或关闭「仅使用免费额度」",
@@ -187,13 +208,14 @@
       const resetOf = (m) => RESET_OVERRIDE[m.value] || RESET[m.provider] || "—";
       const isFree = (m) => /免费/.test(costOf(m));
       const keyUrlOf = (m) => (PROVIDER[m.provider] || {}).keyUrl || null;
-      const isQwenExhausted = (m) => QWEN_EXHAUSTED && m.provider === "qwen";
+      const isQwenExhausted = () => false;
 
       async function load() {
         try {
           const res = await fetch("/api/ai/status");
           if (!res.ok) throw new Error("HTTP " + res.status);
-          render((await res.json()).models || []);
+          allModels = (await res.json()).models || [];
+          render(allModels);
         } catch (e) {
           $("errBanner").style.display = "block";
           $("errBanner").textContent = "读取模型状态失败：" + (e.message || e) + "（请确认 SEO 工具在运行）";
@@ -205,7 +227,7 @@
         $("mTotal").textContent = list.length;
         $("mReady").textContent = list.filter((m) => m.available).length;
         $("mNoKey").textContent = list.filter((m) => !m.available && keyUrlOf(m)).length;
-        $("mOut").textContent = list.filter(isQwenExhausted).length;
+        $("mOut").textContent = list.filter((m) => m.available).length;
 
         const order = ["qwen", "zhipu", "deepseek", "openai"];
         const groups = {};
@@ -215,10 +237,10 @@
         for (const provider of [...order, ...Object.keys(groups).filter((k) => !order.includes(k))]) {
           const arr = groups[provider];
           if (!arr || !arr.length) continue;
-          const p = PROVIDER[provider] || { name: provider, icon: "🔹", color: "#909399" };
-          const pnote = provider === "qwen" && QWEN_EXHAUSTED ? "免费额度已耗尽" : "";
+          const p = PROVIDER[provider] || { name: provider, icon: "AI", color: "#909399" };
+          const pnote = "";
           html.push(`
-            <div class="group">
+            <div class="group" data-model-group="${esc(provider)}">
               <div class="group-head">
                 <span class="dot" style="background:${p.color}"></span>
                 <span>${p.icon}</span>
@@ -229,6 +251,7 @@
             </div>`);
         }
         $("groups").innerHTML = html.join("");
+        filterModels();
       }
 
       function statusTag(m) {
@@ -248,7 +271,7 @@
         const keyLink = keyUrl ? `<a href="${esc(keyUrl)}" target="_blank" rel="noopener">获取 Key →</a>` : "";
         const quotaLink = m.quotaUrl ? `<a href="${esc(m.quotaUrl)}" target="_blank" rel="noopener">查看额度 →</a>` : "";
         return `
-          <div class="card${m.available ? "" : " off"}">
+          <div class="card${m.available ? "" : " off"}" data-model-card data-provider="${esc(m.provider)}" data-available="${m.available ? "ready" : "off"}" data-search="${esc(`${m.label} ${m.value} ${m.purpose || ""}`.toLowerCase())}">
             <div class="card-head">
               <span class="name">${esc(m.label)}</span>
               <span class="id">${esc(m.value)}</span>
@@ -275,18 +298,42 @@
           const data = await res.json().catch(() => ({}));
           if (res.ok && data.ok) {
             box.className = "test-result ok";
-            box.textContent = `✅ ${label} 连接正常，${data.elapsedMs ? (data.elapsedMs / 1000).toFixed(1) + " 秒" : ""} 返回。`;
+            box.textContent = `${label} 连接正常，${data.elapsedMs ? (data.elapsedMs / 1000).toFixed(1) + " 秒" : "已"}返回。`;
           } else {
             box.className = "test-result err";
-            box.textContent = `❌ ${label}：${esc(data.message || ("HTTP " + res.status))}`;
+            box.textContent = `${label}：${esc(data.message || ("HTTP " + res.status))}`;
           }
         } catch (e) {
           box.className = "test-result err";
-          box.textContent = `❌ ${label}：请求失败 ${esc(e.message || e)}`;
+          box.textContent = `${label}：请求失败 ${esc(e.message || e)}`;
         } finally {
           btn.disabled = false; btn.textContent = orig;
         }
       }
+
+      function filterModels() {
+        const search = $("modelSearch").value.trim().toLowerCase();
+        const provider = $("providerFilter").value;
+        const availability = $("availabilityFilter").value;
+        let visibleCount = 0;
+        document.querySelectorAll("[data-model-card]").forEach((card) => {
+          const visible = (!search || card.dataset.search.includes(search))
+            && (!provider || card.dataset.provider === provider)
+            && (!availability || card.dataset.available === availability);
+          card.hidden = !visible;
+          if (visible) visibleCount += 1;
+        });
+        document.querySelectorAll("[data-model-group]").forEach((group) => {
+          group.hidden = !group.querySelector("[data-model-card]:not([hidden])");
+        });
+        $("filterMeta").textContent = `显示 ${visibleCount} / ${allModels.length}`;
+        $("modelEmpty").style.display = visibleCount ? "none" : "block";
+      }
+
+      $("modelSearch").addEventListener("input", filterModels);
+      $("providerFilter").addEventListener("change", filterModels);
+      $("availabilityFilter").addEventListener("change", filterModels);
+      $("reloadModelsBtn").addEventListener("click", load);
 
       load();
     </script>

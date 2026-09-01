@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title desc">
+  <title id="title">百度普通收录 API 主动推送流程</title>
+  <desc id="desc">添加中文站、验证、获取 token、配置站点并推送 URL 的流程。</desc>
+  <rect width="1280" height="360" fill="#f6f8ff"/>
+  <rect x="32" y="28" width="1216" height="304" rx="8" fill="#fff" stroke="#d9dff5"/>
+  <text x="64" y="76" fill="#172044" font-family="Microsoft YaHei, Arial" font-size="26" font-weight="700">百度普通收录：中文站 URL 独立主动推送</text>
+  <text x="64" y="106" fill="#66708a" font-family="Microsoft YaHei, Arial" font-size="16">百度不使用 IndexNow，需要在搜索资源平台取得当前站点的专属 token。</text>
+  <g font-family="Microsoft YaHei, Arial">
+    <g transform="translate(64 142)"><rect width="246" height="142" rx="6" fill="#eef1ff" stroke="#9ba9f5"/><rect x="18" y="18" width="34" height="34" rx="6" fill="#2932e1"/><text x="35" y="42" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">1</text><text x="20" y="78" fill="#172044" font-size="18" font-weight="700">添加并验证中文站</text><text x="20" y="108" fill="#5f6880" font-size="14">站点必须与推送 URL 的 host 一致</text></g>
+    <path d="M326 213h44" stroke="#8993bb" stroke-width="2"/><path d="m362 205 10 8-10 8" fill="none" stroke="#8993bb" stroke-width="2"/>
+    <g transform="translate(384 142)"><rect width="246" height="142" rx="6" fill="#f8f9ff" stroke="#cbd1ed"/><rect x="18" y="18" width="34" height="34" rx="6" fill="#2932e1"/><text x="35" y="42" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">2</text><text x="20" y="78" fill="#172044" font-size="18" font-weight="700">复制主动推送 token</text><text x="20" y="108" fill="#5f6880" font-size="14">普通收录 → API 提交 → 接口地址</text></g>
+    <path d="M646 213h44" stroke="#8993bb" stroke-width="2"/><path d="m682 205 10 8-10 8" fill="none" stroke="#8993bb" stroke-width="2"/>
+    <g transform="translate(704 142)"><rect width="246" height="142" rx="6" fill="#f8f9ff" stroke="#cbd1ed"/><rect x="18" y="18" width="34" height="34" rx="6" fill="#2932e1"/><text x="35" y="42" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">3</text><text x="20" y="78" fill="#172044" font-size="18" font-weight="700">保存 token 与 site</text><text x="20" y="108" fill="#5f6880" font-size="14">密钥不显示，只保存在本机配置</text></g>
+    <path d="M966 213h44" stroke="#8993bb" stroke-width="2"/><path d="m1002 205 10 8-10 8" fill="none" stroke="#8993bb" stroke-width="2"/>
+    <g transform="translate(1024 142)"><rect width="192" height="142" rx="6" fill="#edf9f1" stroke="#8ad2a4"/><rect x="18" y="18" width="34" height="34" rx="6" fill="#218b4b"/><text x="35" y="42" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">4</text><text x="20" y="78" fill="#173628" font-size="18" font-weight="700">推送全部 URL</text><text x="20" y="108" fill="#567064" font-size="14">查看成功数和剩余额度</text></g>
+  </g>
+</svg>

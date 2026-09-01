@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" role="img" aria-labelledby="title desc">
+  <title id="title">在本工具导入 Google 服务账号并验证链路</title>
+  <desc id="desc">粘贴 JSON，保存验证，测试 Search Console 和 Indexing API，并继续未完成任务。</desc>
+  <rect width="900" height="420" fill="#f7f9fc"/>
+  <rect x="24" y="24" width="852" height="58" rx="8" fill="#ffffff" stroke="#d8dee9"/>
+  <rect x="46" y="38" width="30" height="30" rx="6" fill="#1677ff"/>
+  <text x="61" y="59" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff">SEO</text>
+  <text x="90" y="60" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#1f2937">Google Search Console 与 Indexing API</text>
+  <rect x="24" y="106" width="268" height="248" rx="8" fill="#ffffff" stroke="#4285f4" stroke-width="2"/>
+  <circle cx="58" cy="140" r="17" fill="#4285f4"/>
+  <text x="58" y="146" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">1</text>
+  <text x="84" y="146" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2937">粘贴完整 JSON</text>
+  <rect x="46" y="174" width="224" height="102" rx="6" fill="#111827"/>
+  <text x="60" y="198" font-family="Consolas, monospace" font-size="11" fill="#93c5fd">{</text>
+  <text x="72" y="218" font-family="Consolas, monospace" font-size="11" fill="#f8fafc">"type": "service_account",</text>
+  <text x="72" y="238" font-family="Consolas, monospace" font-size="11" fill="#f8fafc">"client_email": "...",</text>
+  <text x="72" y="258" font-family="Consolas, monospace" font-size="11" fill="#f8fafc">"private_key": "..."</text>
+  <text x="60" y="272" font-family="Consolas, monospace" font-size="11" fill="#93c5fd">}</text>
+  <rect x="46" y="294" width="224" height="38" rx="5" fill="#1a73e8"/>
+  <text x="158" y="318" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff">保存并验证服务账号</text>
+  <path d="M307 230h38" stroke="#9aa0a6" stroke-width="2"/>
+  <path d="m340 224 8 6-8 6" fill="none" stroke="#9aa0a6" stroke-width="2"/>
+  <rect x="360" y="106" width="236" height="248" rx="8" fill="#ffffff" stroke="#34a853" stroke-width="2"/>
+  <circle cx="394" cy="140" r="17" fill="#34a853"/>
+  <text x="394" y="146" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">2</text>
+  <text x="420" y="146" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2937">按顺序验证</text>
+  <rect x="382" y="176" width="192" height="42" rx="5" fill="#e6f4ea" stroke="#81c995"/>
+  <circle cx="402" cy="197" r="8" fill="#34a853"/>
+  <path d="m398 197 3 3 6-7" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <text x="420" y="202" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#137333">测试 Search Console</text>
+  <rect x="382" y="230" width="192" height="42" rx="5" fill="#e6f4ea" stroke="#81c995"/>
+  <circle cx="402" cy="251" r="8" fill="#34a853"/>
+  <path d="m398 251 3 3 6-7" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <text x="420" y="256" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#137333">读取 Sitemap 状态</text>
+  <rect x="382" y="284" width="192" height="42" rx="5" fill="#e6f4ea" stroke="#81c995"/>
+  <circle cx="402" cy="305" r="8" fill="#34a853"/>
+  <path d="m398 305 3 3 6-7" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <text x="420" y="310" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#137333">测试 Indexing API</text>
+  <path d="M611 230h38" stroke="#9aa0a6" stroke-width="2"/>
+  <path d="m644 224 8 6-8 6" fill="none" stroke="#9aa0a6" stroke-width="2"/>
+  <rect x="664" y="106" width="212" height="248" rx="8" fill="#ffffff" stroke="#f9ab00" stroke-width="2"/>
+  <circle cx="698" cy="140" r="17" fill="#f9ab00"/>
+  <text x="698" y="146" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">3</text>
+  <text x="724" y="146" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2937">继续未完成任务</text>
+  <rect x="686" y="176" width="168" height="70" rx="6" fill="#fff8e1" stroke="#fdd663"/>
+  <text x="702" y="200" font-family="Arial, sans-serif" font-size="12" fill="#64748b">今日配额</text>
+  <text x="702" y="228" font-family="Arial, sans-serif" font-size="21" font-weight="700" fill="#b06000">126 / 200</text>
+  <rect x="686" y="264" width="168" height="38" rx="5" fill="#f9ab00"/>
+  <text x="770" y="288" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff">继续提交待处理 URL</text>
+  <text x="686" y="326" font-family="Arial, sans-serif" font-size="12" fill="#64748b">已成功 URL 自动跳过</text>
+  <text x="24" y="390" font-family="Arial, sans-serif" font-size="12" fill="#64748b">关闭页面、断网或当天配额用完不会清除已完成进度；恢复后点击“继续”只处理剩余 URL。</text>
+</svg>

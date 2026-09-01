@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" role="img" aria-labelledby="title desc">
+  <title id="title">给服务账号授予 Search Console 站点权限</title>
+  <desc id="desc">选择站点属性，进入设置和用户权限，添加服务账号邮箱。</desc>
+  <rect width="900" height="420" fill="#f7f9fc"/>
+  <rect x="24" y="24" width="852" height="58" rx="8" fill="#ffffff" stroke="#d8dee9"/>
+  <rect x="46" y="39" width="28" height="28" rx="5" fill="#1a73e8"/>
+  <text x="60" y="59" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">S</text>
+  <text x="88" y="60" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#1f2937">Google Search Console</text>
+  <rect x="610" y="37" width="240" height="34" rx="6" fill="#ffffff" stroke="#b8c2cf"/>
+  <text x="628" y="59" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#1f2937">属性：sc-domain:shanbo.cc</text>
+  <rect x="24" y="106" width="196" height="248" rx="8" fill="#ffffff" stroke="#d8dee9"/>
+  <text x="46" y="144" font-family="Arial, sans-serif" font-size="13" fill="#64748b">概览</text>
+  <text x="46" y="184" font-family="Arial, sans-serif" font-size="13" fill="#64748b">网页</text>
+  <text x="46" y="224" font-family="Arial, sans-serif" font-size="13" fill="#64748b">站点地图</text>
+  <rect x="36" y="288" width="172" height="44" rx="6" fill="#e8f0fe"/>
+  <circle cx="57" cy="310" r="8" fill="#1a73e8"/>
+  <text x="77" y="315" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#174ea6">设置</text>
+  <path d="M235 230h42" stroke="#9aa0a6" stroke-width="2"/>
+  <path d="m272 224 8 6-8 6" fill="none" stroke="#9aa0a6" stroke-width="2"/>
+  <rect x="292" y="106" width="262" height="248" rx="8" fill="#ffffff" stroke="#4285f4" stroke-width="2"/>
+  <circle cx="326" cy="140" r="17" fill="#4285f4"/>
+  <text x="326" y="146" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">1</text>
+  <text x="352" y="146" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2937">用户和权限</text>
+  <rect x="314" y="178" width="218" height="58" rx="6" fill="#f8fafc" stroke="#d8dee9"/>
+  <text x="330" y="202" font-family="Arial, sans-serif" font-size="12" fill="#64748b">已验证所有者</text>
+  <text x="330" y="222" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#1f2937">网站管理员账号</text>
+  <rect x="314" y="252" width="178" height="38" rx="5" fill="#1a73e8"/>
+  <text x="403" y="276" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff">添加用户 / 所有者</text>
+  <text x="314" y="320" font-family="Arial, sans-serif" font-size="12" fill="#64748b">不要选错站点属性</text>
+  <path d="M569 230h42" stroke="#9aa0a6" stroke-width="2"/>
+  <path d="m606 224 8 6-8 6" fill="none" stroke="#9aa0a6" stroke-width="2"/>
+  <rect x="626" y="106" width="250" height="248" rx="8" fill="#ffffff" stroke="#34a853" stroke-width="2"/>
+  <circle cx="660" cy="140" r="17" fill="#34a853"/>
+  <text x="660" y="146" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">2</text>
+  <text x="686" y="146" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#1f2937">添加 client_email</text>
+  <text x="648" y="184" font-family="Arial, sans-serif" font-size="12" fill="#64748b">电子邮件地址</text>
+  <rect x="648" y="196" width="206" height="52" rx="5" fill="#f8fafc" stroke="#b8c2cf"/>
+  <text x="660" y="218" font-family="Arial, sans-serif" font-size="11" fill="#1f2937">service-account@project.</text>
+  <text x="660" y="235" font-family="Arial, sans-serif" font-size="11" fill="#1f2937">iam.gserviceaccount.com</text>
+  <text x="648" y="274" font-family="Arial, sans-serif" font-size="12" fill="#64748b">权限</text>
+  <rect x="648" y="286" width="206" height="38" rx="5" fill="#e6f4ea" stroke="#81c995"/>
+  <text x="660" y="310" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#137333">所有者 / 完整权限</text>
+  <text x="24" y="390" font-family="Arial, sans-serif" font-size="12" fill="#64748b">403 排查顺序：属性是否选对 → client_email 是否完整 → 权限是否生效 → Cloud 项目是否启用了对应 API。</text>
+</svg>

@@ -6,7 +6,7 @@
         <p>维护单页栏目、SEO 信息和多语言正文。</p>
       </div>
       <el-button type="primary" plain :loading="translatingAll" :disabled="loading" @click="translateAllLanguages">
-        {{ translatingAll ? "正在顺序翻译..." : "一键翻译" }}
+        {{ translatingAll ? `正在翻译 ${translationProgress}` : "一键翻译" }}
       </el-button>
     </div>
     <PageForm ref="pageFormRef" v-model="form" :menus="menus" submit-text="新建单页" :loading="loading" @submit="submit" @reset="reset" />
@@ -14,9 +14,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import PageForm from "@/components/PageForm.vue";
 import { getAll, type MenuItem } from "@/api/menus";
 import { createEmptyPageForm, createPage, type PageForm as PageFormType } from "@/api/pages";
@@ -28,6 +28,7 @@ const translatingAll = ref(false);
 const menus = ref<MenuItem[]>([]);
 const pageFormRef = ref<InstanceType<typeof PageForm> | null>(null);
 const form = ref<PageFormType>(createEmptyPageForm());
+const translationProgress = computed(() => pageFormRef.value?.translationProgress || "");
 
 const reset = () => {
   form.value = createEmptyPageForm();
@@ -35,6 +36,12 @@ const reset = () => {
 
 const translateAllLanguages = async () => {
   if (translatingAll.value) return;
+  const confirmed = await ElMessageBox.confirm(
+    "将按顺序调用当前模型生成其余 6 种语言，可能产生 API 费用。确认开始吗？",
+    "一键翻译单页",
+    { confirmButtonText: "开始翻译", cancelButtonText: "取消", type: "warning" },
+  ).catch(() => false);
+  if (!confirmed) return;
   translatingAll.value = true;
   try {
     await pageFormRef.value?.generateAllTranslations();

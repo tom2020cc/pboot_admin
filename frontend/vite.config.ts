@@ -13,6 +13,36 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        silenceDeprecations: ["legacy-js-api"],
+      },
+    },
+  },
+  build: {
+    chunkSizeWarningLimit: 950,
+    rollupOptions: {
+      onwarn(warning, warn) {
+        if (warning.code === "INVALID_ANNOTATION" && warning.id?.includes("node_modules")) return;
+        warn(warning);
+      },
+      output: {
+        manualChunks: {
+          "vue-core": ["vue", "vue-router", "pinia", "axios"],
+          "element-plus": ["element-plus"],
+          "element-icons": ["@element-plus/icons-vue"],
+          "code-editor": [
+            "codemirror",
+            "@codemirror/commands",
+            "@codemirror/lang-html",
+            "@codemirror/state",
+            "@codemirror/view",
+          ],
+        },
+      },
+    },
+  },
     // 服务器相关配置
     // server: {
     //   proxy: {

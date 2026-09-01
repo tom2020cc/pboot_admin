@@ -5,7 +5,7 @@
 1. 安装 Node.js LTS。
 2. 双击 `00-install.cmd`。
 3. 双击 `01-config.cmd`，确认当前网站根目录和 `data` 目录里的数据库，点击“一键自检”并保存。
-4. 双击 `02-start.cmd`。
+4. 双击 `07-start-all.cmd`，并保持后端终端窗口打开。
 
 完整图文式文字教程见：[docs/NEW_PC_SETUP_ZH.md](docs/NEW_PC_SETUP_ZH.md)。
 
@@ -41,7 +41,7 @@ D:\phpstudy_pro\WWW\example.com\
 4. 浏览器打开配置向导后，检查“网站根目录”和“PbootCMS 数据库”。放置位置正确时会自动识别上一级网站及其 `data` 目录中的数据库。
 5. 填写本地测试地址、真实线上地址、端口。AI Key 和 FTP 可以稍后再填。
 6. 保存配置。
-7. 双击 `02-start.cmd`。后端和前端窗口都要保持打开，浏览器会自动打开管理后台。
+7. 双击 `07-start-all.cmd`。只需要保持 `Pboot Admin Backend` 后端窗口打开；前端、SEO 和 FTP 在后台运行。
 8. 第一次没有管理员时，双击 `03-create-admin.cmd`。
 
 ## 三、数据库说明
@@ -56,14 +56,15 @@ D:\phpstudy_pro\WWW\example.com\
 
 - `00-install.cmd`：使用 pnpm 安装全部依赖。
 - `01-config.cmd`：打开本站独立配置向导。
-- `02-start.cmd`：一键启动 NestJS 后端和 Vue3 前端。
+- `02-start.cmd`：只启动管理后台；后端使用可见常驻终端，前端在后台运行。
 - `03-create-admin.cmd`：创建登录管理员。
 - `04-stop-ports.cmd`：关闭本项目配置的服务端口。
 - `05-start-seo-tool.cmd`：启动本站 SEO 工具。
 - `06-start-ftp-tool.cmd`：启动本站 FTP 上传工具。
+- `07-start-all.cmd`：日常一键启动后端、前端、SEO 和 FTP；配置向导不会常驻。
 
 如果同一台电脑同时运行多个网站，请在各自的配置向导中设置不同的前后端端口。
 
 ## 五、日常使用
 
-以后只需要双击 `02-start.cmd`。更换数据库、域名、端口、AI 或 FTP 设置时，再运行 `01-config.cmd`。
+以后只需要双击 `07-start-all.cmd`，并保持后端终端打开。更换数据库、域名、端口、AI 或 FTP 设置时，再运行 `01-config.cmd`。

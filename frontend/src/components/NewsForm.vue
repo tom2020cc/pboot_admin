@@ -160,7 +160,7 @@ const translatingLang = ref("");
 const translatingAll = ref(false);
 const optimizingSeo = ref(false);
 const optimizingAlts = ref(false);
-const translationModel = ref("google-free");
+const translationModel = ref("");
 const seoModel = ref("");
 const translationModels = ref<TranslationModel[]>([]);
 const hasAvailableTranslationModel = computed(() => translationModels.value.some((item) => item.available));
@@ -231,7 +231,7 @@ const syncDefaultFields = () => {
 const loadTranslationModels = async () => {
   try {
     const res = await getTranslationModels();
-    translationModels.value = [...res.data].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+    translationModels.value = [...res.data];
     const preferredTranslation = translationModels.value.find((item) => item.available);
     if (preferredTranslation) translationModel.value = preferredTranslation.value;
     const preferredSeoModel = availableSeoModels.value[0];

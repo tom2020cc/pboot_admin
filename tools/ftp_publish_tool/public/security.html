@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PbootCMS FTP 安全巡检</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand"><div class="mark">FTP</div><span>PbootCMS FTP 安全巡检</span></div>
+      <div class="header-status" id="status">正在读取巡检状态</div>
+    </header>
+    <nav class="tool-nav" id="toolNav" aria-label="项目工具导航"></nav>
+
+    <main>
+      <nav class="page-switch" aria-label="FTP 功能">
+        <a href="/">发布管理</a>
+        <a class="active" href="/security.html">安全巡检</a>
+      </nav>
+
+      <section class="card posture" aria-label="当前防护状态">
+        <div class="posture-summary"><strong id="postureSummary">正在检查</strong><span>FTP 站点防护状态</span></div>
+        <div class="posture-item" id="postureConfig"><strong>FTP 配置</strong><span>正在读取</span></div>
+        <div class="posture-item" id="postureBackup"><strong>覆盖前备份</strong><span>正在读取</span></div>
+        <div class="posture-item" id="postureBaseline"><strong>可信基线</strong><span>正在读取</span></div>
+        <div class="posture-item" id="postureMonitor"><strong>定时巡检</strong><span>正在读取</span></div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div><h1>远程安全巡检</h1><p class="subtitle">只读取远端目录并下载小型文件比对，不修改或删除线上内容。</p></div>
+          <span class="status-badge" id="securityBadge">尚未扫描</span>
+        </div>
+        <div class="security-controls">
+          <div class="toolbar">
+            <button class="success" id="scanBtn">增量快检</button>
+            <button id="fullScanBtn">完整复核</button>
+            <button id="baselineBtn">完整扫描并建立基线</button>
+            <button class="primary" id="adoptBaselineBtn" hidden>将本次结果设为基线</button>
+            <button class="danger-outline" id="forceBaselineBtn" hidden>确认仍设为基线</button>
+            <button class="danger-outline" id="cancelScanBtn" disabled>取消扫描</button>
+          </div>
+          <div class="monitor-controls">
+            <label class="check"><input id="monitorEnabled" type="checkbox" />定时巡检</label>
+            <label class="field">间隔（分钟）<input id="monitorInterval" type="number" min="5" value="360" /></label>
+            <label class="field">完整复核（天）<input id="monitorFullDays" type="number" min="1" value="7" /></label>
+            <button id="monitorSaveBtn">保存巡检设置</button>
+          </div>
+        </div>
+
+        <div class="progress-block">
+          <div class="progress-meta"><span id="securityProgressText">等待扫描</span><span id="securityProgressCount">0 / 0</span></div>
+          <div class="progress-track"><div class="progress-bar" id="securityProgressBar"></div></div>
+        </div>
+
+        <section class="metrics" style="margin-top:15px" aria-label="巡检统计">
+          <div class="metric"><span>远端文件</span><strong id="securityFiles">-</strong></div>
+          <div class="metric high"><span>高风险</span><strong id="securityHigh">0</strong></div>
+          <div class="metric medium"><span>需关注</span><strong id="securityMedium">0</strong></div>
+          <div class="metric"><span>新增文件</span><strong id="securityNew">0</strong></div>
+          <div class="metric"><span>已变化</span><strong id="securityModified">0</strong></div>
+          <div class="metric safe"><span>跳过未变化</span><strong id="securitySkipped">0</strong></div>
+        </section>
+
+        <div class="security-split">
+          <div>
+            <div class="security-filters">
+              <select id="severityFilter" aria-label="风险等级"><option value="all">全部等级</option><option value="high">高风险</option><option value="medium">需关注</option><option value="low">变化记录</option></select>
+              <select id="categoryFilter" aria-label="问题类型"><option value="all">全部类型</option></select>
+              <input id="findingSearch" type="search" placeholder="按文件路径或问题搜索" aria-label="搜索异常文件" />
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>等级</th><th>远端文件</th><th>问题</th><th>说明</th><th>操作</th></tr></thead>
+                <tbody id="findings"><tr><td colspan="5"><div class="empty">尚无扫描结果</div></td></tr></tbody>
+              </table>
+            </div>
+            <div class="warning-list" id="scanWarnings"></div>
+          </div>
+          <aside>
+            <div class="side-section"><h3>最近成功巡检</h3><div class="history-list" id="scanHistory"><div class="empty">暂无历史记录</div></div></div>
+            <div class="side-section"><h3>扫描日志</h3><div class="log" id="securityLogs" style="height:220px">等待操作。</div></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div><h2>挂马预防设置</h2><p class="subtitle">巡检负责发现变化，服务器权限和上传目录禁执行负责降低风险。</p></div>
+          <button id="hardeningBtn">生成上传目录防执行规则</button>
+        </div>
+        <div class="prevention-grid">
+          <div class="prevention-item"><strong>加密连接</strong><span>空间支持时使用 FTPS，避免账号和发布内容明文传输。</span></div>
+          <div class="prevention-item"><strong>最小权限</strong><span>FTP 账号只保留网站目录权限，并使用独立密码。</span></div>
+          <div class="prevention-item"><strong>上传目录禁执行</strong><span>static、uploads 等目录拒绝 PHP、PHTML、PHAR 脚本运行。</span></div>
+          <div class="prevention-item"><strong>恢复演练</strong><span>保留覆盖备份，定期确认数据库和模板能够恢复。</span></div>
+        </div>
+        <p class="hint" id="hardeningResult">防执行规则只生成到本地目录，确认后再从发布页上传。</p>
+      </section>
+    </main>
+
+    <script src="/common.js"></script>
+    <script src="/security.js"></script>
+  </body>
+</html>

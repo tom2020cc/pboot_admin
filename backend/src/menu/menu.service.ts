@@ -9,8 +9,8 @@ import { Menu } from './entities/menu.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SyncGuardService } from '../common/sync-guard.service';
-import { fetchWithAiRetry, formatAiErrorMessage } from '../common/ai-retry';
-import { buildTranslationModelCatalog } from '../common/translation-model-catalog';
+import { fetchWithAiRetry, formatAiErrorMessage, isFallbackableAiErrorText } from '../common/ai-retry';
+import { buildTranslationModelCatalog, buildTranslationModelFallbackChain } from '../common/translation-model-catalog';
 
 const initSqlJs = require('sql.js');
 
@@ -82,7 +82,7 @@ export class MenuService {
 
     const menuByCode = new Map(menus.map((menu) => [String(menu.code || ''), menu]));
     const scodeOffsets = this.resolveMenuScodeOffsets(menus);
-    const results: Array<{ acode: string; translated: number; skipped: number }> = [];
+    const results: Array<{ acode: string; translated: number; skipped: number; model: string }> = [];
 
     for (const acode of MENU_TARGET_ACODES) {
       const pairs = sourceMenus
@@ -94,12 +94,12 @@ export class MenuService {
         })
         .filter(Boolean) as Array<{ source: Menu; target: Menu }>;
 
-      const translatedNames = await this.translateMenuNameList(
+      const translation = await this.translateMenuNameListWithFallback(
         pairs.map((pair) => pair.source.name || ''),
         acode,
         modelValue,
-        model.provider,
       );
+      const translatedNames = translation.names;
 
       let translated = 0;
       for (let index = 0; index < pairs.length; index += 1) {
@@ -110,7 +110,7 @@ export class MenuService {
         translated += 1;
       }
 
-      results.push({ acode, translated, skipped: sourceMenus.length - pairs.length });
+      results.push({ acode, translated, skipped: sourceMenus.length - pairs.length, model: translation.model });
     }
 
     return {
@@ -611,6 +611,26 @@ export class MenuService {
     if (provider === 'qwen' && model === 'qwen-mt-lite') return await this.translateListWithQwenMtLite(names, targetAcode);
     if (provider === 'qwen') return await this.translateListWithQwen(names, targetAcode, model);
     return await this.translateListWithOpenAI(names, targetAcode, model);
+  }
+
+  private async translateMenuNameListWithFallback(names: string[], targetAcode: string, requestedModel: string) {
+    const models = this.findTranslationModels();
+    const chain = buildTranslationModelFallbackChain(models, requestedModel);
+    let lastError: unknown;
+
+    for (const candidate of chain) {
+      try {
+        return {
+          names: await this.translateMenuNameList(names, targetAcode, candidate.value, candidate.provider),
+          model: candidate.value,
+        };
+      } catch (error) {
+        lastError = error;
+        if (!isFallbackableAiErrorText(error instanceof Error ? error.message : String(error))) throw error;
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new BadRequestException('所有可用翻译模型均调用失败');
   }
 
   private async translateListWithGoogle(names: string[], targetAcode: string) {

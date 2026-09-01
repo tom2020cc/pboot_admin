@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PbootCMS SEO 检查工具</title>
+    <script>
+      (() => {
+        const pageByPath = {
+          "/audit.html": "audit",
+          "/search-engines.html": "engines",
+          "/google.html": "google",
+          "/bing.html": "bing",
+          "/baidu.html": "baidu",
+          "/yandex.html": "yandex",
+          "/settings.html": "settings",
+        };
+        document.documentElement.dataset.seoPage = pageByPath[location.pathname] || "overview";
+      })();
+    </script>
     <style>
       /* 设计令牌 —— 同步维护:
          frontend/src/assets/styles.scss | seo_publish_tool/public/index.html | ftp_publish_tool/public/index.html */
@@ -42,7 +56,7 @@
         --radius-card: 8px;
         --radius-pill: 999px;
         --shadow-card: 0 1px 2px rgba(16, 24, 40, .04), 0 1px 3px rgba(16, 24, 40, .06);
-        --space-page: 24px;
+        --space-page: 22px;
       }
 
       /* ---------- 基础 ---------- */
@@ -130,7 +144,7 @@
       .flow-status { display: none; margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--el-color-primary-light-7); border-radius: 6px; color: var(--el-color-primary-dark-2); background: var(--el-color-primary-light-9); }
       .flow-status strong { display: block; margin-bottom: 3px; }
       .flow-status.error { border-color: var(--el-color-danger-light-8); color: var(--text-danger); background: var(--el-color-danger-light-9); }
-      .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+      .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
       .metric { padding: 16px 18px; border: 1px solid var(--el-border-color-light); border-radius: var(--radius-card); background: var(--el-bg-color); box-shadow: var(--shadow-card); }
       .metric span { color: var(--el-text-color-secondary); }
       .metric strong { display: block; margin-top: 4px; font-size: 28px; font-variant-numeric: tabular-nums; }
@@ -140,7 +154,7 @@
       .chip { padding: 4px 10px; border: 1px solid var(--el-color-primary-light-7); border-radius: var(--radius-pill); color: var(--el-color-primary-dark-2); background: var(--el-color-primary-light-9); }
 
       /* ---------- 问题列表 ---------- */
-      .issue-tools { display: grid; grid-template-columns: 130px minmax(160px, 1fr); gap: 8px; margin-bottom: 10px; }
+      .issue-tools { display: grid; grid-template-columns: 130px 130px 150px minmax(220px, 1fr); gap: 8px; margin-bottom: 10px; }
       .issue { margin-bottom: 8px; padding: 10px 12px; border-left: 4px solid var(--el-color-warning); background: var(--el-fill-color-light); }
       .issue.high { border-left-color: var(--el-color-danger); }
       .issue.low { border-left-color: var(--el-text-color-secondary); }
@@ -227,10 +241,65 @@
       .gi-time { flex: 0 0 auto; color: var(--el-text-color-secondary); font-size: 11px; white-space: nowrap; }
 
       /* ---------- 收录总览 ---------- */
-      .ov-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+      .ov-stats { display: grid; grid-template-columns: repeat(3, minmax(140px, .8fr)) minmax(320px, 1.4fr); gap: 10px; margin-bottom: 14px; }
       .ov-stat { background: var(--el-fill-color-light); border: 1px solid var(--el-border-color-light); border-radius: 8px; padding: 12px; }
       .ov-stat .k { color: var(--el-text-color-secondary); font-size: 12px; }
       .ov-stat .v { font-size: 18px; font-weight: 700; margin-top: 4px; word-break: break-all; }
+      .coverage-block { margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--el-border-color-light); }
+      .coverage-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin: 2px 0 12px; }
+      .coverage-head h3 { margin: 0; font-size: 16px; }
+      .coverage-head .note { margin-top: 4px; }
+      .coverage-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+      .coverage-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+      .coverage-metric { height: auto; min-width: 0; min-height: 146px; padding: 14px 15px 13px; border: 1px solid var(--el-border-color-light); border-top: 3px solid var(--engine-color, var(--el-color-primary)); border-radius: 7px; background: var(--el-bg-color); text-align: left; cursor: pointer; }
+      .coverage-metric:hover, .coverage-metric.active { border-color: var(--engine-color, var(--el-color-primary)); box-shadow: 0 3px 12px rgba(31, 45, 61, .08); }
+      .coverage-metric:focus-visible { outline: 2px solid var(--el-color-primary-light-5); outline-offset: 2px; }
+      .coverage-metric[data-engine="google"] { --engine-color: #4285f4; }
+      .coverage-metric[data-engine="baidu"] { --engine-color: #2932e1; }
+      .coverage-metric[data-engine="yandex"] { --engine-color: #e53935; }
+      .coverage-metric-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .coverage-engine { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 700; }
+      .coverage-engine-mark { display: grid; place-items: center; width: 26px; height: 26px; flex: 0 0 26px; border-radius: 5px; color: #fff; background: var(--engine-color, var(--el-color-primary)); font-size: 13px; font-weight: 800; }
+      .coverage-source-badge { padding: 2px 7px; border-radius: 4px; color: var(--el-text-color-secondary); background: var(--el-fill-color-light); font-size: 10px; font-weight: 600; white-space: nowrap; }
+      .coverage-count { display: block; margin-top: 12px; font-size: 34px; line-height: 1; font-weight: 750; font-variant-numeric: tabular-nums; }
+      .coverage-count-label { display: block; margin-top: 6px; color: var(--el-text-color-regular); font-size: 12px; }
+      .coverage-progress { display: block; height: 4px; margin-top: 11px; overflow: hidden; border-radius: 2px; background: var(--el-fill-color); }
+      .coverage-progress span { display: block; height: 100%; max-width: 100%; background: var(--engine-color, var(--el-color-primary)); }
+      .coverage-meta { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; color: var(--el-text-color-secondary); font-size: 11px; }
+      .coverage-meta span { min-width: 0; overflow-wrap: anywhere; }
+      .coverage-detail-shell { margin-top: 12px; border: 1px solid var(--el-border-color-light); border-radius: 7px; overflow: hidden; background: var(--el-bg-color); }
+      .coverage-toolbar { display: grid; grid-template-columns: auto minmax(260px, 1fr) 160px; gap: 10px; align-items: center; padding: 10px; border-bottom: 1px solid var(--el-border-color-light); background: var(--el-fill-color-extra-light); }
+      .coverage-tabs { display: inline-flex; padding: 3px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-bg-color); }
+      .coverage-tab { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 4px; background: transparent; color: var(--el-text-color-regular); box-shadow: none; }
+      .coverage-tab.active { color: #fff; background: var(--el-color-primary); }
+      .coverage-tab:hover:not(.active) { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
+      .coverage-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 12px 14px; border-bottom: 1px solid var(--el-border-color-light); }
+      .coverage-detail-head strong { display: block; font-size: 14px; }
+      .coverage-detail-head .note { margin-top: 3px; }
+      .coverage-detail-list { min-height: 92px; }
+      .coverage-row { display: grid; grid-template-columns: minmax(280px, 1fr) 126px 138px; gap: 14px; align-items: center; min-height: 64px; padding: 10px 14px; border-bottom: 1px solid var(--el-border-color-lighter); }
+      .coverage-row:last-child { border-bottom: 0; }
+      .coverage-url { min-width: 0; }
+      .coverage-url a { display: block; overflow: hidden; color: var(--el-text-color-primary); text-overflow: ellipsis; white-space: nowrap; }
+      .coverage-url small { display: block; margin-top: 3px; overflow: hidden; color: var(--el-text-color-secondary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+      .coverage-url .coverage-reason { color: var(--el-text-color-regular); }
+      .coverage-state { justify-self: start; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+      .coverage-state.success { color: var(--text-success); background: var(--el-color-success-light-9); }
+      .coverage-state.warning { color: var(--text-warning); background: var(--el-color-warning-light-9); }
+      .coverage-state.danger { color: var(--text-danger); background: var(--el-color-danger-light-9); }
+      .coverage-state.info { color: var(--el-text-color-secondary); background: var(--el-fill-color-light); }
+      .coverage-date { color: var(--el-text-color-secondary); font-size: 11px; line-height: 1.45; text-align: right; }
+      .coverage-empty { padding: 26px 16px; color: var(--el-text-color-secondary); text-align: center; }
+      .coverage-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border-top: 1px solid var(--el-border-color-light); background: var(--el-fill-color-extra-light); }
+      .coverage-pagination-actions { display: flex; gap: 7px; }
+      .coverage-editor { margin-top: 10px; border: 1px solid var(--el-border-color-light); border-radius: 7px; background: var(--el-fill-color-extra-light); }
+      .coverage-editor summary { padding: 11px 13px; color: var(--el-text-color-primary); font-size: 13px; font-weight: 700; cursor: pointer; }
+      .coverage-editor-body { display: grid; grid-template-columns: 180px minmax(260px, 1fr); gap: 10px; padding: 0 13px 13px; }
+      .coverage-editor-body .wide { grid-column: 1 / -1; }
+      .coverage-editor-body textarea { min-height: 108px; resize: vertical; }
+      .coverage-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .overview-subhead { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 0 0 10px; }
+      .overview-subhead h3 { margin: 0; font-size: 15px; }
       .engine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
       .engine-card { border: 1px solid var(--el-border-color-light); border-radius: 10px; padding: 14px; background: var(--el-bg-color); }
       .engine-card .ec-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -250,6 +319,47 @@
       .ov-inspect { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
       .ov-inspect .inspect-field { flex: 1; min-width: 320px; }
 
+      /* ---------- 工作区导航与页面体检 ---------- */
+      .section-nav { position: sticky; top: 112px; z-index: 8; display: flex; gap: 6px; margin: 0 0 14px; padding: 7px; border: 1px solid var(--el-border-color-light); border-radius: 8px; background: rgba(255, 255, 255, .96); overflow-x: auto; box-shadow: var(--shadow-card); }
+      .section-nav a { flex: 0 0 auto; padding: 6px 11px; border-radius: 5px; color: var(--el-text-color-regular); font-size: 13px; font-weight: 600; }
+      .section-nav a:hover { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
+      section[id], div[id="content-audit"] { scroll-margin-top: 168px; }
+      .page-audit-form { display: grid; grid-template-columns: 140px minmax(320px, 1fr) auto; gap: 10px; align-items: end; }
+      .page-audit-result { display: none; margin-top: 14px; }
+      .audit-summary { display: grid; grid-template-columns: 150px minmax(280px, .85fr) minmax(360px, 1.4fr); gap: 12px; align-items: stretch; }
+      .audit-score { display: grid; place-content: center; min-height: 154px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-fill-color-light); text-align: center; }
+      .audit-score strong { font-size: 42px; line-height: 1; font-variant-numeric: tabular-nums; }
+      .audit-score span { margin-top: 7px; color: var(--el-text-color-secondary); font-size: 12px; }
+      .audit-score.good strong { color: var(--el-color-success); }
+      .audit-score.warn strong { color: var(--el-color-warning-dark-2); }
+      .audit-score.bad strong { color: var(--el-color-danger); }
+      .audit-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .audit-fact { min-width: 0; padding: 10px 11px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-bg-color); }
+      .audit-fact span { display: block; color: var(--el-text-color-secondary); font-size: 11px; }
+      .audit-fact strong { display: block; margin-top: 3px; overflow-wrap: anywhere; font-size: 14px; }
+      .serp-preview { min-width: 0; padding: 13px 15px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-bg-color); }
+      .serp-preview-label { color: var(--el-text-color-secondary); font-size: 11px; font-weight: 600; }
+      .serp-url { margin-top: 10px; color: var(--text-success); overflow-wrap: anywhere; font-size: 12px; }
+      .serp-title { margin-top: 3px; color: #1a0dab; font-size: 18px; line-height: 1.35; overflow-wrap: anywhere; }
+      .serp-description { margin-top: 5px; color: var(--el-text-color-regular); font-size: 13px; line-height: 1.5; }
+      .audit-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+      .audit-check { min-width: 0; padding: 10px 11px; border: 1px solid var(--el-border-color-light); border-left-width: 4px; border-radius: 6px; background: var(--el-bg-color); }
+      .audit-check.pass { border-left-color: var(--el-color-success); }
+      .audit-check.warn { border-left-color: var(--el-color-warning); }
+      .audit-check.fail { border-left-color: var(--el-color-danger); }
+      .audit-check.info { border-left-color: var(--el-color-primary); }
+      .audit-check-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .audit-check-head strong { font-size: 13px; }
+      .audit-check-status { flex: 0 0 auto; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+      .audit-check.pass .audit-check-status { color: var(--text-success); background: var(--el-color-success-light-9); }
+      .audit-check.warn .audit-check-status { color: var(--text-warning); background: var(--el-color-warning-light-9); }
+      .audit-check.fail .audit-check-status { color: var(--text-danger); background: var(--el-color-danger-light-9); }
+      .audit-check.info .audit-check-status { color: var(--el-color-primary-dark-2); background: var(--el-color-primary-light-9); }
+      .audit-check-summary { margin-top: 5px; color: var(--el-text-color-primary); font-size: 12px; overflow-wrap: anywhere; }
+      .audit-check-detail { margin-top: 3px; color: var(--el-text-color-secondary); font-size: 11px; overflow-wrap: anywhere; }
+      .issue-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+      .health-detail { margin-top: 5px; color: var(--el-text-color-secondary); font-size: 11px; }
+
       /* ---------- 通用装饰 ---------- */
       .band h2 { display: flex; align-items: center; gap: 9px; }
       .band h2::before { content: ""; width: 5px; height: 20px; border-radius: 3px; background: var(--el-color-primary); flex: 0 0 auto; }
@@ -264,40 +374,108 @@
         .identity-grid, .definition-grid { grid-template-columns: 1fr 1fr; }
         .content-grid { grid-template-columns: 1fr; }
         .runtime { display: none; }
+        .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .issue-tools { grid-template-columns: 1fr 1fr; }
+        .audit-summary { grid-template-columns: 140px 1fr; }
+        .serp-preview { grid-column: 1 / -1; }
+        .audit-checks { grid-template-columns: 1fr 1fr; }
+        .coverage-toolbar { grid-template-columns: 1fr 1fr; }
+        .coverage-tabs { grid-column: 1 / -1; justify-self: start; }
+        .ov-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
       @media (max-width: 680px) {
-        main { padding: 12px; }
+        html, body { max-width: 100%; overflow-x: hidden; }
+        main { width: 100%; max-width: 100vw; min-width: 0; padding: 12px; overflow: hidden; }
+        header { min-height: 64px; padding: 10px 12px; }
+        .brand { min-width: 0; font-size: 20px; }
+        .brand > span:last-child { white-space: nowrap; }
+        .toolbar { display: grid; width: 100%; max-width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .toolbar button { width: 100%; min-width: 0; padding: 0 5px; font-size: 11px; white-space: nowrap; }
+        .band-title { flex-direction: column; align-items: stretch; gap: 8px; }
+        .band-title > button, .band-title > .action-link { align-self: flex-start; }
         .form-grid, .google-grid, .metrics { grid-template-columns: 1fr; }
         .inspect-field { min-width: 100%; }
         .google-workflow { grid-template-columns: 1fr; }
         .identity-grid, .definition-grid, .guide-grid { grid-template-columns: 1fr; }
+        .section-nav { top: 112px; margin-left: -4px; margin-right: -4px; }
+        .page-audit-form, .audit-summary, .audit-checks, .issue-tools { grid-template-columns: 1fr; }
+        .serp-preview { grid-column: auto; }
+        .coverage-head, .overview-subhead { align-items: stretch; flex-direction: column; }
+        .coverage-actions { justify-content: flex-start; }
+        .ov-stats, .coverage-metrics, .coverage-toolbar, .coverage-editor-body { grid-template-columns: 1fr; }
+        .coverage-tabs, .coverage-editor-body .wide { grid-column: auto; }
+        .coverage-tabs { display: grid; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .coverage-tab { min-width: 0; padding-left: 5px; padding-right: 5px; }
+        .coverage-row { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 10px; }
+        .coverage-date { grid-column: 1 / -1; text-align: left; }
+        .coverage-url a, .coverage-url small { white-space: normal; overflow-wrap: anywhere; }
+        .coverage-pagination { align-items: stretch; flex-direction: column; }
+        .coverage-pagination-actions { display: grid; grid-template-columns: 1fr 1fr; }
       }
     </style>
+    <link rel="stylesheet" href="/seo-shell.css" />
+    <script defer src="/seo-pages.js"></script>
   </head>
-  <body>
-    <header>
-      <div class="brand"><span class="brand-mark">SEO</span><span>PbootCMS SEO 检查工具</span></div>
-      <div>
-        <div id="status" class="status">准备就绪</div>
-        <div id="runtime" class="runtime"></div>
+  <body class="seo-page">
+    <header class="seo-header">
+      <div class="brand">
+        <span class="brand-mark">SEO</span>
+        <span class="brand-copy"><strong>PbootCMS SEO 检查工具</strong><small>收录提交、页面体检与内容优化</small></span>
+      </div>
+      <div class="status-panel" id="statusPanel" data-tone="ready">
+        <span class="status-indicator" aria-hidden="true"></span>
+        <div class="status-copy">
+          <div id="status" class="status">准备就绪</div>
+          <div id="runtime" class="runtime"></div>
+        </div>
       </div>
     </header>
-    <nav class="tool-nav" id="toolNav" aria-label="项目工具导航"></nav>
+    <nav class="tool-nav" aria-label="项目工具导航"><span class="nav-caption">项目工具</span><div class="tool-nav-links" id="toolNav"></div></nav>
 
     <main>
-      <div class="toolbar">
-        <button class="success" id="prepareGoogleBtn">一键准备 Google 提交</button>
+      <nav class="section-nav workspace-nav" aria-label="SEO 工作区导航">
+        <span class="nav-caption">SEO 功能</span>
+        <a href="/" data-workspace-page="overview">SEO 总览</a>
+        <a href="/audit.html" data-workspace-page="audit">页面体检与优化</a>
+        <a href="/google.html" data-workspace-page="google">Google</a>
+        <a href="/bing.html" data-workspace-page="bing">Bing</a>
+        <a href="/baidu.html" data-workspace-page="baidu">百度</a>
+        <a href="/yandex.html" data-workspace-page="yandex">Yandex</a>
+        <a href="/settings.html" data-workspace-page="settings">站点与迁移</a>
+      </nav>
+      <div class="workspace-intro">
+        <div>
+          <h1 id="workspaceTitle">SEO 总览</h1>
+          <p id="workspaceDescription">查看各搜索引擎的配置、提交与收录状态。</p>
+        </div>
+        <span class="workspace-badge" id="workspaceBadge">总览</span>
+      </div>
+      <div class="toolbar" data-seo-pages="overview">
         <button class="primary" id="refreshBtn">刷新检查</button>
-        <button class="success" id="generateBtn">生成 sitemap + robots</button>
+        <a class="action-link" href="/google.html">进入 Google</a>
+        <a class="action-link" href="/bing.html">进入 Bing</a>
+        <a class="action-link" href="/baidu.html">进入百度</a>
+        <a class="action-link" href="/yandex.html">进入 Yandex</a>
+      </div>
+      <div class="toolbar engine-commandbar" data-seo-pages="google">
+        <button class="success" id="prepareGoogleBtn">一键准备 Google Sitemap</button>
+        <span>生成、上传并检查公开 Sitemap，然后继续下方 Search Console 工作流。</span>
+      </div>
+      <div class="toolbar engine-commandbar" data-seo-pages="bing">
         <button id="keyBtn">生成 IndexNow Key</button>
         <button class="warn" id="pushBtn">推送 IndexNow（Bing 等）</button>
+        <span>IndexNow 会通知 Bing 及其他参与协议的搜索引擎；百度与 Google 使用各自页面。</span>
+      </div>
+      <div class="toolbar engine-commandbar" data-seo-pages="settings">
+        <button class="success" id="generateBtn">生成 sitemap + robots</button>
         <button id="uploadSeoFtpBtn">上传 SEO 文件到 FTP</button>
+        <span>先确认站点地址，再生成并上传各搜索引擎需要的公开文件。</span>
       </div>
       <div id="flowStatus" class="flow-status"></div>
       <div id="indexNowResult" class="google-result"></div>
       <div id="urlWarning" class="warning"></div>
 
-      <section class="band">
+      <section class="band" id="site-settings" data-seo-pages="settings">
         <h2>站点地址</h2>
         <div class="form-grid">
           <label><span>站点名称</span><input id="siteNameInput" /></label>
@@ -307,7 +485,36 @@
         </div>
       </section>
 
-      <section class="band">
+      <section class="band" id="page-audit" data-seo-pages="audit">
+        <div class="band-title">
+          <div>
+            <h2>页面技术 SEO 体检</h2>
+            <div class="note">实际访问页面并检查响应、标题、描述、Canonical、H1、收录指令、Hreflang、图片 ALT、结构化数据和移动端适配。本地地址适合改版时检查，线上地址适合上线后复核。</div>
+          </div>
+          <span class="note" id="pageAuditMeta">尚未体检</span>
+        </div>
+        <div class="page-audit-form">
+          <label><span>检查环境</span><select id="pageAuditSource"><option value="public">真实线上页面</option><option value="local">本地测试页面</option></select></label>
+          <label><span>完整页面 URL</span><input id="pageAuditUrlInput" list="pageAuditUrls" placeholder="https://shanbo.cc/" /></label>
+          <button class="primary" id="pageAuditBtn">开始体检</button>
+          <datalist id="pageAuditUrls"></datalist>
+        </div>
+        <div class="page-audit-result" id="pageAuditResult">
+          <div class="audit-summary">
+            <div class="audit-score" id="pageAuditScore"><strong>0</strong><span>技术 SEO 得分</span></div>
+            <div class="audit-facts" id="pageAuditFacts"></div>
+            <div class="serp-preview">
+              <div class="serp-preview-label">搜索结果预览</div>
+              <div class="serp-url" id="pageAuditSnippetUrl"></div>
+              <div class="serp-title" id="pageAuditSnippetTitle"></div>
+              <div class="serp-description" id="pageAuditSnippetDescription"></div>
+            </div>
+          </div>
+          <div class="audit-checks" id="pageAuditChecks"></div>
+        </div>
+      </section>
+
+      <section class="band" data-seo-pages="settings">
         <div class="band-title">
           <div>
             <h2>当前项目身份</h2>
@@ -318,7 +525,7 @@
         <div id="projectIdentity" class="identity-grid"></div>
       </section>
 
-      <section class="band">
+      <section class="band" id="indexing-overview" data-seo-pages="overview">
         <div class="band-title">
           <div>
             <h2>收录状态总览</h2>
@@ -327,19 +534,91 @@
           <button id="refreshOverviewBtn">刷新总览</button>
         </div>
         <div class="ov-stats" id="ovStats"></div>
+        <div class="coverage-block">
+          <div class="coverage-head">
+            <div>
+              <h3>三大搜索引擎收录量</h3>
+              <div class="note">只统计确认过的收录数据。数字、检查覆盖率、数据来源和更新时间分别显示；“--”表示尚未同步，不代表收录为 0。</div>
+            </div>
+            <div class="coverage-actions">
+              <a class="action-link" href="/google.html#google-search-console">检查 Google</a>
+              <button id="syncYandexCoverageBtn">同步 Yandex</button>
+              <button id="openBaiduCoverageBtn">录入百度索引量</button>
+            </div>
+          </div>
+          <div class="coverage-metrics" id="coverageMetrics"></div>
+          <div class="coverage-detail-shell">
+            <div class="coverage-toolbar">
+              <div class="coverage-tabs" id="coverageTabs" role="tablist" aria-label="搜索引擎收录明细">
+                <button class="coverage-tab active" data-coverage-engine="google" type="button">Google</button>
+                <button class="coverage-tab" data-coverage-engine="baidu" type="button">百度</button>
+                <button class="coverage-tab" data-coverage-engine="yandex" type="button">Yandex</button>
+              </div>
+              <input id="coverageSearchInput" placeholder="搜索 URL、标题、语言或类型" />
+              <select id="coverageStateFilter">
+                <option value="">全部状态</option>
+                <option value="indexed">已确认收录</option>
+                <option value="attention">需要关注</option>
+                <option value="unchecked">未检查</option>
+              </select>
+            </div>
+            <div class="coverage-detail-head">
+              <div><strong id="coverageDetailTitle">Google 收录明细</strong><div class="note" id="coverageDetailNote">正在读取...</div></div>
+              <span class="note" id="coverageDetailUpdated"></span>
+            </div>
+            <div class="coverage-detail-list" id="coverageDetailList"><div class="coverage-empty">正在读取收录数据...</div></div>
+            <div class="coverage-pagination">
+              <span class="note" id="coveragePageMeta"></span>
+              <div class="coverage-pagination-actions">
+                <button id="coveragePrevBtn" type="button">上一页</button>
+                <button id="coverageNextBtn" type="button">下一页</button>
+              </div>
+            </div>
+          </div>
+          <details class="coverage-editor" id="baiduCoverageEditor">
+            <summary>百度索引量快照</summary>
+            <div class="coverage-editor-body">
+              <label><span>百度平台索引量</span><input id="baiduCoverageCountInput" type="number" min="0" step="1" placeholder="例如 860" /></label>
+              <label><span>记录备注</span><input id="baiduCoverageNoteInput" placeholder="例如：百度搜索资源平台 8 月索引量" /></label>
+              <label class="wide"><span>已收录 URL 明细（可选，每行一个；总数可以大于明细数量）</span><textarea id="baiduCoverageUrlsInput" placeholder="https://cn.shanbo.cc/page-1/&#10;https://cn.shanbo.cc/page-2/"></textarea></label>
+              <div class="coverage-editor-actions wide">
+                <button class="primary" id="saveBaiduCoverageBtn" type="button">保存百度快照</button>
+                <button id="clearBaiduCoverageBtn" type="button">清除本地快照</button>
+                <a class="action-link" href="https://ziyuan.baidu.com/" target="_blank" rel="noopener">打开百度搜索资源平台</a>
+              </div>
+            </div>
+          </details>
+        </div>
+        <div class="overview-subhead">
+          <div><h3>提交通道与平台配置</h3><div class="note">下面显示推送、验证和 Sitemap 通道是否可用，不作为收录数量。</div></div>
+        </div>
         <div class="engine-grid" id="engineGrid"></div>
         <div class="ov-inspect">
-          <label class="inspect-field"><span>查询某 URL 在各平台的收录情况（Google + Bing）</span><input id="ovInspectUrlInput" placeholder="https://shanbo.cc/xxx/" /></label>
+          <label class="inspect-field"><span>查询某 URL 的收录情况（Google、Bing 与已保存的百度 / Yandex 明细）</span><input id="ovInspectUrlInput" placeholder="https://shanbo.cc/xxx/" /></label>
           <button class="primary" id="ovInspectBtn">查询收录</button>
         </div>
         <div id="ovInspectResult" class="google-result"></div>
       </section>
 
-      <section class="band">
+      <section class="engine-entry" data-seo-pages="engines">
+        <div class="engine-entry-copy">
+          <span class="engine-entry-kicker">搜索引擎工作区</span>
+          <h2>每个平台单独配置、单独提交、单独看教程</h2>
+          <p>选择一个搜索引擎进入对应页面。这里不再混放凭据、推送按钮和诊断结果。</p>
+        </div>
+        <div class="engine-entry-grid">
+          <a class="engine-entry-card google" href="/google.html"><span class="engine-entry-mark">G</span><strong>Google</strong><small>Search Console、Indexing API、收录诊断与续传</small><b>进入 Google →</b></a>
+          <a class="engine-entry-card bing" href="/bing.html"><span class="engine-entry-mark">B</span><strong>Bing</strong><small>站点验证、Sitemap、IndexNow 与 URL 查询</small><b>进入 Bing →</b></a>
+          <a class="engine-entry-card baidu" href="/baidu.html"><span class="engine-entry-mark">百</span><strong>百度</strong><small>中文站主动推送、token 配置与提交说明</small><b>进入百度 →</b></a>
+          <a class="engine-entry-card yandex" href="/yandex.html"><span class="engine-entry-mark">Я</span><strong>Yandex</strong><small>站点验证、OAuth、Sitemap 与 IndexNow</small><b>进入 Yandex →</b></a>
+        </div>
+      </section>
+
+      <section class="band" id="google-workspace" data-seo-pages="google">
         <div class="band-title">
           <div>
             <h2>Google 收录</h2>
-            <div class="note">无需 Google Cloud 或服务账号。本工具负责生成并检查 sitemap.xml、robots.txt；Sitemap 提交和单页请求收录在 Google Search Console 官方页面完成。</div>
+            <div class="note">先生成并检查 sitemap.xml、robots.txt；下方已配置的同一份服务账号继续负责 Search Console 数据、Sitemap API、URL Inspection 与 Indexing API。</div>
           </div>
           <a class="action-link" id="googleConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener">打开 Search Console</a>
         </div>
@@ -372,51 +651,58 @@
         <div id="googleResult" class="google-result"></div>
       </section>
 
-      <section class="band">
+      <section class="band" id="google-indexing-workspace" data-seo-pages="google">
         <div class="band-title">
           <div>
-            <h2>Google Indexing 一键提交</h2>
-            <div class="note">用 Google Indexing API 真正把 URL 提交给 Google（只需配置一次服务账号）。配好后每条 URL 可一键提交，并查询 Google 的处理状态。普通页面属于“通知 Google 来抓取”，不保证一定收录——这是 Google 的规则，任何工具都一样。</div>
+            <h2>Google Search Console 与 Indexing API</h2>
+            <div class="note">同一份服务账号同时用于 Search Console 的 Sitemap/收录查询，以及 Indexing API 的分批通知、每日配额和断点续传。</div>
           </div>
           <span class="note" id="googleIndexingMeta">未配置</span>
         </div>
         <div class="google-actions">
           <label class="inspect-field" style="flex: 1 1 100%;">
-            <span>Google 服务账号 JSON（Google Cloud → IAM → 服务账号 → 新建 JSON 密钥，下载后整段粘贴；保存后输入框会清空，密钥仅保存在本工具目录）</span>
+            <span>Google 服务账号 JSON（用于 Search Console 与 Indexing API；保存后输入框会清空）</span>
             <textarea id="googleServiceAccountInput" class="gi-textarea" placeholder='{ "type": "service_account", "client_email": "xxx@project.iam.gserviceaccount.com", "private_key": "-----BEGIN PRIVATE KEY-----\n..." }'></textarea>
           </label>
         </div>
         <details class="gi-steps">
-          <summary>Google 服务账号 JSON 怎么获取？点开看详细步骤（首次配置约 10 分钟，只需做一次）</summary>
+          <summary>Google 服务账号 JSON 怎么获取？点开看详细步骤</summary>
           <ol>
             <li>用拥有本网站 Search Console 权限的 Google 账号，打开 <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a>（console.cloud.google.com）。</li>
             <li>点页面顶部的项目选择器 →「新建项目」，名称随意（例如 shanbo-search-console），创建后切换到该项目。</li>
-            <li>左侧菜单「API 和服务」→「库」→ 搜索 <b>Indexing API</b> → 打开它 → 点「启用」（Enable）。没有结算账号一般也能启用，提交量小在免费额度内。</li>
+            <li>左侧菜单「API 和服务」→「库」，分别启用 <b>Search Console API</b> 和 <b>Indexing API</b>。</li>
             <li>左侧菜单「IAM 和管理」→「服务账号」→「创建服务账号」。名称随意（例如 shanbocc），角色可以不选，一路「完成」。</li>
             <li>在服务账号列表中点进刚建的账号 →「密钥」标签页 →「添加密钥」→「创建新密钥」→ 类型选 <b>JSON</b> →「创建」。浏览器会自动下载一个 .json 文件，这就是服务账号 JSON。</li>
-            <li>打开 <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Search Console</a> → 左下角「设置」→「用户和权限」→「添加用户」→ 粘贴 JSON 里 <b>client_email</b> 的值（形如 xxx@xxx.iam.gserviceaccount.com）→ 权限选「完整」。<b>漏掉这步提交会报 403。</b></li>
-            <li>用记事本打开下载的 JSON 文件，全选、复制，粘贴到上方输入框，点「保存并验证服务账号」。看到「取得 Google 访问令牌」即配置成功。</li>
+            <li>打开 <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Search Console</a>，把 JSON 里的 <b>client_email</b> 加入当前属性。Search Console 数据至少需要完整权限；Google 的 Indexing API 官方流程要求该服务账号成为站点所有者。<b>漏掉授权或选错属性通常会报 403。</b></li>
+            <li>用记事本打开下载的 JSON 文件，全选、复制，粘贴到上方输入框，点「保存并验证服务账号」。看到取得 Indexing API 访问令牌即配置成功。</li>
           </ol>
           <div class="note">密钥只保存在本工具目录的 seo.config.json 里，不要提交到代码仓库或发给他人；若怀疑泄露，回到 Google Cloud 服务账号的「密钥」页删除该密钥再重新创建即可。当前账号：<span id="giStepsAccount">-</span></div>
         </details>
         <div class="google-actions">
           <button class="primary" id="saveGoogleServiceAccountBtn">保存并验证服务账号</button>
-          <button id="testGoogleIndexingBtn">测试连接</button>
+          <button id="testGoogleIndexingBtn">测试 Indexing API 连接</button>
           <button class="warn" id="clearGoogleServiceAccountBtn">清除服务账号</button>
           <a class="action-link" id="googleIndexingHelpLink" href="https://developers.google.com/search/apis/indexing-api/v3/using-api" target="_blank" rel="noopener">Indexing API 文档</a>
           <a class="action-link" id="googleIndexingConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener">打开 Search Console</a>
         </div>
-        <div class="google-actions">
-          <button class="success" id="googleIndexingSubmitAllBtn">提交全部 URL 到 Google</button>
+        <div class="gi-policy-note">
+          <strong>使用范围提示</strong>
+          <span>Google 官方当前说明 Indexing API 主要用于带 JobPosting 或直播 BroadcastEvent 结构化数据的页面。工具按你的需求恢复完整提交能力，但普通产品和新闻页仍应同时维护 Sitemap。</span>
+        </div>
+        <div class="google-actions gi-controls">
+          <button class="success" id="googleIndexingSubmitAllBtn">继续提交待处理 URL</button>
           <button class="warn" id="googleIndexingStopBtn" style="display: none;">停止提交</button>
           <button id="googleIndexingReloadBtn">刷新提交状态</button>
           <button id="googleIndexingClearBtn">清除提交记录</button>
-          <span class="note">逐条提交，每批最多 100 条；已提交过的 URL 会自动跳过，不会重复提交。Google 默认每天约 200 条配额，太平洋时间零点重置。</span>
+          <label class="gi-quota-field"><span>本地每日提交限额</span><input id="googleDailyQuotaInput" type="number" min="1" max="100000" step="1" value="200" /></label>
+          <button id="saveGoogleQuotaBtn">保存限额</button>
         </div>
         <div class="gi-summary" id="googleIndexingSummary">
           <div class="gi-stat pending"><span class="lbl">待提交</span><span class="num" id="giPendingCount">0</span></div>
           <div class="gi-stat done"><span class="lbl">已提交</span><span class="num" id="giDoneCount">0</span></div>
-          <div class="gi-stat quota"><span class="lbl">今日配额已用</span><span class="num" id="giQuotaText">0 / 200</span></div>
+          <div class="gi-stat quota"><span class="lbl">今日已请求</span><span class="num" id="giQuotaText">0 / 200</span></div>
+          <div class="gi-stat remaining"><span class="lbl">今日剩余</span><span class="num" id="giQuotaRemaining">200</span></div>
+          <span class="gi-reset-note" id="giQuotaResetNote">太平洋时间零点自动重置</span>
         </div>
         <div class="gi-progress" id="googleIndexingProgress">
           <div class="gi-progress-head">
@@ -430,32 +716,94 @@
           <button id="googleIndexingManualSubmitBtn">提交该 URL</button>
           <button id="googleIndexingManualMetaBtn">查询该 URL 状态</button>
         </div>
-        <div id="googleIndexingUrlList" class="gi-list"></div>
+        <details class="gi-url-panel" open>
+          <summary>URL 提交明细 <span id="giUrlSummary"></span></summary>
+          <div id="googleIndexingUrlList" class="gi-list"></div>
+        </details>
         <div id="googleIndexingResult" class="google-result"></div>
       </section>
 
-      <section class="band">
+      <section class="band" id="google-search-console" data-seo-pages="google">
         <div class="band-title">
           <div>
-            <h2>Google Search Console（Sitemap 提交 + 收录查询）</h2>
-            <div class="note">复用同一份服务账号调用 Search Console API：一键把 sitemap 提交给 Google，并查询任意 URL「到底收没收录」。注意：收录查询（URL Inspection）只支持「网址前缀」属性（如 https://example.com/），不支持 sc-domain 域名属性；sitemap 提交两者都支持。首次使用需在 Google Cloud 额外启用 <b>Search Console API</b>（和 Indexing API 并列的那个）。</div>
+            <h2>Google Search Console 收录中心</h2>
+            <div class="note">更新未收录名单、重新通知 Google，并逐条处理真正需要请求收录的页面。</div>
           </div>
           <span class="note" id="searchConsoleMeta">未配置</span>
         </div>
-        <div class="google-actions">
-          <label class="inspect-field"><span>Search Console 属性（siteUrl）</span><input id="gscSiteUrlInput" placeholder="sc-domain:example.com 或 https://example.com/" /></label>
-          <label class="inspect-field"><span>Sitemap 地址</span><input id="gscSitemapUrlInput" placeholder="https://example.com/sitemap.xml" /></label>
-          <button class="primary" id="gscSaveBtn">保存属性</button>
+        <div class="gsc-diagnostics">
+          <div class="gsc-diagnostic-head">
+            <div>
+              <h3>未收录推进队列</h3>
+              <div class="note">默认只显示已经确认、可以进入 Google 官方页面请求收录的 URL。</div>
+            </div>
+          </div>
+          <div class="gsc-push-panel">
+            <div class="gsc-push-copy">
+              <strong>主动推进收录</strong>
+              <span>Sitemap 负责批量通知，网址检查负责少量重要页面。普通产品页没有可合法批量强推的 Google API。</span>
+            </div>
+            <div class="gsc-push-actions">
+              <button class="primary" id="gscInspectBatchBtn" type="button">更新未收录队列</button>
+              <button class="success" id="gscSubmitSitemapBtn" type="button">重新提交 Sitemap</button>
+              <button class="primary" id="gscOpenNextRequestBtn" type="button">打开下一条请求收录</button>
+              <button class="warn" id="gscInspectStopBtn" type="button" style="display:none;">停止检查</button>
+            </div>
+          </div>
+          <div id="searchConsoleResult" class="google-result"></div>
+          <div class="gi-summary gsc-summary">
+            <div class="gi-stat quota"><span class="lbl">今日待处理</span><span class="num" id="gscAttentionCount">0</span></div>
+            <div class="gi-stat pending"><span class="lbl">等待检查</span><span class="num" id="gscPendingCount">0</span></div>
+            <div class="gi-stat done"><span class="lbl">已确认收录</span><span class="num" id="gscIndexedCount">0</span></div>
+            <div class="gi-stat remaining"><span class="lbl">已有诊断</span><span class="num" id="gscCachedCount">0</span></div>
+          </div>
+          <div class="gi-progress" id="gscInspectionProgress">
+            <div class="gi-progress-head"><span id="gscInspectionProgressText">准备检查...</span><span id="gscInspectionProgressCount">0 / 0</span></div>
+            <div class="gi-progress-bar"><div class="gi-progress-fill" id="gscInspectionProgressFill"></div></div>
+          </div>
+          <div class="gsc-inspection-filters">
+            <label><span>筛选收录状态</span><select id="gscInspectionFilter"><option value="attention" selected>今日待处理</option><option value="blocked">先修复问题</option><option value="pending">等待检查</option><option value="indexed">已收录</option><option value="priority">优先队列</option><option value="all">全部</option></select></label>
+            <label><span>搜索 URL 或页面标题</span><input id="gscInspectionSearch" type="search" placeholder="输入域名、路径或标题" /></label>
+          </div>
+          <details class="gi-url-panel gsc-inspection-panel" open>
+            <summary>待请求收录页面 <span id="gscInspectionSummary"></span></summary>
+            <div class="gsc-inspection-list" id="gscInspectionList"></div>
+          </details>
+
+          <details class="gsc-advanced">
+            <summary>高级设置与查询</summary>
+            <div class="gsc-advanced-body">
+              <div class="google-actions">
+                <label class="inspect-field"><span>Search Console 属性（siteUrl）</span><input id="gscSiteUrlInput" placeholder="sc-domain:example.com 或 https://example.com/" /></label>
+                <label class="inspect-field"><span>Sitemap 地址</span><input id="gscSitemapUrlInput" placeholder="https://example.com/sitemap.xml" /></label>
+                <button class="primary" id="gscSaveBtn">保存属性</button>
+              </div>
+              <div class="gsc-command-bar">
+                <button id="gscLoadSitemapsBtn">读取 Sitemap 状态</button>
+                <label class="gsc-days-field"><span>搜索表现周期</span><select id="gscPerformanceDays"><option value="7">近 7 天</option><option value="28" selected>近 28 天</option><option value="90">近 90 天</option></select></label>
+                <button id="gscLoadPerformanceBtn">读取搜索表现</button>
+                <a class="action-link" id="gscApiEnableLink" href="https://console.cloud.google.com/apis/library/searchconsole.googleapis.com" target="_blank" rel="noopener">打开 Google API 设置</a>
+              </div>
+              <div class="gsc-data-panel" id="gscSitemapPanel"></div>
+              <div class="gsc-data-panel" id="gscPerformancePanel"></div>
+              <div class="google-actions gsc-single-inspect">
+                <label class="inspect-field" style="flex: 1;"><span>检查单个完整 URL</span><input id="gscInspectUrlInput" placeholder="https://example.com/your-page/" /></label>
+                <button id="gscInspectBtn">检查这个 URL</button>
+              </div>
+              <div class="gsc-diagnostic-controls">
+                <label><span>每次检查数量</span><input id="gscBatchLimitInput" type="number" min="1" max="100" step="1" value="20" /></label>
+                <label><span>结果有效期</span><select id="gscCacheDaysSelect"><option value="7" selected>7 天</option><option value="14">14 天</option><option value="30">30 天</option><option value="0">每次重新检查</option></select></label>
+                <button id="gscReloadInspectionsBtn">刷新本地记录</button>
+                <button id="gscCopyPendingBtn" type="button">复制待收录 URL</button>
+                <button id="gscClearInspectionsBtn">清除诊断记录</button>
+              </div>
+              <p class="gsc-advanced-note">Google URL Inspection 官方单站配额：2000 次/天、600 次/分钟。这里的设置只影响诊断，不会自动删除或修改线上页面。</p>
+            </div>
+          </details>
         </div>
-        <div class="google-actions">
-          <button class="success" id="gscSubmitSitemapBtn">提交 Sitemap 到 Google</button>
-          <label class="inspect-field" style="flex: 1;"><span>查询收录状态（要查的完整 URL）</span><input id="gscInspectUrlInput" placeholder="https://example.com/your-page/" /></label>
-          <button id="gscInspectBtn">查询收录状态</button>
-        </div>
-        <div id="searchConsoleResult" class="google-result"></div>
       </section>
 
-      <section class="band">
+      <section class="band" id="yandex-workspace" data-seo-pages="yandex">
         <div class="band-title">
           <div>
             <h2>Yandex 收录</h2>
@@ -494,7 +842,21 @@
         <div id="yandexResult" class="google-result"></div>
       </section>
 
-      <section class="band">
+      <section class="band tutorial-section" data-seo-pages="yandex">
+        <div class="tutorial-heading">
+          <div><span class="tutorial-kicker">Yandex 配置教程</span><h2>验证、OAuth、Sitemap 和 IndexNow 分清使用场景</h2></div>
+          <a class="action-link" href="https://yandex.com/dev/webmaster/doc/en/" target="_blank" rel="noopener">官方 Webmaster API 文档</a>
+        </div>
+        <figure class="tutorial-figure"><img src="/tutorials/yandex-workflow.svg" alt="Yandex Webmaster 配置与主动提交流程图" /><figcaption>Webmaster 负责所有权与数据，IndexNow 负责向参与协议的搜索引擎发送页面更新通知。</figcaption></figure>
+        <div class="tutorial-steps-grid">
+          <article><span>01</span><h3>添加与验证</h3><p>在 Yandex Webmaster 添加真实线上域名，选择 HTML 文件验证。把平台提供的文件名和完整内容填入上方，再上传 SEO 文件到 FTP。</p></article>
+          <article><span>02</span><h3>检查公开文件</h3><p>点击“检查线上验证 / IndexNow Key”，确认验证 HTML 与 key 文本均能从公网直接访问；403、404 或超时都要先处理。</p></article>
+          <article><span>03</span><h3>连接 Webmaster API</h3><p>OAuth token 用于读取站点列表、索引数据和提交 Sitemap。保存后先测试 API 连接，再执行 Sitemap 提交。</p></article>
+          <article><span>04</span><h3>日常主动通知</h3><p>页面新增、更新或删除后使用 IndexNow。成功响应只表示已接收通知，最终抓取与收录仍由搜索引擎判断。</p></article>
+        </div>
+      </section>
+
+      <section class="band" id="bing-workspace" data-seo-pages="bing">
         <div class="band-title">
           <div>
             <h2>Bing 收录</h2>
@@ -525,7 +887,21 @@
         <div id="bingResult" class="google-result"></div>
       </section>
 
-      <section class="band">
+      <section class="band tutorial-section" data-seo-pages="bing">
+        <div class="tutorial-heading">
+          <div><span class="tutorial-kicker">Bing 配置教程</span><h2>验证站点后，用 Sitemap 管全站、IndexNow 管更新</h2></div>
+          <a class="action-link" href="https://learn.microsoft.com/en-us/bingwebmaster/" target="_blank" rel="noopener">官方 Bing Webmaster API 文档</a>
+        </div>
+        <figure class="tutorial-figure"><img src="/tutorials/bing-workflow.svg" alt="Bing Webmaster 配置、Sitemap 与 IndexNow 提交流程图" /><figcaption>API Key 用于本工具调用 Bing Webmaster；IndexNow key 文件用于证明 URL 通知属于当前站点。</figcaption></figure>
+        <div class="tutorial-steps-grid">
+          <article><span>01</span><h3>添加站点</h3><p>登录 Bing Webmaster，添加真实线上域名。已有 Search Console 的站点也可以按平台提示导入，但仍要确认域名完全一致。</p></article>
+          <article><span>02</span><h3>生成验证文件</h3><p>选择 XML 文件验证，复制验证码到上方面板，生成 BingSiteAuth.xml 后通过 FTP 上传并检查线上状态。</p></article>
+          <article><span>03</span><h3>保存 API Key</h3><p>进入设置中的 API 访问页面生成密钥。保存后可从本工具提交 Sitemap，并查询单个 URL 的 Bing 状态。</p></article>
+          <article><span>04</span><h3>持续提交更新</h3><p>首次上线提交 Sitemap；日常内容变更使用 IndexNow。一次通知会按协议共享给参与的搜索引擎，无需重复点多个入口。</p></article>
+        </div>
+      </section>
+
+      <section class="band" id="baidu-workspace" data-seo-pages="baidu">
         <div class="band-title">
           <div>
             <h2>百度收录（中文站）</h2>
@@ -552,7 +928,21 @@
         <div id="baiduResult" class="google-result"></div>
       </section>
 
-      <section class="band">
+      <section class="band tutorial-section" data-seo-pages="baidu">
+        <div class="tutorial-heading">
+          <div><span class="tutorial-kicker">百度配置教程</span><h2>中文站使用百度自己的普通收录 API</h2></div>
+          <a class="action-link" href="https://ziyuan.baidu.com/" target="_blank" rel="noopener">打开百度搜索资源平台</a>
+        </div>
+        <figure class="tutorial-figure"><img src="/tutorials/baidu-workflow.svg" alt="百度搜索资源平台普通收录 API 主动推送流程图" /><figcaption>百度 token 与已验证站点绑定；推送的 URL 必须属于同一 host，不能混入其他语言子域名。</figcaption></figure>
+        <div class="tutorial-steps-grid">
+          <article><span>01</span><h3>添加中文站</h3><p>在百度搜索资源平台添加并验证中文站，例如 cn 子域名。站点协议、域名和推送 URL 必须完全匹配。</p></article>
+          <article><span>02</span><h3>复制主动推送 token</h3><p>进入“普通收录 → API 提交”，从接口调用地址中复制 token。只把 token 填入上方，不要粘贴整条接口 URL。</p></article>
+          <article><span>03</span><h3>保存并主动推送</h3><p>确认 site 是中文站后保存配置，再推送全部中文 URL。结果会显示成功数量、剩余额度和平台返回信息。</p></article>
+          <article><span>04</span><h3>看懂提交结果</h3><p>提交成功表示百度已接收 URL，不等于已经收录。索引量应以百度平台数据为准，重复推送可用于通知内容更新。</p></article>
+        </div>
+      </section>
+
+      <section class="band" data-seo-pages="engines">
         <div class="band-title">
           <div>
             <h2>国内其它搜索引擎</h2>
@@ -563,61 +953,85 @@
         <div class="guide-grid" id="cnEnginesList"></div>
       </section>
 
-      <section class="band">
-        <div class="band-title">
-          <div>
-            <h2>Google 后续操作教程</h2>
-            <div class="note">普通新闻和产品页没有可用的 Google 强制收录接口，以下步骤需要在 Search Console 官方页面完成。</div>
+      <section class="band tutorial-section google-tutorial" data-seo-pages="google">
+        <div class="tutorial-heading">
+          <div><span class="tutorial-kicker">Google 完整配置教程</span><h2>一份服务账号，连接 Search Console 与 Indexing API</h2><p>功能逻辑保持不变：Sitemap、URL Inspection、搜索表现、分批通知、每日配额和断点续传仍使用当前同一份服务账号。</p></div>
+          <div class="guide-actions">
+            <a class="action-link" id="googleSitemapHelpLink" href="https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap" target="_blank" rel="noopener">Google Sitemap 文档</a>
+            <a class="action-link" id="googleInspectionHelpLink" href="https://support.google.com/webmasters/answer/9012289" target="_blank" rel="noopener">网址检查说明</a>
           </div>
         </div>
-        <div class="guide-grid">
-          <div class="guide">
-            <h3>首次部署或更换域名</h3>
-            <ol>
-              <li>点击“一键准备 Google 提交”，等待 FTP 和线上检查全部完成。</li>
-              <li>打开 Sitemaps 页面，提交页面中显示的 sitemap 地址。</li>
-              <li>等待 Google 处理；显示“成功”只代表 sitemap 可读取，不等于全部收录。</li>
-            </ol>
-          </div>
-          <div class="guide">
-            <h3>发布重要新闻或产品后</h3>
-            <ol>
-              <li>先更新 sitemap 并上传到线上。</li>
-              <li>复制该页面真实 URL，打开“网址检查”。</li>
-              <li>运行线上测试，页面正常后点击“请求编入索引”。</li>
-            </ol>
-          </div>
-          <div class="guide">
-            <h3>日常检查重点</h3>
-            <ul>
-              <li>网页索引：查看未编入索引原因和趋势。</li>
-              <li>Sitemaps：确认最后读取时间与状态。</li>
-              <li>设置中的抓取统计信息：确认 Googlebot 能稳定访问。</li>
-            </ul>
-          </div>
-          <div class="guide">
-            <h3>不能自动化的边界</h3>
-            <ul>
-              <li>工具不能承诺排名，也不能保证每个 URL 被收录。</li>
-              <li>IndexNow 面向 Bing 等支持方，不会把普通页面提交给 Google。</li>
-              <li>Google Indexing API 不适用于普通新闻和产品页面。</li>
-            </ul>
-          </div>
+        <div class="tutorial-rail" aria-label="Google 配置步骤">
+          <div><b>1</b><span>创建 Cloud 项目</span></div><i></i>
+          <div><b>2</b><span>启用两个 API</span></div><i></i>
+          <div><b>3</b><span>创建服务账号 JSON</span></div><i></i>
+          <div><b>4</b><span>授予站点所有者权限</span></div><i></i>
+          <div><b>5</b><span>导入并测试</span></div>
         </div>
-        <div class="guide-actions">
-          <a class="action-link" id="googleSitemapHelpLink" href="https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap" target="_blank" rel="noopener">Google Sitemap 文档</a>
-          <a class="action-link" id="googleInspectionHelpLink" href="https://support.google.com/webmasters/answer/9012289" target="_blank" rel="noopener">网址检查说明</a>
+        <section class="google-official-panel" aria-labelledby="googleOfficialHeading">
+          <div class="google-subheading">
+            <div>
+              <span class="tutorial-kicker">按顺序打开</span>
+              <h3 id="googleOfficialHeading">Google 官方配置页面快捷入口</h3>
+              <p>Cloud Console 页面会使用当前选中的项目。每次打开后先核对页面顶部项目名称，保证两个 API、服务账号和配额都属于同一项目。</p>
+            </div>
+            <span class="google-project-warning">先确认 Cloud 项目，再开始配置</span>
+          </div>
+          <div class="google-link-grid">
+            <a class="google-link-card tone-blue" href="https://console.cloud.google.com/projectselector2/home/dashboard" target="_blank" rel="noopener"><span>01</span><strong>选择或创建 Cloud 项目</strong><small>所有 API、凭据与配额的归属项目</small><code>console.cloud.google.com/projectselector2</code></a>
+            <a class="google-link-card tone-blue" href="https://console.cloud.google.com/apis/library/searchconsole.googleapis.com" target="_blank" rel="noopener"><span>02</span><strong>启用 Search Console API</strong><small>Sitemap、网址检查和搜索表现所需</small><code>searchconsole.googleapis.com</code></a>
+            <a class="google-link-card tone-red" href="https://console.cloud.google.com/apis/library/indexing.googleapis.com" target="_blank" rel="noopener"><span>03</span><strong>启用 Web Search Indexing API</strong><small>分批通知、配额统计和断点续传所需</small><code>indexing.googleapis.com</code></a>
+            <a class="google-link-card tone-green" href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener"><span>04</span><strong>创建并管理服务账号</strong><small>创建账号后进入“密钥”生成 JSON</small><code>console.cloud.google.com/iam-admin</code></a>
+            <a class="google-link-card tone-green" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener"><span>05</span><strong>查看 API 凭据</strong><small>核对服务账号与当前项目是否一致</small><code>console.cloud.google.com/apis/credentials</code></a>
+            <a class="google-link-card tone-yellow" id="googleTutorialConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener"><span>06</span><strong>打开 Search Console</strong><small>选择站点属性，添加 JSON 中的 client_email</small><code>search.google.com/search-console</code></a>
+            <a class="google-link-card tone-red" href="https://console.cloud.google.com/apis/api/indexing.googleapis.com/quotas" target="_blank" rel="noopener"><span>07</span><strong>查看 Indexing API 配额</strong><small>核对每日发布量与每分钟请求限制</small><code>indexing.googleapis.com/quotas</code></a>
+            <a class="google-link-card tone-yellow" href="https://developers.google.com/search/apis/indexing-api/v3/prereqs" target="_blank" rel="noopener"><span>08</span><strong>阅读 Google 官方前置条件</strong><small>项目、服务账号、站点所有者和授权说明</small><code>developers.google.com/search/apis</code></a>
+          </div>
+        </section>
+        <div class="google-subheading google-visual-heading">
+          <div><span class="tutorial-kicker">图解操作</span><h3>照着四张图完成整条授权链路</h3><p>每张图对应一个实际配置阶段。图中绿色状态表示可以继续，红色提示表示当前步骤尚未完成。</p></div>
+        </div>
+        <div class="google-svg-grid">
+          <figure class="google-guide-visual"><img src="/tutorials/google-cloud-project-api.svg" alt="选择 Google Cloud 项目并启用两个 API 的步骤图" /><figcaption><strong>1. 项目与 API</strong><span>先选定项目，再分别启用 Search Console API 和 Web Search Indexing API。</span></figcaption></figure>
+          <figure class="google-guide-visual"><img src="/tutorials/google-service-account-key.svg" alt="创建 Google 服务账号并下载 JSON 密钥的步骤图" /><figcaption><strong>2. 服务账号与 JSON</strong><span>项目角色可以跳过；密钥类型选择 JSON，并妥善保存唯一下载文件。</span></figcaption></figure>
+          <figure class="google-guide-visual"><img src="/tutorials/google-search-console-owner.svg" alt="在 Google Search Console 中给服务账号授予站点权限的步骤图" /><figcaption><strong>3. Search Console 站点权限</strong><span>复制 JSON 的 client_email，添加到目标属性的用户和权限中。</span></figcaption></figure>
+          <figure class="google-guide-visual"><img src="/tutorials/google-tool-connection.svg" alt="在本工具导入服务账号并测试 Google API 的步骤图" /><figcaption><strong>4. 导入、验证与继续任务</strong><span>保存 JSON 后按顺序测试连接、读取 Sitemap，再继续未完成队列。</span></figcaption></figure>
+        </div>
+        <div class="google-subheading google-screenshot-heading">
+          <div><span class="tutorial-kicker">真实页面核对</span><h3>配置完成后，页面状态应与下图一致</h3></div>
+        </div>
+        <div class="tutorial-image-grid">
+          <figure class="tutorial-shot"><img src="/tutorials/google-enable-search-console-api.png" alt="Google Cloud 中 Search Console API 已启用的页面" /><figcaption><strong>图 1：确认 Search Console API 已启用</strong><span>页面顶部应显示“停用 API”，这表示当前项目已经启用。Indexing API 也要用同样方式启用。</span></figcaption></figure>
+          <figure class="tutorial-shot"><img src="/tutorials/google-search-console-workspace.png" alt="本工具 Google Search Console 收录中心页面" /><figcaption><strong>图 2：回到本工具验证完整链路</strong><span>保存服务账号后先测试连接，再读取 Sitemap 或执行少量 URL Inspection，确认权限与属性匹配。</span></figcaption></figure>
+        </div>
+        <div class="tutorial-steps-grid google-steps">
+          <article><span>01</span><h3>创建或选择 Cloud 项目</h3><p>用拥有网站 Search Console 权限的 Google 账号登录 Cloud Console。新建项目后切换到该项目，后续服务账号、API 和配额都必须在同一项目内。</p></article>
+          <article><span>02</span><h3>启用两个 API</h3><p>打开上方两个 API 直达页，确认项目名正确后点击“启用”。配置完成时页面按钮会变成“管理”或“停用 API”；只启用其中一个会导致部分按钮返回 403。</p></article>
+          <article><span>03</span><h3>创建服务账号与 JSON</h3><p>进入“服务账号”，点击“创建服务账号”。项目角色可以跳过；创建后依次进入“密钥 → 添加密钥 → 创建新密钥 → JSON”，密钥文件只会下载一次。</p></article>
+          <article><span>04</span><h3>给站点授予权限</h3><p>打开 Search Console 并选中目标属性，进入“设置 → 用户和权限”，添加 JSON 中的 <b>client_email</b>。若 Indexing API 仍返回 403，再核对该账号的所有者状态。</p></article>
+          <article><span>05</span><h3>导入 JSON 并验证</h3><p>用记事本打开 JSON，全选复制到上方服务账号输入框，点击“保存并验证服务账号”。成功后账号邮箱会显示在页面右侧，输入框会自动清空。</p></article>
+          <article><span>06</span><h3>配置 Search Console 属性</h3><p>域名属性填写 <b>sc-domain:example.com</b>；网址前缀属性必须包含协议和末尾斜杠。Sitemap 地址必须属于同一属性，保存后先读取 Sitemap 状态。</p></article>
+          <article><span>07</span><h3>按正确方式推进收录</h3><p>普通产品页以 Sitemap、内部链接和 Search Console 手动请求为主。Indexing API 官方仅支持含 JobPosting，或 VideoObject 中 BroadcastEvent 的页面，不应把普通产品页当作批量强推接口。</p></article>
+          <article><span>08</span><h3>配额与断点续传</h3><p>Indexing API 初始默认发布配额为 200 次/项目/天，并在太平洋时间零点重置。本工具会记录成功 URL 和今日用量，恢复网络或配额后只处理剩余列表。</p></article>
+        </div>
+        <div class="tutorial-troubleshoot">
+          <strong>常见问题快速判断</strong>
+          <div><b>API 未启用</b><span>回到当前 Cloud 项目确认两个 API 都显示已启用，启用后等待几分钟再试。</span></div>
+          <div><b>403 / 权限不足</b><span>检查服务账号邮箱是否被添加到当前 Search Console 属性，并具有所有者或完整权限。</span></div>
+          <div><b>属性不匹配</b><span>域名属性使用 sc-domain:，网址前缀属性要严格匹配协议、子域名和末尾斜杠。</span></div>
+          <div><b>达到配额或断网</b><span>停止后不要清除提交记录；恢复网络或配额后点击“继续提交待处理 URL”即可。</span></div>
         </div>
       </section>
 
-      <div class="metrics">
+      <div class="metrics" id="content-audit" data-seo-pages="audit">
+        <div class="metric"><span>SEO 健康度</span><strong id="healthScore">0</strong><div class="health-detail" id="healthDetail"></div></div>
         <div class="metric"><span>可收录 URL</span><strong id="urlCount">0</strong></div>
         <div class="metric"><span>内容数量</span><strong id="contentCount">0</strong></div>
         <div class="metric"><span>栏目数量</span><strong id="menuCount">0</strong></div>
         <div class="metric"><span>高风险问题</span><strong id="highCount">0</strong></div>
       </div>
 
-      <div class="content-grid">
+      <div class="content-grid" data-seo-pages="audit">
         <section class="band">
           <h2>站点信息</h2>
           <div id="siteMeta" class="site-meta"></div>
@@ -627,8 +1041,8 @@
           <div class="band-title">
             <h2>SEO 问题</h2>
             <div style="display: flex; align-items: center; gap: 12px;">
-              <a class="action-link" href="/models.html" target="_blank" rel="noopener">📊 模型总览</a>
-              <a class="action-link" href="/models-config.html" target="_blank" rel="noopener">⚙️ 模型配置</a>
+              <a class="action-link" href="/models.html">模型总览</a>
+              <a class="action-link" href="/models-config.html">模型配置</a>
               <span id="issueTotal" class="note"></span>
             </div>
           </div>
@@ -652,8 +1066,7 @@
                 <option value="pt">Português (pt)</option>
               </select>
             </label>
-            <button id="aiPreviewBtn">预览修复</button>
-            <button class="success" id="aiFixBtn">AI 开始修复</button>
+            <button class="success" id="aiFixBtn">开始 / 继续直接修复</button>
             <button class="warn" id="aiStopBtn" style="display: none;">停止修复</button>
             <button id="aiTestBtn">测试模型连接</button>
           </div>
@@ -671,7 +1084,7 @@
               <a class="action-link" id="aiQuotaLink" target="_blank" rel="noopener" style="display: none;">查看实时余量</a>
             </div>
           </div>
-          <div class="ai-fix-note">选中一个模型 + 目标语言，点「AI 开始修复」即可让模型自动补齐标题、副标题、关键词、描述、URL 名称、正文过短和图片 ALT 等问题（修复前自动备份数据库）。</div>
+          <div class="ai-fix-note"><strong>逐批校验并直接写入：</strong>每个成功批次都会立即落库并保存断点。额度不足、断网、关闭页面或服务重启不会撤销已完成修复；恢复后再次点击按钮会自动跳过已修复记录。</div>
           <div class="ai-problem-filter" id="aiProblemFilter">
             <span class="ai-quota-label">只修：</span>
             <label><input type="checkbox" value="title" checked /> 标题</label>
@@ -703,7 +1116,13 @@
               <option value="medium">中风险</option>
               <option value="low">提示</option>
             </select>
+            <select id="languageFilter"><option value="">全部语言</option></select>
+            <select id="typeFilter"><option value="">全部类型</option></select>
             <input id="issueSearchInput" placeholder="搜索标题、栏目、URL 或问题内容" />
+          </div>
+          <div class="issue-actions">
+            <button id="exportIssuesBtn">导出筛选结果 CSV</button>
+            <button id="copyIssueSummaryBtn">复制诊断摘要</button>
           </div>
           <div id="issues"></div>
           <div class="pagination">
@@ -716,7 +1135,49 @@
         </section>
       </div>
 
-      <section class="band">
+      <section class="band migration-panel" id="config-migration" data-seo-pages="settings">
+        <div class="migration-head">
+          <div>
+            <span class="tutorial-kicker">配置备份与跨电脑迁移</span>
+            <h2>按范围导出与导入工具配置</h2>
+            <p>可以完整迁移搜索引擎、模型、FTP 和断点状态，也可以只备份当前生效的全部模型 API Key。</p>
+          </div>
+          <span class="migration-badge">包含敏感密钥</span>
+        </div>
+        <div class="migration-layout">
+          <div class="migration-copy">
+            <h3>导出配置包</h3>
+            <p>下载一个可直接带到新电脑的 JSON 配置包。文件包含真实密钥，请只保存在你自己控制的设备中。</p>
+            <div class="migration-export-actions">
+              <label>
+                <span>备份范围</span>
+                <select id="configExportScope" aria-label="配置备份范围">
+                  <option value="all" selected>全部工具配置</option>
+                  <option value="ai-keys">仅模型 API Key</option>
+                </select>
+              </label>
+              <button class="primary" id="exportConfigBackupBtn" type="button">下载完整配置包</button>
+            </div>
+            <div class="migration-export-note" id="configExportScopeNote">包含 SEO、Google、模型、FTP、环境配置与续传状态。</div>
+          </div>
+          <div class="migration-copy">
+            <h3>导入配置包</h3>
+            <p>推荐保留新电脑自己的项目路径和端口，只恢复网站、FTP、模型和搜索引擎配置。</p>
+            <div class="migration-actions">
+              <select id="configImportMode" aria-label="配置导入方式">
+                <option value="portable" selected>跨电脑导入（保留本机路径和端口）</option>
+                <option value="full">完整覆盖（包括路径和端口）</option>
+              </select>
+              <button id="selectConfigBackupBtn" type="button">选择配置包</button>
+              <input id="configBackupFileInput" type="file" accept="application/json,.json" hidden />
+            </div>
+          </div>
+        </div>
+        <div class="migration-items" id="configBackupItems"><span class="note">正在读取可迁移配置...</span></div>
+        <div id="configBackupResult" class="google-result"></div>
+      </section>
+
+      <section class="band" data-seo-pages="settings">
         <div class="band-title">
           <div>
             <h2>换站部署清单</h2>
@@ -736,6 +1197,7 @@
     <script>
       const $ = (id) => document.getElementById(id);
       let busy = false;
+      let currentReport = null;
       let currentIssues = [];
       let currentUrls = [];
       let issuePage = 1;
@@ -744,14 +1206,23 @@
       let googleStatus = {};
       let googleIndexingStatus = {};
       let giStopRequested = false;
+      let searchConsoleStatus = {};
+      let gscInspectionState = { results: {}, count: 0, summary: {} };
+      let gscPerformanceState = { rows: [], summary: {} };
+      let gscSitemapState = { sitemaps: [], summary: {} };
+      let gscInspectionStopRequested = false;
+      const gscRequestProgressKey = "pboot-gsc-request-progress";
       let yandexStatus = {};
+      let indexCoverageState = { engines: {} };
+      let coverageEngine = "google";
+      let coveragePage = 1;
+      const coveragePageSize = 25;
       let googleSubmittedState = { submitted: {}, count: 0, quota: { dailyLimit: 200, dailyUsed: 0, dailyRemaining: 200 } };
       let currentConfig = {};
       let currentInstance = {};
       let aiModels = [];
       let aiJob = null;
       let aiPolling = false;
-      let aiPreviewMode = false;
       const AI_PROVIDERS = [
         { id: "qwen", label: "Qwen（阿里云百炼）" },
         { id: "zhipu", label: "智谱 GLM" },
@@ -773,11 +1244,14 @@
       function setStatus(text, isError = false) {
         $("status").textContent = text;
         $("status").className = isError ? "status error" : "status";
+        const panel = $("statusPanel");
+        if (panel) panel.dataset.tone = isError ? "error" : /正在|准备|处理中|提交中|加载中/.test(String(text || "")) ? "busy" : "ready";
       }
 
       function setBusy(value) {
         busy = value;
         document.querySelectorAll("button").forEach((button) => (button.disabled = value));
+        if (!value) renderGiSummary();
       }
 
       function renderFlowStatus(title = "", detail = "", isError = false) {
@@ -812,9 +1286,164 @@
         }
       }
 
+      function showConfigBackupResult(ok, title, lines = []) {
+        const box = $("configBackupResult");
+        box.style.display = "block";
+        box.dataset.tone = ok ? "success" : "warning";
+        box.innerHTML = `<div class="google-result-title">${escapeHtml(title)}</div><pre>${escapeHtml(lines.filter(Boolean).join("\n"))}</pre>`;
+      }
+
+      async function loadConfigBackupStatus() {
+        const result = await api("/api/config-backup/status");
+        $("configBackupItems").innerHTML = (result.items || []).map((item) => `
+          <span class="migration-item ${item.available ? "ready" : "missing"}">
+            <i aria-hidden="true"></i>${escapeHtml(item.label)}<b>${item.available ? "可导出" : "尚无数据"}</b>
+          </span>
+        `).join("");
+        const providers = (result.modelKeyProviders || []).join("、");
+        $("configExportScopeNote").dataset.modelKeyCount = String(result.modelKeyCount || 0);
+        $("configExportScopeNote").dataset.modelKeyProviders = providers;
+        syncConfigExportScope();
+      }
+
+      async function exportConfigBackup() {
+        const scope = $("configExportScope").value === "ai-keys" ? "ai-keys" : "all";
+        const aiOnly = scope === "ai-keys";
+        setStatus(aiOnly ? "正在生成模型 Key 备份..." : "正在生成完整配置包...");
+        const response = await fetch(`/api/config-backup/export?scope=${encodeURIComponent(scope)}`, { cache: "no-store" });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.message || `导出失败（HTTP ${response.status}）`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const filename = disposition.match(/filename="([^"]+)"/i)?.[1] || `pboot-config-${Date.now()}.json`;
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+        showConfigBackupResult(true, aiOnly ? "模型 Key 备份已导出" : "配置包已导出", [
+          `文件：${filename}`,
+          `大小：${formatBytes(blob.size)}`,
+          aiOnly ? "范围：仅模型 API Key，不包含站点、FTP、SEO 与断点状态。" : "范围：全部工具配置与续传状态。",
+          "配置包包含真实密钥，请妥善保管。",
+        ]);
+        setStatus(aiOnly ? "模型 Key 备份已下载" : "完整配置包已下载");
+      }
+
+      function syncConfigExportScope() {
+        const aiOnly = $("configExportScope").value === "ai-keys";
+        const note = $("configExportScopeNote");
+        const count = Number(note.dataset.modelKeyCount || 0);
+        const providers = note.dataset.modelKeyProviders || "暂无已配置厂商";
+        $("exportConfigBackupBtn").textContent = aiOnly ? "下载模型 Key 备份" : "下载完整配置包";
+        note.textContent = aiOnly
+          ? `仅包含当前实际生效的模型厂商 Key，共 ${count} 个：${providers}。导入时不会覆盖其他配置。`
+          : "包含 SEO、Google、模型、FTP、环境配置与续传状态。";
+      }
+
+      async function importConfigBackupFile(file) {
+        if (!file) return;
+        let bundle;
+        try {
+          bundle = JSON.parse(await file.text());
+        } catch (_error) {
+          throw new Error("无法解析配置包，请选择本工具导出的 JSON 文件。");
+        }
+        const aiOnly = bundle.scope === "ai-keys";
+        const mode = $("configImportMode").value === "full" ? "full" : "portable";
+        const warning = aiOnly
+          ? "将只导入配置包中的模型 API Key，并同步给后台翻译功能；不会覆盖站点、FTP、SEO 或续传状态。确认继续吗？"
+          : mode === "full"
+          ? "完整覆盖会同时替换当前电脑的项目路径和端口。确认继续吗？"
+          : "将导入全部密钥与续传状态，并保留当前电脑的项目路径和端口。确认继续吗？";
+        if (!confirm(warning)) return;
+        setStatus("正在校验并导入配置包...");
+        const result = await api("/api/config-backup/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bundle, mode }),
+        });
+        showConfigBackupResult(true, "配置导入完成", [
+          result.message,
+          `导入方式：${result.scope === "ai-keys" ? "仅模型 API Key" : result.mode === "full" ? "完整覆盖" : "跨电脑迁移"}`,
+          `已导入：${(result.imported || []).join("、")}`,
+          result.scope === "ai-keys" ? `模型厂商 Key：${result.modelKeyCount || 0} 个` : "",
+          `原配置备份：${result.backupPath || "-"}`,
+          result.scope === "ai-keys"
+            ? "请重启整套工具，使 SEO 修复与后台翻译重新读取模型 Key。"
+            : "请重启整套工具，使端口、模型和 FTP 服务全部重新读取配置。",
+        ]);
+        await loadConfigBackupStatus();
+        setStatus("配置已导入，建议重启工具");
+      }
+
       function renderWarning(text) {
         $("urlWarning").style.display = text ? "block" : "none";
         $("urlWarning").textContent = text || "";
+      }
+
+      function formatBytes(bytes) {
+        const value = Number(bytes || 0);
+        if (value < 1024) return `${value} B`;
+        if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+        return `${(value / 1024 / 1024).toFixed(1)} MB`;
+      }
+
+      function renderPageAuditOptions() {
+        const source = $("pageAuditSource").value;
+        const field = source === "local" ? "localUrl" : "url";
+        const options = currentUrls
+          .filter((item) => item[field])
+          .slice(0, 500)
+          .map((item) => `<option value="${escapeHtml(item[field])}">${escapeHtml(`${item.lang || ""} · ${item.type || item.kind || ""} · ${item.title || item.id || ""}`)}</option>`)
+          .join("");
+        $("pageAuditUrls").innerHTML = options;
+      }
+
+      function renderPageAudit(result) {
+        const score = Number(result.score || 0);
+        const scoreBox = $("pageAuditScore");
+        scoreBox.className = `audit-score ${score >= 85 ? "good" : score >= 65 ? "warn" : "bad"}`;
+        scoreBox.querySelector("strong").textContent = score;
+        $("pageAuditMeta").textContent = `通过 ${result.summary?.pass || 0} · 提醒 ${result.summary?.warn || 0} · 失败 ${result.summary?.fail || 0}`;
+        $("pageAuditFacts").innerHTML = [
+          ["页面响应", `HTTP ${result.statusCode}`],
+          ["抓取耗时", `${result.loadMs} ms`],
+          ["HTML 大小", formatBytes(result.sizeBytes)],
+          ["正文字符", result.details?.bodyCharacters || 0],
+          ["内部 / 外部链接", `${result.details?.internalLinks || 0} / ${result.details?.externalLinks || 0}`],
+          ["图片 / 缺 ALT", `${result.details?.imageCount || 0} / ${result.details?.missingAltCount || 0}`],
+        ].map(([label, value]) => `<div class="audit-fact"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+        $("pageAuditSnippetUrl").textContent = result.snippet?.url || result.finalUrl || "";
+        $("pageAuditSnippetTitle").textContent = result.snippet?.title || "页面标题缺失";
+        $("pageAuditSnippetDescription").textContent = result.snippet?.description || "Meta Description 缺失，搜索引擎可能从正文中自动截取摘要。";
+        const statusLabels = { pass: "通过", warn: "提醒", fail: "失败", info: "参考" };
+        $("pageAuditChecks").innerHTML = (result.checks || []).map((item) => `
+          <div class="audit-check ${escapeHtml(item.status)}">
+            <div class="audit-check-head"><strong>${escapeHtml(item.label)}</strong><span class="audit-check-status">${escapeHtml(statusLabels[item.status] || item.status)}</span></div>
+            <div class="audit-check-summary">${escapeHtml(item.summary || "")}</div>
+            ${item.detail ? `<div class="audit-check-detail">${escapeHtml(item.detail)}</div>` : ""}
+          </div>
+        `).join("");
+        $("pageAuditResult").style.display = "block";
+      }
+
+      async function runPageAudit() {
+        const url = $("pageAuditUrlInput").value.trim();
+        if (!url) throw new Error("请输入要体检的完整页面 URL。");
+        setStatus(`正在抓取并体检 ${url} ...`);
+        $("pageAuditMeta").textContent = "正在检查";
+        const result = await api("/api/page-audit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        renderPageAudit(result);
+        setStatus(`页面体检完成：${result.score} 分，${result.summary?.fail || 0} 项失败，${result.summary?.warn || 0} 项提醒`);
       }
 
       function renderNavigation(items) {
@@ -834,7 +1463,7 @@
         $("siteBaseUrlInput").value = config.siteBaseUrl || "";
         $("runtime").textContent = `${config.siteName || "-"} · 端口 ${instance.port || location.port} · ${instance.databasePath || ""}`;
         renderNavigation(result.navigation || []);
-        document.title = `${config.siteName || "PbootCMS"} · SEO 检查工具`;
+        document.title = `${config.siteName || "PbootCMS"} · ${$("workspaceTitle")?.textContent || "SEO 检查"}`;
         renderWarning(result.publicUrlWarning ? "真实线上地址看起来仍是本地/测试域名，已禁止向搜索引擎提交。" : "");
         renderProjectIdentity();
       }
@@ -878,7 +1507,7 @@
           "3. 在本页填写本地测试地址与真实线上地址；SEO 提交只使用真实线上地址。",
           "4. 打开 FTP 发布页，填写新站自己的 FTP 信息并测试连接。",
           "5. 为新站重新生成 IndexNow Key，不复用旧站 Key。",
-          "6. 回到 SEO 检查页，核对“当前项目身份”，再运行“一键准备 Google 提交”。",
+          "6. 回到 SEO 检查页，核对“当前项目身份”，再运行“一键准备 Google Sitemap”。",
           "7. 确认线上 sitemap.xml 与 robots.txt 通过检查后，到该站 Search Console 提交 sitemap。",
           "8. 使用网址检查处理最重要的新页面；提交或抓取不等于已经收录。",
         ].join("\n");
@@ -903,6 +1532,7 @@
         $("googleSitemapsLink").href = result.sitemapsUrl || "https://search.google.com/search-console/sitemaps";
         $("googleInspectLink").href = result.consoleUrl || "https://search.google.com/search-console";
         $("googlePageIndexLink").href = result.pageIndexUrl || result.consoleUrl || "https://search.google.com/search-console";
+        $("googleTutorialConsoleLink").href = result.consoleUrl || "https://search.google.com/search-console";
         $("googleSitemapHelpLink").href = result.helpUrls?.sitemap || "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap";
         $("googleInspectionHelpLink").href = result.helpUrls?.urlInspection || "https://support.google.com/webmasters/answer/9012289";
         $("googleChecklist").innerHTML = [
@@ -914,7 +1544,7 @@
           `<span class="google-ready-summary ${result.ready ? "ok" : "bad"}">${result.ready ? "当前项目配置检查通过" : `尚有 ${result.issues?.length || 0} 项配置需要处理`}</span>`,
         ].join("");
         $("googleAccountMeta").textContent = result.ready
-          ? "无需 Google Cloud。首次把 Sitemap 地址提交到 Search Console；重要新页面可复制 URL 后在“网址检查”中请求编入索引。"
+          ? "公开 Sitemap 与 robots 已具备基础条件；下方服务账号继续负责 Search Console 数据与 API 工作流。"
           : (result.issues || []).join("；");
         renderProjectIdentity(result.projectIdentity || {});
       }
@@ -937,6 +1567,10 @@
         } else {
           meta.textContent = "未配置服务账号";
           meta.style.color = "#d94b35";
+        }
+        const quotaInput = $("googleDailyQuotaInput");
+        if (quotaInput && document.activeElement !== quotaInput) {
+          quotaInput.value = String(googleIndexingStatus.dailyQuota || googleIndexingStatus.quota?.dailyLimit || 200);
         }
         $("googleIndexingSubmitAllBtn").disabled = busy || !googleIndexingStatus.enabled;
         $("giStepsAccount").textContent = googleIndexingStatus.clientEmail || "尚未配置";
@@ -1045,12 +1679,334 @@
       async function loadSearchConsoleStatus() {
         try {
           const data = await api("/api/search-console/status");
+          searchConsoleStatus = data;
           $("gscSiteUrlInput").value = data.siteUrl || "";
           $("gscSitemapUrlInput").value = data.sitemapUrl || "";
+          $("gscApiEnableLink").href = data.apiEnableUrl || "https://console.cloud.google.com/apis/library/searchconsole.googleapis.com";
           $("searchConsoleMeta").textContent = data.enabled ? `已配置 ${data.clientEmail}` : "未配置服务账号";
           $("searchConsoleMeta").style.color = data.enabled ? "#176b3a" : "#d94b35";
+          await loadGscInspectionState();
         } catch (_error) {
           $("searchConsoleMeta").textContent = "加载失败";
+        }
+      }
+
+      function formatGscDate(value, includeTime = true) {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleString("zh-CN", includeTime
+          ? { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }
+          : { year: "numeric", month: "2-digit", day: "2-digit" });
+      }
+
+      function renderGscSitemaps(data) {
+        gscSitemapState = data || { sitemaps: [], summary: {} };
+        const box = $("gscSitemapPanel");
+        const summary = gscSitemapState.summary || {};
+        const rows = gscSitemapState.sitemaps || [];
+        box.innerHTML = `
+          <div class="gsc-panel-head">
+            <div><h3>Sitemap 处理状态</h3><div class="note">${escapeHtml(gscSitemapState.message || "")}</div></div>
+            <span class="gsc-state ${summary.withErrors ? "danger" : summary.pending ? "warning" : "success"}">${summary.withErrors ? "存在错误" : summary.pending ? "Google 处理中" : "处理正常"}</span>
+          </div>
+          <div class="gsc-inline-summary">
+            <div class="gsc-inline-stat"><span>Sitemap</span><strong>${Number(summary.total || 0)}</strong></div>
+            <div class="gsc-inline-stat"><span>包含 URL</span><strong>${Number(summary.submittedUrls || 0)}</strong></div>
+            <div class="gsc-inline-stat"><span>错误</span><strong>${Number(summary.withErrors || 0)}</strong></div>
+            <div class="gsc-inline-stat"><span>警告 / 待处理</span><strong>${Number(summary.withWarnings || 0)} / ${Number(summary.pending || 0)}</strong></div>
+          </div>
+          <div class="gsc-sitemap-list">
+            ${rows.length ? rows.map((item) => {
+              const submitted = (item.contents || []).reduce((sum, content) => sum + Number(content.submitted || 0), 0);
+              const status = item.errors ? ["danger", `${item.errors} 个错误`] : item.isPending ? ["warning", "处理中"] : ["success", "已处理"];
+              return `<div class="gsc-sitemap-row">
+                <div class="gsc-row-main"><a href="${escapeHtml(item.path)}" target="_blank" rel="noopener">${escapeHtml(item.path)}</a><small>${escapeHtml(item.isSitemapsIndex ? "Sitemap 索引" : item.type || "Sitemap")}</small></div>
+                <div class="gsc-row-fact"><span>包含 URL</span><strong>${submitted}</strong></div>
+                <div class="gsc-row-fact"><span>最后读取</span><strong>${escapeHtml(formatGscDate(item.lastDownloaded))}</strong></div>
+                <span class="gsc-state ${status[0]}">${escapeHtml(status[1])}${item.warnings ? ` · ${item.warnings} 警告` : ""}</span>
+              </div>`;
+            }).join("") : '<div class="gsc-empty">Search Console 中还没有 Sitemap 记录。</div>'}
+          </div>
+        `;
+      }
+
+      function renderGscPerformance(data) {
+        gscPerformanceState = data || { rows: [], summary: {} };
+        const summary = gscPerformanceState.summary || {};
+        const rows = gscPerformanceState.rows || [];
+        const box = $("gscPerformancePanel");
+        box.innerHTML = `
+          <div class="gsc-panel-head">
+            <div><h3>Google 搜索表现</h3><div class="note">${escapeHtml(gscPerformanceState.message || "")} 数据用于提高收录诊断队列优先级。</div></div>
+            <span class="gsc-state success">${escapeHtml(gscPerformanceState.startDate || "-")} 至 ${escapeHtml(gscPerformanceState.endDate || "-")}</span>
+          </div>
+          <div class="gsc-inline-summary">
+            <div class="gsc-inline-stat"><span>有曝光页面</span><strong>${Number(summary.pages || 0)}</strong></div>
+            <div class="gsc-inline-stat"><span>点击</span><strong>${Math.round(Number(summary.clicks || 0))}</strong></div>
+            <div class="gsc-inline-stat"><span>曝光</span><strong>${Math.round(Number(summary.impressions || 0))}</strong></div>
+            <div class="gsc-inline-stat"><span>CTR / 平均位置</span><strong>${(Number(summary.ctr || 0) * 100).toFixed(1)}% / ${Number(summary.position || 0).toFixed(1)}</strong></div>
+          </div>
+          <div class="gsc-performance-list">
+            ${rows.length ? rows.slice(0, 20).map((row) => `<div class="gsc-performance-row">
+              <div class="gsc-row-main"><a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.url)}</a><small>按点击排序，显示前 20 个页面</small></div>
+              <div class="gsc-row-fact"><span>点击</span><strong>${Math.round(row.clicks)}</strong></div>
+              <div class="gsc-row-fact"><span>曝光 / CTR</span><strong>${Math.round(row.impressions)} / ${(row.ctr * 100).toFixed(1)}%</strong></div>
+              <div class="gsc-row-fact"><span>平均位置</span><strong>${row.position.toFixed(1)}</strong></div>
+            </div>`).join("") : '<div class="gsc-empty">所选周期暂无搜索表现数据。</div>'}
+          </div>
+        `;
+        renderGscInspectionDashboard();
+      }
+
+      function gscCacheDays() {
+        return Math.max(0, Number($("gscCacheDaysSelect")?.value || 7));
+      }
+
+      function isGscInspectionStale(item, days = gscCacheDays()) {
+        if (!item?.checkedAt) return true;
+        if (days === 0) return true;
+        const checked = new Date(item.checkedAt).getTime();
+        return !Number.isFinite(checked) || Date.now() - checked > days * 24 * 60 * 60 * 1000;
+      }
+
+      function gscInspectionCandidates() {
+        const reportMap = new Map(currentUrls.map((item) => [item.url, item]));
+        const performanceMap = new Map((gscPerformanceState.rows || []).map((item) => [item.url, item]));
+        const seen = new Set();
+        return googleSubmissionUrls().map((url) => {
+          if (seen.has(url)) return null;
+          seen.add(url);
+          const report = reportMap.get(url) || {};
+          const performance = performanceMap.get(url) || {};
+          const inspection = (gscInspectionState.results || {})[url] || null;
+          let path = "";
+          try { path = new URL(url).pathname; } catch (_error) { path = ""; }
+          const reasons = [];
+          let score = Number(report.priority || 0) * 100;
+          if (path === "/") { score += 10000; reasons.push("语言首页"); }
+          if (report.kind === "栏目") { score += 300; reasons.push("栏目页"); }
+          if (Number(performance.impressions || 0) > 0) {
+            score += Math.min(5000, Math.log10(Number(performance.impressions) + 1) * 1200);
+            reasons.push(`${Math.round(performance.impressions)} 次曝光`);
+          }
+          if (report.lastmod) {
+            const modified = new Date(report.lastmod).getTime();
+            if (Number.isFinite(modified) && Date.now() - modified < 30 * 24 * 60 * 60 * 1000) {
+              score += 500;
+              reasons.push("近期更新");
+            }
+          }
+          return {
+            url,
+            title: report.title || "",
+            lang: report.lang || "",
+            type: report.type || report.kind || "",
+            score,
+            reason: reasons.join(" · ") || `Sitemap 优先级 ${report.priority || "默认"}`,
+            inspection,
+            stale: isGscInspectionStale(inspection),
+          };
+        }).filter(Boolean).sort((a, b) => Number(b.stale) - Number(a.stale) || b.score - a.score || a.url.localeCompare(b.url));
+      }
+
+      function isGscRequestable(item) {
+        return ["not-indexed", "known-not-indexed"].includes(item?.inspection?.diagnosis?.state || "");
+      }
+
+      function gscLocalDayKey() {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      }
+
+      function gscOpenedRequestUrls() {
+        try {
+          const state = JSON.parse(localStorage.getItem(gscRequestProgressKey) || "{}");
+          return state.day === gscLocalDayKey() && Array.isArray(state.urls) ? new Set(state.urls) : new Set();
+        } catch (_error) {
+          return new Set();
+        }
+      }
+
+      function markGscRequestOpened(url) {
+        const urls = gscOpenedRequestUrls();
+        urls.add(url);
+        localStorage.setItem(gscRequestProgressKey, JSON.stringify({ day: gscLocalDayKey(), urls: [...urls] }));
+      }
+
+      function gscRequestableCandidates(pendingTodayOnly = false) {
+        const opened = pendingTodayOnly ? gscOpenedRequestUrls() : null;
+        return gscInspectionCandidates()
+          .filter(isGscRequestable)
+          .filter((item) => !opened || !opened.has(item.url))
+          .sort((a, b) => b.score - a.score || a.url.localeCompare(b.url));
+      }
+
+      function renderGscInspectionProgress(done, total, succeeded, failed, text = "") {
+        const box = $("gscInspectionProgress");
+        box.style.display = total ? "block" : "none";
+        const percent = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+        $("gscInspectionProgressFill").style.width = `${percent}%`;
+        $("gscInspectionProgressText").textContent = text || (done >= total ? "诊断完成" : "正在读取 Google 索引状态...");
+        $("gscInspectionProgressCount").textContent = `${done} / ${total}（成功 ${succeeded}，失败 ${failed}）`;
+      }
+
+      function renderGscInspectionDashboard() {
+        const candidates = gscInspectionCandidates();
+        const cached = candidates.filter((item) => item.inspection);
+        const indexed = cached.filter((item) => item.inspection?.diagnosis?.indexed);
+        const openedToday = gscOpenedRequestUrls();
+        const requestable = cached.filter((item) => isGscRequestable(item) && !openedToday.has(item.url));
+        const pending = candidates.filter((item) => item.stale);
+        $("gscPendingCount").textContent = pending.length;
+        $("gscIndexedCount").textContent = indexed.length;
+        $("gscAttentionCount").textContent = requestable.length;
+        $("gscCachedCount").textContent = cached.length;
+
+        const openNextButton = $("gscOpenNextRequestBtn");
+        if (openNextButton) {
+          openNextButton.disabled = !requestable.length;
+          openNextButton.textContent = requestable.length
+            ? `打开下一条请求收录（${requestable.length}）`
+            : "暂无可请求页面";
+        }
+        if ($("gscCopyPendingBtn")) $("gscCopyPendingBtn").disabled = !requestable.length;
+
+        const filter = $("gscInspectionFilter")?.value || "attention";
+        const keyword = ($("gscInspectionSearch")?.value || "").trim().toLowerCase();
+        let filtered = candidates.filter((item) => {
+          if (keyword && !`${item.url} ${item.title}`.toLowerCase().includes(keyword)) return false;
+          const state = item.inspection?.diagnosis?.state || "";
+          if (filter === "pending") return item.stale;
+          if (filter === "attention") return isGscRequestable(item) && !openedToday.has(item.url);
+          if (filter === "blocked") return /^blocked-|fetch-error|not-found$/.test(state);
+          if (filter === "indexed") return Boolean(item.inspection?.diagnosis?.indexed);
+          return true;
+        });
+        if (filter === "attention" || filter === "blocked") {
+          filtered = filtered.sort((a, b) => new Date(a.inspection?.checkedAt || 0) - new Date(b.inspection?.checkedAt || 0));
+        }
+        const visible = filtered.slice(0, 100);
+        $("gscInspectionSummary").textContent = `显示 ${visible.length} / ${filtered.length}，全部候选 ${candidates.length}`;
+        $("gscInspectionList").innerHTML = visible.length ? visible.map((item) => {
+          const diagnosis = item.inspection?.diagnosis;
+          const label = diagnosis?.label || "未检查";
+          const tone = diagnosis?.tone || "";
+          const title = item.title ? `${item.lang || "-"} · ${item.type || "页面"} · ${item.title}` : item.reason;
+          const crawl = item.inspection?.lastCrawlTime ? `抓取 ${formatGscDate(item.inspection.lastCrawlTime)}` : "尚无抓取时间";
+          const checked = item.inspection?.checkedAt ? `检查 ${formatGscDate(item.inspection.checkedAt)}${item.stale ? " · 已过期" : ""}` : "本地尚无诊断记录";
+          const requestable = isGscRequestable(item);
+          const opened = openedToday.has(item.url);
+          return `<div class="gsc-inspection-row" data-url="${escapeHtml(item.url)}">
+            <div class="gsc-inspection-url"><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a><small>${escapeHtml(title)}</small></div>
+            <span class="gsc-state ${escapeHtml(tone)}">${escapeHtml(label)}${item.stale && item.inspection ? " · 过期" : ""}</span>
+            <div class="gsc-inspection-date">${escapeHtml(checked)}<br />${escapeHtml(crawl)}</div>
+            <div class="gsc-inspection-action">${escapeHtml(diagnosis?.nextAction || `优先原因：${item.reason}`)}</div>
+            <div class="gsc-inspection-buttons">
+              <button data-gsc-inspect type="button">${item.inspection ? "重新检查" : "检查"}</button>
+              ${requestable && !opened ? '<button class="primary" data-gsc-request type="button">请求收录</button>' : opened ? '<span class="note">今日已打开</span>' : ""}
+            </div>
+          </div>`;
+        }).join("") : '<div class="gsc-empty">没有符合当前筛选条件的 URL。</div>';
+      }
+
+      async function loadGscInspectionState() {
+        gscInspectionState = await api("/api/search-console/inspections");
+        renderGscInspectionDashboard();
+      }
+
+      async function inspectGscUrl(url) {
+        const result = await api("/api/search-console/inspect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inspectionUrl: url,
+            siteUrl: $("gscSiteUrlInput").value.trim(),
+          }),
+        });
+        if (result.ok) {
+          gscInspectionState.results[result.inspectionUrl] = result;
+          gscInspectionState.count = Object.keys(gscInspectionState.results).length;
+        }
+        return result;
+      }
+
+      function showGscInspectionResult(result) {
+        if (!result.ok) {
+          showSearchConsoleResult("收录查询失败", [result.message || "", result.action ? `下一步：${result.action}` : ""], "warning");
+          return;
+        }
+        const diagnosis = result.diagnosis || {};
+        const lines = [
+          `结论：${diagnosis.label || result.coverageState || "未知"}`,
+          `建议：${diagnosis.nextAction || "继续观察"}`,
+          `Google 覆盖状态：${result.coverageState || "未知"}`,
+          `索引状态：${result.indexingState || "未知"}`,
+          `抓取状态：${result.pageFetchState || "未知"}`,
+          `robots 状态：${result.robotsTxtState || "未知"}`,
+          `用户规范网址：${result.userCanonical || "-"}`,
+          `Google 规范网址：${result.googleCanonical || "-"}`,
+          result.lastCrawlTime ? `上次抓取：${result.lastCrawlTime}` : "",
+        ].filter(Boolean);
+        showSearchConsoleResult(`收录状态：${result.inspectionUrl}`, lines, diagnosis.indexed ? "success" : diagnosis.tone === "danger" ? "warning" : "info");
+      }
+
+      async function submitGscSitemap() {
+        const result = await api("/api/search-console/sitemap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            siteUrl: $("gscSiteUrlInput").value.trim(),
+            sitemapUrl: $("gscSitemapUrlInput").value.trim(),
+          }),
+        });
+        showSearchConsoleResult(
+          result.ok ? "Sitemap 已重新提交" : "Sitemap 提交失败",
+          result.ok
+            ? [result.message || "", "Google 已收到整站 URL 清单。接下来只需对最重要的未收录页面逐条请求编入索引。"]
+            : [result.message || "", result.action ? `下一步：${result.action}` : ""],
+          result.ok ? "success" : "warning",
+        );
+        setStatus(result.message || "");
+        return result;
+      }
+
+      async function openGscIndexRequest(url) {
+        const popup = window.open("about:blank", "_blank");
+        if (popup) {
+          popup.opener = null;
+          popup.document.title = "正在打开 Google Search Console";
+          popup.document.body.textContent = "正在读取该网址的 Google 收录状态...";
+        }
+        try {
+          let inspection = (gscInspectionState.results || {})[url] || null;
+          if (!inspection?.inspectionResultLink) inspection = await inspectGscUrl(url);
+          if (!inspection?.ok) {
+            if (popup) popup.close();
+            showGscInspectionResult(inspection || { ok: false, message: "无法读取该 URL 的收录状态。" });
+            return;
+          }
+          if (inspection.diagnosis?.indexed) {
+            if (popup) popup.close();
+            showSearchConsoleResult("该页面已经收录", [url, "无需重复请求编入索引。"], "success");
+            renderGscInspectionDashboard();
+            return;
+          }
+          await copyText(url, "待收录 URL");
+          const target = inspection.inspectionResultLink || "https://search.google.com/search-console";
+          markGscRequestOpened(url);
+          if (popup) popup.location.replace(target);
+          else window.open(target, "_blank", "noopener");
+          showSearchConsoleResult(
+            "已打开 Google 请求收录入口",
+            [url, "页面 URL 已复制。Google 页面打开后，点击“请求编入索引”；完成后回到这里继续下一条。"],
+            "info",
+          );
+          renderGscInspectionDashboard();
+          setStatus("已打开下一条未收录页面");
+        } catch (error) {
+          if (popup) popup.close();
+          throw error;
         }
       }
 
@@ -1067,47 +2023,168 @@
         setStatus("已保存 Search Console 属性");
       });
 
-      $("gscSubmitSitemapBtn").onclick = () => runAction(async () => {
-        const result = await api("/api/search-console/sitemap", {
+      $("gscSubmitSitemapBtn").onclick = () => runAction(submitGscSitemap);
+      $("gscOpenNextRequestBtn").onclick = () => {
+        const target = gscRequestableCandidates(true)[0];
+        if (!target || busy) return;
+        runAction(() => openGscIndexRequest(target.url));
+      };
+      $("gscCopyPendingBtn").onclick = () => runAction(async () => {
+        const urls = gscRequestableCandidates(true).map((item) => item.url);
+        if (!urls.length) throw new Error("当前没有可请求收录的页面。");
+        await copyText(urls.join("\n"), `${urls.length} 条待收录 URL`);
+        showSearchConsoleResult("待收录 URL 已复制", [`共 ${urls.length} 条，可用于复核、分派或逐条在 Search Console 请求收录。`], "info");
+      });
+
+      $("gscLoadSitemapsBtn").onclick = () => runAction(async () => {
+        const result = await api("/api/search-console/sitemaps", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            siteUrl: $("gscSiteUrlInput").value.trim(),
-            sitemapUrl: $("gscSitemapUrlInput").value.trim(),
-          }),
+          body: JSON.stringify({ siteUrl: $("gscSiteUrlInput").value.trim() }),
         });
-        showSearchConsoleResult(result.ok ? "Sitemap 已提交" : "Sitemap 提交失败", [result.message || ""], result.ok ? "success" : "warning");
-        setStatus(result.message || "");
+        if (!result.ok) {
+          showSearchConsoleResult("读取 Sitemap 状态失败", [result.message || "", result.action ? `下一步：${result.action}` : ""], "warning");
+          setStatus(result.message || "读取 Sitemap 状态失败", true);
+          return;
+        }
+        renderGscSitemaps(result);
+        setStatus(result.message || "已读取 Sitemap 处理状态");
+      });
+
+      $("gscLoadPerformanceBtn").onclick = () => runAction(async () => {
+        const days = Number($("gscPerformanceDays").value || 28);
+        const result = await api("/api/search-console/performance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ siteUrl: $("gscSiteUrlInput").value.trim(), days, rowLimit: 250 }),
+        });
+        if (!result.ok) {
+          showSearchConsoleResult("读取搜索表现失败", [result.message || "", result.action ? `下一步：${result.action}` : ""], "warning");
+          setStatus(result.message || "读取搜索表现失败", true);
+          return;
+        }
+        renderGscPerformance(result);
+        setStatus(result.message || "搜索表现已更新");
       });
 
       $("gscInspectBtn").onclick = () => runAction(async () => {
         const url = $("gscInspectUrlInput").value.trim();
         if (!url) throw new Error("请输入要查询收录状态的完整 URL。");
-        const result = await api("/api/search-console/inspect", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            inspectionUrl: url,
-            siteUrl: $("gscSiteUrlInput").value.trim(),
-          }),
-        });
-        if (!result.ok) {
-          showSearchConsoleResult("收录查询失败", [result.message || ""], "warning");
-          setStatus(result.message || "查询失败");
-          return;
-        }
-        const indexed = /indexed/i.test(result.coverageState || "");
-        const lines = [
-          `收录状态 coverageState：${result.coverageState || "未知"}`,
-          `索引状态 indexingState：${result.indexingState || "未知"}`,
-          `抓取状态 pageFetchState：${result.pageFetchState || "未知"}`,
-          `robots 状态：${result.robotsTxtState || "未知"}`,
-          `Google 指定规范网址：${result.googleCanonical || "-"}`,
-          result.lastCrawlTime ? `上次抓取：${result.lastCrawlTime}` : "",
-        ].filter(Boolean);
-        showSearchConsoleResult(`收录状态：${url}`, lines, indexed ? "success" : "info");
+        const result = await inspectGscUrl(url);
+        showGscInspectionResult(result);
+        renderGscInspectionDashboard();
         setStatus(result.message || "");
       });
+
+      $("gscInspectBatchBtn").onclick = () => runAction(async () => {
+        if (!searchConsoleStatus.enabled) throw new Error("请先配置 Google 服务账号。");
+        const limit = Math.max(1, Math.min(100, Math.floor(Number($("gscBatchLimitInput").value || 20))));
+        $("gscBatchLimitInput").value = String(limit);
+        const targets = gscInspectionCandidates().filter((item) => item.stale).slice(0, limit);
+        if (!targets.length) {
+          showSearchConsoleResult("无需批量诊断", [`缓存有效期内已有 ${gscInspectionState.count || 0} 条结果。可缩短缓存有效期或选择“总是重新检查”。`], "info");
+          setStatus("没有需要重新检查的 URL");
+          return;
+        }
+        if (!confirm(`将调用 Google URL Inspection 检查 ${targets.length} 个 URL。\n\n结果会逐条保存，可随时停止并在以后继续。继续吗？`)) return;
+        gscInspectionStopRequested = false;
+        const stopButton = $("gscInspectStopBtn");
+        stopButton.style.display = "";
+        stopButton.disabled = false;
+        stopButton.textContent = "停止诊断";
+        let done = 0;
+        let succeeded = 0;
+        let failed = 0;
+        let stoppedByGoogle = false;
+        let googleStopResult = null;
+        const errors = [];
+        renderGscInspectionProgress(0, targets.length, 0, 0, "正在读取 Google 索引状态...");
+        try {
+          for (const target of targets) {
+            if (gscInspectionStopRequested) break;
+            renderGscInspectionProgress(done, targets.length, succeeded, failed, `正在检查：${target.url}`);
+            const result = await inspectGscUrl(target.url);
+            done += 1;
+            if (result.ok) {
+              succeeded += 1;
+            } else {
+              failed += 1;
+              if (errors.length < 5) errors.push(`${target.url}：${result.message || "未知错误"}`);
+              if ([401, 403, 429].includes(Number(result.status))) {
+                stoppedByGoogle = true;
+                googleStopResult = result;
+                break;
+              }
+            }
+            renderGscInspectionDashboard();
+            renderGscInspectionProgress(done, targets.length, succeeded, failed);
+            await sleep(125);
+          }
+        } finally {
+          stopButton.style.display = "none";
+        }
+        await loadGscInspectionState();
+        const stopped = gscInspectionStopRequested || stoppedByGoogle;
+        const title = stopped ? "批量诊断已停止" : "批量诊断完成";
+        const lines = [
+          `本次完成 ${done} / ${targets.length}，成功 ${succeeded}，失败 ${failed}。`,
+          googleStopResult?.reason === "api-disabled" ? "Search Console API 刚启用时可能需要几分钟生效；页面显示已启用后，稍等再继续即可。" : "",
+          googleStopResult?.reason === "permission" ? "请确认服务账号已加入 Search Console 属性，并拥有完整权限。" : "",
+          googleStopResult?.reason === "quota" ? "本次已达到 Google 检查配额，稍后可从未完成位置继续。" : "",
+          stoppedByGoogle && !googleStopResult?.reason ? "Google 返回授权或配额错误，已自动停止，避免继续失败。" : "",
+          gscInspectionStopRequested ? "已按你的要求停止；下次会继续检查未完成的 URL。" : "",
+          ...errors,
+        ].filter(Boolean);
+        renderGscInspectionProgress(done, targets.length, succeeded, failed, title);
+        showSearchConsoleResult(title, lines, failed || stopped ? "warning" : "success");
+        setStatus(`${title}：成功 ${succeeded}，失败 ${failed}`);
+      });
+
+      $("gscInspectStopBtn").onclick = () => {
+        gscInspectionStopRequested = true;
+        $("gscInspectStopBtn").disabled = true;
+        $("gscInspectStopBtn").textContent = "正在停止...";
+        setStatus("已请求停止，当前 URL 检查完成后停止...");
+      };
+
+      $("gscReloadInspectionsBtn").onclick = () => runAction(async () => {
+        await loadGscInspectionState();
+        setStatus("Google 收录诊断记录已刷新");
+      });
+
+      $("gscClearInspectionsBtn").onclick = () => runAction(async () => {
+        if (!confirm("确定清空本地 Google 收录诊断记录吗？\nGoogle Search Console 中的数据不会被删除。")) return;
+        const result = await api("/api/search-console/inspections/clear", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clear: true }),
+        });
+        await loadGscInspectionState();
+        showSearchConsoleResult("诊断记录已清空", [result.message || ""], "info");
+        setStatus(result.message || "诊断记录已清空");
+      });
+
+      $("gscInspectionFilter").onchange = renderGscInspectionDashboard;
+      $("gscInspectionSearch").oninput = renderGscInspectionDashboard;
+      $("gscCacheDaysSelect").onchange = renderGscInspectionDashboard;
+      $("gscInspectionList").onclick = (event) => {
+        const requestButton = event.target.closest("button[data-gsc-request]");
+        const inspectButton = event.target.closest("button[data-gsc-inspect]");
+        const button = requestButton || inspectButton;
+        if (!button || busy) return;
+        const url = button.closest(".gsc-inspection-row")?.dataset.url;
+        if (!url) return;
+        if (requestButton) {
+          runAction(() => openGscIndexRequest(url));
+          return;
+        }
+        runAction(async () => {
+          const result = await inspectGscUrl(url);
+          showGscInspectionResult(result);
+          renderGscInspectionDashboard();
+          setStatus(result.message || `已检查 ${url}`);
+        });
+      };
 
       function showBingResult(title, lines = [], tone = "info") {
         const result = $("bingResult");
@@ -1329,6 +2406,122 @@
 
       const TONE_LABEL = { success: "已就绪", warning: "部分配置", error: "待配置", info: "需手动" };
 
+      const COVERAGE_ENGINE_UI = {
+        google: { name: "Google", mark: "G", badge: "URL 检查", countLabel: "已确认收录" },
+        baidu: { name: "百度", mark: "百", badge: "平台快照", countLabel: "平台索引量" },
+        yandex: { name: "Yandex", mark: "Я", badge: "官方 API", countLabel: "搜索中页面" },
+      };
+
+      function coverageNumber(value) {
+        return value === null || value === undefined || Number.isNaN(Number(value))
+          ? "--"
+          : Number(value).toLocaleString("zh-CN");
+      }
+
+      function normalizeCoverageClientUrl(value) {
+        try {
+          const url = new URL(String(value || ""));
+          url.hash = "";
+          return url.toString().replace(/\/$/, "").toLowerCase();
+        } catch (_error) {
+          return String(value || "").trim().replace(/\/$/, "").toLowerCase();
+        }
+      }
+
+      function coverageFilteredRows(engine) {
+        const keyword = ($("coverageSearchInput")?.value || "").trim().toLowerCase();
+        const stateFilter = $("coverageStateFilter")?.value || "";
+        return (engine?.details || []).filter((item) => {
+          if (keyword && !`${item.url || ""} ${item.title || ""} ${item.lang || ""} ${item.type || ""}`.toLowerCase().includes(keyword)) return false;
+          if (stateFilter === "indexed") return item.state === "indexed";
+          if (stateFilter === "unchecked") return item.state === "unchecked";
+          if (stateFilter === "attention") return item.state !== "indexed" && item.state !== "unchecked";
+          return true;
+        });
+      }
+
+      function renderCoverageDetails() {
+        const engine = indexCoverageState.engines?.[coverageEngine] || null;
+        const ui = COVERAGE_ENGINE_UI[coverageEngine] || COVERAGE_ENGINE_UI.google;
+        document.querySelectorAll("[data-coverage-engine]").forEach((item) => {
+          item.classList.toggle("active", item.dataset.coverageEngine === coverageEngine);
+        });
+        $("coverageDetailTitle").textContent = `${ui.name} 收录明细`;
+        $("coverageDetailNote").textContent = engine?.message || "暂无收录数据。";
+        $("coverageDetailUpdated").textContent = engine
+          ? `${engine.source || ""}${engine.updatedAt ? ` · 更新 ${formatGscDate(engine.updatedAt)}` : " · 尚未更新"}`
+          : "";
+
+        const filtered = coverageFilteredRows(engine);
+        const pageCount = Math.max(1, Math.ceil(filtered.length / coveragePageSize));
+        coveragePage = Math.min(Math.max(1, coveragePage), pageCount);
+        const start = (coveragePage - 1) * coveragePageSize;
+        const visible = filtered.slice(start, start + coveragePageSize);
+        $("coverageDetailList").innerHTML = visible.length ? visible.map((item) => {
+          const meta = [item.lang, item.type, item.title].filter(Boolean).join(" · ") || "站外或未匹配到本地内容记录";
+          const checked = item.checkedAt ? `检查 ${formatGscDate(item.checkedAt)}` : "尚未检查";
+          const access = item.lastAccess ? `抓取 ${formatGscDate(item.lastAccess)}` : "";
+          return `<div class="coverage-row">
+            <div class="coverage-url">
+              <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+              <small>${escapeHtml(meta)}</small>
+              ${item.detail ? `<small class="coverage-reason">${escapeHtml(item.detail)}</small>` : ""}
+            </div>
+            <span class="coverage-state ${escapeHtml(item.tone || "info")}">${escapeHtml(item.label || item.state || "未知")}</span>
+            <div class="coverage-date">${escapeHtml(checked)}${access ? `<br />${escapeHtml(access)}` : ""}</div>
+          </div>`;
+        }).join("") : `<div class="coverage-empty">${engine?.details?.length ? "没有符合当前筛选条件的 URL。" : escapeHtml(engine?.message || "暂无 URL 明细。")}</div>`;
+        $("coveragePageMeta").textContent = `显示 ${visible.length} / ${filtered.length}，第 ${coveragePage} / ${pageCount} 页`;
+        $("coveragePrevBtn").disabled = coveragePage <= 1;
+        $("coverageNextBtn").disabled = coveragePage >= pageCount;
+      }
+
+      function renderIndexCoverage() {
+        const engines = indexCoverageState.engines || {};
+        $("coverageMetrics").innerHTML = ["google", "baidu", "yandex"].map((id) => {
+          const engine = engines[id] || {};
+          const ui = COVERAGE_ENGINE_UI[id];
+          const total = Math.max(0, Number(engine.total || indexCoverageState.totalUrls || 0));
+          const value = engine.count === null || engine.count === undefined ? null : Number(engine.count);
+          const progressBase = id === "google" ? Number(engine.checked || 0) : value;
+          const progress = total && Number.isFinite(progressBase) ? Math.max(0, Math.min(100, Math.round((progressBase / total) * 100))) : 0;
+          const leftMeta = id === "google"
+            ? `已检查 ${coverageNumber(engine.checked || 0)} / ${coverageNumber(total)}`
+            : `已保存 ${coverageNumber(engine.checked || 0)} 条明细`;
+          const updated = engine.updatedAt ? formatGscDate(engine.updatedAt) : "尚未更新";
+          return `<button class="coverage-metric${coverageEngine === id ? " active" : ""}" data-engine="${id}" data-coverage-engine="${id}" type="button">
+            <span class="coverage-metric-top">
+              <span class="coverage-engine"><span class="coverage-engine-mark">${ui.mark}</span>${ui.name}</span>
+              <span class="coverage-source-badge">${engine.exact ? "已同步" : ui.badge}</span>
+            </span>
+            <span class="coverage-count">${coverageNumber(value)}</span>
+            <span class="coverage-count-label">${ui.countLabel}</span>
+            <span class="coverage-progress"><span style="width:${progress}%"></span></span>
+            <span class="coverage-meta"><span>${escapeHtml(leftMeta)}</span><span>${escapeHtml(updated)}</span></span>
+          </button>`;
+        }).join("");
+
+        const baidu = engines.baidu || {};
+        const active = document.activeElement;
+        if (active !== $("baiduCoverageCountInput")) $("baiduCoverageCountInput").value = baidu.count ?? "";
+        if (active !== $("baiduCoverageNoteInput")) $("baiduCoverageNoteInput").value = baidu.note || "";
+        if (active !== $("baiduCoverageUrlsInput")) {
+          $("baiduCoverageUrlsInput").value = (baidu.details || []).map((item) => item.url).join("\n");
+        }
+        $("syncYandexCoverageBtn").textContent = engines.yandex?.configured ? "同步 Yandex" : "配置 Yandex OAuth";
+        renderCoverageDetails();
+      }
+
+      async function loadIndexCoverage() {
+        try {
+          indexCoverageState = await api("/api/index-coverage");
+          renderIndexCoverage();
+        } catch (error) {
+          $("coverageMetrics").innerHTML = `<div class="coverage-empty">收录统计加载失败：${escapeHtml(error.message || String(error))}</div>`;
+          $("coverageDetailList").innerHTML = `<div class="coverage-empty">请刷新后重试。</div>`;
+        }
+      }
+
       async function loadOverview() {
         try {
           const data = await api("/api/indexing-overview");
@@ -1361,8 +2554,94 @@
       }
 
       $("refreshOverviewBtn").onclick = () => runAction(async () => {
-        await loadOverview();
+        await Promise.all([loadOverview(), loadIndexCoverage()]);
         setStatus("收录总览已刷新");
+      });
+
+      $("coverageMetrics").onclick = (event) => {
+        const target = event.target.closest("[data-coverage-engine]");
+        if (!target) return;
+        coverageEngine = target.dataset.coverageEngine;
+        coveragePage = 1;
+        renderIndexCoverage();
+      };
+
+      $("coverageTabs").onclick = (event) => {
+        const target = event.target.closest("[data-coverage-engine]");
+        if (!target) return;
+        coverageEngine = target.dataset.coverageEngine;
+        coveragePage = 1;
+        renderIndexCoverage();
+      };
+
+      $("coverageSearchInput").oninput = () => {
+        coveragePage = 1;
+        renderCoverageDetails();
+      };
+      $("coverageStateFilter").onchange = () => {
+        coveragePage = 1;
+        renderCoverageDetails();
+      };
+      $("coveragePrevBtn").onclick = () => {
+        coveragePage = Math.max(1, coveragePage - 1);
+        renderCoverageDetails();
+      };
+      $("coverageNextBtn").onclick = () => {
+        coveragePage += 1;
+        renderCoverageDetails();
+      };
+
+      $("openBaiduCoverageBtn").onclick = () => {
+        coverageEngine = "baidu";
+        coveragePage = 1;
+        $("baiduCoverageEditor").open = true;
+        renderIndexCoverage();
+        $("baiduCoverageCountInput").focus();
+      };
+
+      $("saveBaiduCoverageBtn").onclick = () => runAction(async () => {
+        const value = $("baiduCoverageCountInput").value.trim();
+        if (value === "") throw new Error("请输入百度搜索资源平台显示的索引量。");
+        const result = await api("/api/index-coverage/baidu", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            count: Number(value),
+            note: $("baiduCoverageNoteInput").value.trim(),
+            urlText: $("baiduCoverageUrlsInput").value,
+          }),
+        });
+        coverageEngine = "baidu";
+        await loadIndexCoverage();
+        setStatus(result.message || "百度索引量快照已保存");
+      });
+
+      $("clearBaiduCoverageBtn").onclick = () => runAction(async () => {
+        if (!confirm("确定清除本地百度索引量快照吗？\n百度搜索资源平台的数据不会变化。")) return;
+        const result = await api("/api/index-coverage/baidu", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clear: true }),
+        });
+        await loadIndexCoverage();
+        setStatus(result.message || "百度索引量快照已清除");
+      });
+
+      $("syncYandexCoverageBtn").onclick = () => runAction(async () => {
+        if (!indexCoverageState.engines?.yandex?.configured) {
+          location.href = "/yandex.html#yandex-workspace";
+          return;
+        }
+        setStatus("正在从 Yandex Webmaster 同步搜索中页面...");
+        const result = await api("/api/index-coverage/yandex/refresh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ maxDetails: 1000 }),
+        });
+        coverageEngine = "yandex";
+        coveragePage = 1;
+        await loadIndexCoverage();
+        setStatus(result.message || "Yandex 收录数据已同步");
       });
 
       function showOvInspectResult(title, lines = [], tone = "info") {
@@ -1386,8 +2665,9 @@
             body: JSON.stringify({ inspectionUrl: url, siteUrl: $("gscSiteUrlInput").value.trim() }),
           });
           if (g.ok) {
-            const indexed = /indexed/i.test(g.coverageState || "");
-            lines.push(`【Google】${g.coverageState || "未知"}（${indexed ? "已收录" : "未收录 / 待处理"}）`);
+            const indexed = Boolean(g.diagnosis?.indexed);
+            lines.push(`【Google】${g.diagnosis?.label || g.coverageState || "未知"}（${indexed ? "已收录" : "需要处理 / 观察"}）`);
+            if (g.diagnosis?.nextAction) lines.push(`  建议：${g.diagnosis.nextAction}`);
             if (g.indexingState) lines.push(`  索引状态：${g.indexingState}`);
             if (g.lastCrawlTime) lines.push(`  上次抓取：${g.lastCrawlTime}`);
             if (indexed) overallTone = "success";
@@ -1417,7 +2697,19 @@
         }
 
         lines.push("");
-        lines.push("【百度 / Yandex】暂无公开收录查询 API，请到各自平台「收录」页手动查。");
+        for (const id of ["baidu", "yandex"]) {
+          const engine = indexCoverageState.engines?.[id] || {};
+          const name = COVERAGE_ENGINE_UI[id].name;
+          const key = normalizeCoverageClientUrl(url);
+          const match = (engine.details || []).find((item) => normalizeCoverageClientUrl(item.url) === key);
+          if (match) {
+            lines.push(`【${name}】${match.label || "已在本地收录明细中确认"}`);
+          } else if (engine.count !== null && engine.count !== undefined) {
+            lines.push(`【${name}】当前总数 ${engine.count}，但未在已保存的 ${engine.details?.length || 0} 条明细中找到该 URL；这不等于未收录。`);
+          } else {
+            lines.push(`【${name}】尚未同步索引量或 URL 明细。`);
+          }
+        }
         showOvInspectResult(`收录情况：${url}`, lines, overallTone);
         setStatus("查询完成");
       });
@@ -1456,23 +2748,58 @@
         return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
       }
 
+      function googleSubmissionUrls() {
+        const urls = currentUrls.map((item) => item.url).filter(Boolean);
+        const config = currentReport?.config || {};
+        try {
+          const base = new URL(String(config.siteBaseUrl || ""));
+          base.pathname = "/";
+          base.search = "";
+          base.hash = "";
+          urls.unshift(base.toString());
+          if (config.useLanguageSubdomains !== false) {
+            const rootHost = base.hostname.replace(/^(cn|es|fr|ru|ar|pt)\./i, "");
+            ["cn", "es", "fr", "ru", "ar", "pt"].forEach((language) => {
+              urls.unshift(`${base.protocol}//${language}.${rootHost}/`);
+            });
+          }
+        } catch (_error) {
+          /* Keep report URLs when the public base URL has not been configured yet. */
+        }
+        return [...new Set(urls)];
+      }
+
       function renderGiSummary() {
         const submitted = googleSubmittedState.submitted || {};
-        const urls = currentUrls.map((item) => item.url).filter(Boolean);
+        const urls = googleSubmissionUrls();
         const doneCount = urls.filter((url) => submitted[url]).length;
         const pendingCount = urls.length - doneCount;
         const quota = googleSubmittedState.quota || { dailyLimit: 200, dailyUsed: 0, dailyRemaining: 200 };
         $("giDoneCount").textContent = doneCount;
         $("giPendingCount").textContent = pendingCount;
         $("giQuotaText").textContent = `${quota.dailyUsed} / ${quota.dailyLimit}`;
-        const quotaEl = document.querySelector(".gi-stat.quota");
-        if (quotaEl) quotaEl.classList.toggle("low", Number(quota.dailyRemaining) <= 0);
+        $("giQuotaRemaining").textContent = quota.dailyRemaining;
+        $("giQuotaResetNote").textContent = `${quota.resetNote || "配额每天在太平洋时间零点重置"} · 配额日期 ${quota.pacificDate || "-"}`;
+        const remainingEl = document.querySelector(".gi-stat.remaining");
+        if (remainingEl) remainingEl.classList.toggle("low", Number(quota.dailyRemaining) <= 0);
+        const submitButton = $("googleIndexingSubmitAllBtn");
+        const submitCount = Math.min(pendingCount, Math.max(0, Number(quota.dailyRemaining || 0)));
+        submitButton.textContent = pendingCount
+          ? Number(quota.dailyRemaining) > 0
+            ? `继续提交待处理 URL（本次最多 ${submitCount}）`
+            : "今日配额已用完"
+          : urls.length
+            ? "全部 URL 已提交"
+            : "继续提交待处理 URL";
+        submitButton.disabled = busy || !googleIndexingStatus.enabled || !pendingCount || Number(quota.dailyRemaining) <= 0;
       }
 
       function renderGoogleIndexingUrls() {
         const box = $("googleIndexingUrlList");
-        const urls = currentUrls.map((item) => item.url).filter(Boolean);
+        const urls = googleSubmissionUrls();
         const submitted = googleSubmittedState.submitted || {};
+        const summary = $("giUrlSummary");
+        if (summary) summary.textContent = `${urls.length} 个 URL，已提交 ${urls.filter((url) => submitted[url]).length} 个`;
         if (!urls.length) {
           box.innerHTML = `<div class="note" style="padding: 12px;">暂无 URL，请先点“刷新检查”。</div>`;
           renderGiSummary();
@@ -1566,12 +2893,76 @@
 
       function filteredIssues() {
         const severity = $("severityFilter").value;
+        const language = $("languageFilter").value;
+        const type = $("typeFilter").value;
         const query = $("issueSearchInput").value.trim().toLowerCase();
         return currentIssues.filter((item) => {
           if (severity && item.severity !== severity) return false;
+          if (language && item.acode !== language) return false;
+          if (type && item.type !== type) return false;
           if (!query) return true;
-          return [item.type, item.title, item.detail, item.url].some((value) => String(value || "").toLowerCase().includes(query));
+          return [item.acode, item.type, item.title, item.detail, item.url, item.code].some((value) => String(value || "").toLowerCase().includes(query));
         });
+      }
+
+      function populateIssueFilters() {
+        const languageValue = $("languageFilter").value;
+        const typeValue = $("typeFilter").value;
+        const languages = [...new Set(currentIssues.map((item) => item.acode).filter(Boolean))].sort();
+        const types = [...new Set(currentIssues.map((item) => item.type).filter(Boolean))].sort();
+        $("languageFilter").innerHTML = `<option value="">全部语言</option>${languages.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
+        $("typeFilter").innerHTML = `<option value="">全部类型</option>${types.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
+        if (languages.includes(languageValue)) $("languageFilter").value = languageValue;
+        if (types.includes(typeValue)) $("typeFilter").value = typeValue;
+      }
+
+      function issueSummaryText() {
+        const rows = filteredIssues();
+        const counts = rows.reduce((result, item) => {
+          result[item.severity] = (result[item.severity] || 0) + 1;
+          return result;
+        }, {});
+        const stats = currentReport?.stats || {};
+        const filters = [
+          $("severityFilter").selectedOptions[0]?.textContent,
+          $("languageFilter").selectedOptions[0]?.textContent,
+          $("typeFilter").selectedOptions[0]?.textContent,
+          $("issueSearchInput").value.trim() ? `搜索：${$("issueSearchInput").value.trim()}` : "",
+        ].filter((item) => item && !item.startsWith("全部"));
+        return [
+          `${currentReport?.config?.siteName || "PbootCMS"} SEO 诊断摘要`,
+          `生成时间：${new Date().toLocaleString()}`,
+          `SEO 健康度：${stats.health?.score ?? "-"} 分`,
+          `可收录 URL：${stats.urls || 0}`,
+          `筛选条件：${filters.join("；") || "全部问题"}`,
+          `筛选结果：${rows.length} 条（高风险 ${counts.high || 0}、中风险 ${counts.medium || 0}、提示 ${counts.low || 0}）`,
+          "",
+          ...rows.slice(0, 50).map((item, index) => `${index + 1}. [${item.acode || "-"}/${item.type}] ${item.title} - ${item.detail || ""}`),
+          ...(rows.length > 50 ? [`...另有 ${rows.length - 50} 条，请导出 CSV 查看完整结果。`] : []),
+        ].join("\n");
+      }
+
+      function csvCell(value) {
+        return `"${String(value ?? "").replace(/"/g, '""')}"`;
+      }
+
+      function exportFilteredIssues() {
+        const rows = filteredIssues();
+        if (!rows.length) throw new Error("当前筛选范围没有可导出的问题。");
+        const csv = [
+          ["风险级别", "语言", "内容类型", "问题", "说明", "页面 URL", "后台编辑地址"],
+          ...rows.map((item) => [item.severity, item.acode || "", item.type, item.title, item.detail || "", item.url || "", item.editUrl || ""]),
+        ].map((row) => row.map(csvCell).join(",")).join("\r\n");
+        const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
+        const link = document.createElement("a");
+        const date = new Date().toISOString().slice(0, 10);
+        link.href = URL.createObjectURL(blob);
+        link.download = `seo-issues-${date}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+        setStatus(`已导出 ${rows.length} 条 SEO 问题`);
       }
 
       function renderIssues() {
@@ -1579,7 +2970,11 @@
         const pageCount = Math.max(1, Math.ceil(rows.length / issuePageSize));
         issuePage = Math.min(Math.max(issuePage, 1), pageCount);
         const pageRows = rows.slice((issuePage - 1) * issuePageSize, issuePage * issuePageSize);
-        $("issueTotal").textContent = `筛选结果 ${rows.length} 条`;
+        const counts = rows.reduce((result, item) => {
+          result[item.severity] = (result[item.severity] || 0) + 1;
+          return result;
+        }, {});
+        $("issueTotal").textContent = `共 ${rows.length} 条 · 高 ${counts.high || 0} · 中 ${counts.medium || 0} · 提示 ${counts.low || 0}`;
         $("issuePageMeta").textContent = rows.length ? `第 ${issuePage}/${pageCount} 页` : "暂无问题";
         $("issuePrevBtn").disabled = busy || issuePage <= 1;
         $("issueNextBtn").disabled = busy || issuePage >= pageCount;
@@ -1587,7 +2982,7 @@
           ? pageRows.map((item) => `
               <div class="issue ${escapeHtml(item.severity)}">
                 <div class="issue-head">
-                  <div class="issue-title">[${escapeHtml(item.type)}] ${escapeHtml(item.title)}</div>
+                  <div class="issue-title">[${escapeHtml(item.acode || "-")} · ${escapeHtml(item.type)}] ${escapeHtml(item.title)}</div>
                   ${item.editUrl ? `<a class="issue-edit" href="${escapeHtml(item.editUrl)}" target="_blank" rel="noopener">编辑</a>` : ""}
                 </div>
                 <div class="issue-detail">${escapeHtml(item.detail || "")}</div>
@@ -1690,10 +3085,10 @@
         lines.push(`修改内容 ${contentChanged} 条，修改栏目 ${menuChanged} 条，共 ${changed} 条`);
         if (result.backupPath) lines.push(`数据库备份：${result.backupPath}`);
         if (result.slugChanged) {
-          lines.push("⚠ 本次修改了 URL 名称（slug），页面地址已变化。请点击顶部「生成 sitemap + robots」重新生成 sitemap，并重新提交 IndexNow / Google。");
+          lines.push("注意：本次修改了 URL 名称（slug），页面地址已变化。请重新生成 sitemap，并再次提交对应搜索引擎。");
         }
         if (Number(result.skippedBatches || 0) > 0) {
-          lines.push(`⚠ ${result.skippedBatches} 批 AI 调用失败已跳过，对应记录本次未修改。`);
+          lines.push(`注意：${result.skippedBatches} 批 AI 调用失败已跳过，对应记录本次未修改。`);
         }
         return lines;
       }
@@ -1712,16 +3107,11 @@
             renderAiLogs(job.logs || []);
             if (!aiPolling) pollAiJob();
           } else if (job.state === "completed" && job.result) {
-            if (job.result.dryRun) {
-              renderAiPreview(job.result);
-              setStatus("预览完成，请检查后点「确认写入」或「取消」");
-            } else {
-              showAiResult(true, "上次修复已完成", buildAiResultLines(job.result));
-            }
+            showAiResult(true, "上次修复已完成", buildAiResultLines(job.result));
           } else if (job.state === "stopped") {
-            showAiResult(false, "上次任务已停止", [job.message || "数据库未写入"]);
+            showAiResult(false, "上次任务已停止，可继续", [job.message || "已完成批次保持不变", ...buildAiResultLines(job.result)]);
           } else if (job.state === "failed") {
-            showAiResult(false, "上次修复失败", [job.error || "未知错误"]);
+            showAiResult(false, "上次修复暂停，可继续", [job.message || "未完成批次没有写入", job.error || "未知错误", ...buildAiResultLines(job.result)]);
           }
         } catch (error) {
           aiModels = [];
@@ -1749,23 +3139,18 @@
             updateAiProgress(aiJob.current || 0, aiJob.total || 0, aiJob.message || "");
             renderAiLogs(aiJob.logs || []);
             if (state === "completed") {
-              if (aiPreviewMode) {
-                renderAiPreview(aiJob.result || {});
-                setStatus("预览完成，请检查后点「确认写入」或「取消」");
-              } else {
-                await refresh();
-                showAiResult(true, aiJob.message || "修复完成", buildAiResultLines(aiJob.result));
-                setStatus(aiJob.message || "AI 修复完成");
-              }
+              await refresh();
+              showAiResult(true, aiJob.message || "修复完成", buildAiResultLines(aiJob.result));
+              setStatus(aiJob.message || "AI 修复完成");
               break;
             }
             if (state === "stopped") {
-              showAiResult(false, "已停止", [aiJob.message || "任务已被用户停止，数据库未写入"]);
+              showAiResult(false, "已停止，可继续", [aiJob.message || "已完成批次保持不变", ...buildAiResultLines(aiJob.result)]);
               setStatus(aiJob.message || "任务已停止");
               break;
             }
             if (state === "failed") {
-              showAiResult(false, "修复失败", [aiJob.error || "未知错误"]);
+              showAiResult(false, "修复暂停，可继续", [aiJob.message || "未完成批次没有写入", aiJob.error || "未知错误", ...buildAiResultLines(aiJob.result)]);
               setStatus(`AI 修复失败：${aiJob.error || "未知错误"}`, true);
               break;
             }
@@ -1840,112 +3225,13 @@
         stopBtn.style.display = "none";
       }
 
-      function renderAiPreview(result) {
-        const box = $("aiFixResult");
-        const preview = result.preview || [];
-        const show = preview.slice(0, 150);
-        const more = preview.length - show.length;
-        const html = show
-          .map(
-            (item) => `
-              <div class="pv-item">
-                <div class="pv-head">[${escapeHtml(item.type)}] #${item.id} ${escapeHtml(item.title || "")}（${escapeHtml(item.lang)}）</div>
-                ${(item.changes || [])
-                  .map(
-                    (c) => `
-                      <div class="pv-change">
-                        <span class="pv-field">${escapeHtml(c.field)}</span>
-                        <span class="pv-old">${c.old ? escapeHtml(c.old) : "（空）"}</span>
-                        <span class="pv-arrow">→</span>
-                        <span class="pv-new">${c.new ? escapeHtml(c.new) : "（空）"}</span>
-                      </div>
-                    `,
-                  )
-                  .join("")}
-              </div>
-            `,
-          )
-          .join("");
-        box.style.display = "block";
-        box.dataset.tone = "success";
-        box.innerHTML = `
-          <div class="google-result-title">AI 修复预览（未写库）</div>
-          <div class="in-summary">
-            <span>将修改 <span class="ok">${preview.length}</span> 条记录</span>
-            ${result.skippedBatches ? `<span>跳过 <span class="warn">${result.skippedBatches}</span> 批</span>` : ""}
-          </div>
-          <div class="ai-preview">${html || `<div class="note" style="padding: 12px;">没有需要修改的内容。</div>`}</div>
-          ${more ? `<div class="note" style="margin-top: 6px;">（仅显示前 ${show.length} 条，共 ${preview.length} 条）</div>` : ""}
-          <div class="ai-preview-actions">
-            <button class="success" id="aiApplyBtn">确认写入（${result.changed ?? preview.length} 条）</button>
-            <button id="aiCancelBtn">取消</button>
-          </div>
-        `;
-        $("aiApplyBtn").onclick = () => runAction(applyAiPreview);
-        $("aiCancelBtn").onclick = () => {
-          box.style.display = "none";
-          setStatus("已取消预览，未写入数据库");
-        };
-      }
-
-      async function applyAiPreview() {
-        if (!confirm("确认把预览中的内容写入数据库吗？（写入前会自动备份）")) return;
-        const result = await api("/api/ai/apply", { method: "POST" });
-        showAiResult(true, "写入完成", buildAiResultLines(result));
-        setStatus(result.message || "写入完成");
-        await refresh();
-      }
-
-      async function previewAiFix() {
-        if (aiJob && (aiJob.state || "idle") === "running") {
-          throw new Error("已有 AI 任务正在运行，请等待当前任务完成。");
-        }
-        const model = $("aiModelSelect").value;
-        const language = $("aiLanguageSelect").value;
-        const modelDef = aiModels.find((item) => item.value === model);
-        if (!modelDef) throw new Error("请先选择一个 AI 模型。");
-        if (!modelDef.available) throw new Error(`所选模型「${modelDef.label}」未配置 API Key。`);
-
-        const mode = aiModeFor(language);
-        const targetAcode = mode === "fix-language" && language !== "all" ? language : "";
-        const languageLabel = $("aiLanguageSelect").selectedOptions[0]?.textContent || language;
-
-        const preview = await api("/api/ai/preview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode, targetAcode, problems: getSelectedProblems() }),
-        });
-        const total = Number(preview.totalRecords || 0);
-        if (!total) {
-          setStatus("当前所选语言没有需要修复的问题");
-          return;
-        }
-        if (!confirm(`将用 ${modelDef.label} 对【${languageLabel}】生成 ${total} 条修复预览（不写库），继续吗？`)) return;
-
-        aiPreviewMode = true;
-        const job = await api("/api/ai/start", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode, model, targetAcode, problems: getSelectedProblems(), dryRun: true }),
-        });
-        aiJob = job;
-        showAiProgress();
-        updateAiProgress(0, total, "正在生成预览...");
-        renderAiLogs(job.logs || []);
-        setStatus("正在生成 AI 修复预览（不写库）...");
-        const stopBtn = $("aiStopBtn");
-        stopBtn.style.display = "";
-        stopBtn.disabled = false;
-        stopBtn.textContent = "停止预览";
-        await pollAiJob();
-        stopBtn.style.display = "none";
-        aiPreviewMode = false;
-      }
-
       function renderReport(report) {
+        currentReport = report;
         currentIssues = report.issues || [];
         currentUrls = report.urls || [];
         issuePage = 1;
+        $("healthScore").textContent = `${report.stats.health?.score ?? 0} 分`;
+        $("healthDetail").textContent = `${report.stats.health?.cleanRecords ?? 0} 条记录无已知问题，${report.stats.health?.affectedRecords ?? 0} 条需关注`;
         $("urlCount").textContent = report.stats.urls;
         $("contentCount").textContent = report.stats.contents;
         $("menuCount").textContent = report.stats.menus;
@@ -1964,7 +3250,19 @@
         if (!$("googleInspectUrlInput").value && currentUrls.length) {
           $("googleInspectUrlInput").value = currentUrls.find((item) => item.url)?.url || "";
         }
+        if (!$("gscInspectUrlInput").value && currentUrls.length) {
+          $("gscInspectUrlInput").value = currentUrls.find((item) => item.url)?.url || "";
+        }
+        populateIssueFilters();
+        renderPageAuditOptions();
+        const auditField = $("pageAuditSource").value === "local" ? "localUrl" : "url";
+        if (!$("pageAuditUrlInput").value) {
+          $("pageAuditUrlInput").value = $("pageAuditSource").value === "local"
+            ? report.config.localTestBaseUrl || currentUrls.find((item) => item[auditField])?.[auditField] || ""
+            : report.config.siteBaseUrl || currentUrls.find((item) => item[auditField])?.[auditField] || "";
+        }
         renderGoogleIndexingUrls();
+        renderGscInspectionDashboard();
         renderWarning(report.publicUrlWarning || "");
         renderIssues();
       }
@@ -1974,6 +3272,10 @@
         const report = await api("/api/report");
         renderReport(report);
         setStatus(`检查完成：${report.stats.urls} 个 URL，${report.stats.issues} 个问题`);
+        if (location.hash) {
+          const anchor = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+          if (anchor) requestAnimationFrame(() => anchor.scrollIntoView({ block: "start" }));
+        }
       }
 
       async function waitForSeoUpload(initialState = {}, timeoutMilliseconds = 20 * 60 * 1000) {
@@ -2112,12 +3414,12 @@
         const result = await api("/api/google-indexing/config", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ serviceAccount: value }),
+          body: JSON.stringify({ serviceAccount: value, dailyQuota: Number($("googleDailyQuotaInput").value || 200) }),
         });
         $("googleServiceAccountInput").value = "";
         await loadGoogleIndexingStatus();
-        showGoogleIndexingResult(result.message, ["正在用该账号向 Google 验证连通性..."], "info");
-        setStatus("已保存，正在验证 Google 连通性...");
+        showGoogleIndexingResult(result.message, ["正在验证 Indexing API 连通性..."], "info");
+        setStatus("已保存，正在验证 Indexing API...");
         const testResult = await api("/api/google-indexing/test", { method: "POST" });
         showGoogleIndexingResult(testResult.message, [], testResult.ok ? "success" : "warning");
         setStatus(testResult.message);
@@ -2125,6 +3427,20 @@
       $("testGoogleIndexingBtn").onclick = () => runAction(async () => {
         const result = await api("/api/google-indexing/test", { method: "POST" });
         showGoogleIndexingResult(result.message, [], result.ok ? "success" : "warning");
+        setStatus(result.message);
+      });
+      $("saveGoogleQuotaBtn").onclick = () => runAction(async () => {
+        const dailyQuota = Number($("googleDailyQuotaInput").value);
+        if (!Number.isInteger(dailyQuota) || dailyQuota < 1 || dailyQuota > 100000) {
+          throw new Error("每日提交限额必须是 1 到 100000 之间的整数。");
+        }
+        const result = await api("/api/google-indexing/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quotaOnly: true, dailyQuota }),
+        });
+        await loadGoogleIndexingStatus();
+        showGoogleIndexingResult("每日提交限额已更新", [result.message, result.quota?.resetNote || ""], "success");
         setStatus(result.message);
       });
       $("googleIndexingManualSubmitBtn").onclick = () => runAction(async () => {
@@ -2162,7 +3478,7 @@
       });
       $("googleIndexingSubmitAllBtn").onclick = () => runAction(async () => {
         const submitted = googleSubmittedState.submitted || {};
-        const allUrls = currentUrls.map((item) => item.url).filter(Boolean);
+        const allUrls = googleSubmissionUrls();
         if (!allUrls.length) throw new Error("没有可提交的 URL，请先刷新检查。");
         if (!googleIndexingStatus.enabled) throw new Error("请先配置 Google 服务账号。");
         const pendingUrls = allUrls.filter((url) => !submitted[url]);
@@ -2199,7 +3515,7 @@
             "1. 打开 Search Console → 选择对应资源 → 左下角「设置」→「用户和权限」→「添加用户」。",
             `2. 粘贴服务账号邮箱 ${googleIndexingStatus.clientEmail || "（见上方已配置账号）"}，权限选「完整」或「所有者」。`,
             "3. 确认 Google Cloud 项目已启用 Indexing API。",
-            "4. 保存后回来点「提交全部 URL 到 Google」重试。",
+            "4. 保存后回来点「继续提交待处理 URL」重试。",
           ], "warning");
           setStatus("Google 所有权验证失败，无法提交");
           return;
@@ -2207,7 +3523,7 @@
         if (Number(quota.dailyRemaining) <= 0) {
           showGoogleIndexingResult("Google 今日配额已用完", [
             `今日 ${quota.dailyLimit || 200} 条提交配额已用完，无法继续提交。`,
-            "配额太平洋时间零点重置（约北京时间 15:00），明天再点一次即可继续提交剩余 URL。",
+            "配额太平洋时间零点重置（北京时间约 15:00 或 16:00），重置后再点一次即可继续提交剩余 URL。",
             `当前仍有 ${pendingUrls.length} 个 URL 待提交（${alreadyCount} 个已提交过会自动跳过）。`,
           ], "warning");
           setStatus("Google 今日配额已用完");
@@ -2216,7 +3532,7 @@
 
         const toSubmit = pendingUrls.slice(0, Math.max(0, Number(quota.dailyRemaining)));
         const quotaCapped = toSubmit.length < pendingUrls.length;
-        const summary = `共 ${allUrls.length} 个 URL：已提交 ${alreadyCount} 个（自动跳过），本次提交 ${toSubmit.length} 个。${quotaCapped ? `（今日配额剩余 ${quota.dailyRemaining}，其余 ${pendingUrls.length - toSubmit.length} 个明天再提交）` : ""}`;
+        const summary = `共 ${allUrls.length} 个 URL：已提交 ${alreadyCount} 个（自动跳过），本次最多提交 ${toSubmit.length} 个。${quotaCapped ? `（今日配额剩余 ${quota.dailyRemaining}，其余 ${pendingUrls.length - toSubmit.length} 个在配额重置后继续）` : ""}`;
         if (!confirm(`${summary}\n\n逐条提交，过程中可随时停止。继续吗？`)) return;
 
         giStopRequested = false;
@@ -2229,6 +3545,8 @@
         let done = 0;
         let quotaExhausted = false;
         let ownershipBlocked = false;
+        let authorizationBlocked = false;
+        let transientBlocked = false;
         const errorSamples = [];
         const chunkSize = 20;
         const totalChunks = Math.ceil(toSubmit.length / chunkSize);
@@ -2245,7 +3563,7 @@
             });
             totalOk += Number(result.succeeded || 0);
             totalFail += Number(result.failed || 0);
-            done += batch.length;
+            done += Number(result.attempted ?? batch.length);
             for (const item of result.results || []) {
               if (item.ok && !item.skipped) {
                 googleSubmittedState.submitted[item.url] = {
@@ -2264,9 +3582,13 @@
               googleSubmittedState.quota = result.quota;
               if (Number(result.quota.dailyRemaining) <= 0) quotaExhausted = true;
             }
+            if (result.stopReason === "ownership") ownershipBlocked = true;
+            if (result.stopReason === "authorization") authorizationBlocked = true;
+            if (result.stopReason === "transient-error") transientBlocked = true;
+            if (result.stopReason === "google-quota" || result.stopReason === "daily-quota") quotaExhausted = true;
             if ((result.results || []).some((item) => item.status === 429)) quotaExhausted = true;
             updateGiProgress(done, toSubmit.length, totalOk, totalFail);
-            if ((ownershipBlocked && totalOk === 0) || quotaExhausted) break;
+            if (result.stopReason || quotaExhausted) break;
           }
         } finally {
           stopBtn.style.display = "none";
@@ -2278,8 +3600,14 @@
         if (ownershipBlocked && totalOk === 0) {
           message = `提交失败：Google 返回 403 所有权验证失败（服务账号不是该站点的所有者），本次 ${totalFail} 条全部未提交。请先在 Search Console 把服务账号加为该资源的所有者/完整权限用户，再重试。`;
           tone = "warning";
+        } else if (authorizationBlocked) {
+          message = `Google 授权失败，已自动停止。本次实际请求 ${done} 条，成功 ${totalOk}，失败 ${totalFail}。请检查服务账号、Indexing API 是否启用以及 Google Cloud 权限，修复后再次点击即可继续。`;
+          tone = "warning";
+        } else if (transientBlocked) {
+          message = `Google 网络或服务暂时异常，已自动停止，避免连续消耗请求。本次实际请求 ${done} 条，成功 ${totalOk}，失败 ${totalFail}；稍后再次点击会从未成功的 URL 继续。`;
+          tone = "warning";
         } else if (quotaExhausted) {
-          message = `Google 今日配额已用完（默认每天约 200 条），已自动停止。本次完成 ${done}/${toSubmit.length} 条，成功 ${totalOk}，失败 ${totalFail}；另有 ${alreadyCount} 个已提交过的 URL 已自动跳过。配额太平洋时间零点重置（= 北京时间每天 15:00），重置后再点一次继续提交剩余 ${pendingUrls.length - totalOk} 个（已提交的会自动跳过）。`;
+          message = `Google 今日配额已用完，已自动停止。本次实际请求 ${done}/${toSubmit.length} 条，成功 ${totalOk}，失败 ${totalFail}；另有 ${alreadyCount} 个已提交 URL 已自动跳过。配额在太平洋时间零点重置（北京时间约 15:00 或 16:00），重置后再点一次即可继续剩余 ${pendingUrls.length - totalOk} 个。`;
           tone = "warning";
         } else if (stopped) {
           message = `已停止提交：完成 ${done}/${toSubmit.length} 条，成功 ${totalOk}，失败 ${totalFail}。`;
@@ -2288,7 +3616,7 @@
           message = `Google Indexing 提交完成：成功 ${totalOk}，失败 ${totalFail}，跳过已提交 ${alreadyCount} 个。`;
           tone = totalFail ? "warning" : "success";
         }
-        updateGiProgress(done, toSubmit.length, totalOk, totalFail, ownershipBlocked && totalOk === 0 ? "所有权验证失败" : quotaExhausted ? "配额用完，已停止" : stopped ? "已停止" : "提交完成");
+        updateGiProgress(done, toSubmit.length, totalOk, totalFail, ownershipBlocked && totalOk === 0 ? "所有权验证失败" : authorizationBlocked ? "授权失败，已停止" : transientBlocked ? "临时异常，已停止" : quotaExhausted ? "配额用完，已停止" : stopped ? "已停止" : "提交完成");
         await loadGoogleSubmittedState();
         showGoogleIndexingResult(message, errorSamples, tone);
         setStatus(message);
@@ -2305,7 +3633,7 @@
         setStatus("已刷新 Google 提交状态");
       });
       $("googleIndexingClearBtn").onclick = () => runAction(async () => {
-        if (!confirm("确定清空 Google 提交记录与今日配额计数吗？\n清空后「提交全部」会把所有 URL 重新提交（会重新占用配额）。")) return;
+        if (!confirm("确定清空 Google 已提交记录吗？\n今日配额计数会保留，清空后这些 URL 会重新进入待提交列表。")) return;
         const result = await api("/api/google-indexing/submitted/clear", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2408,8 +3736,20 @@
       $("copyGoogleInspectUrlBtn").onclick = () => runAction(() => copyText($("googleInspectUrlInput").value, "页面 URL"));
       $("copyProjectSummaryBtn").onclick = () => runAction(() => copyText(projectSummaryText(), "项目摘要"));
       $("copyMigrationGuideBtn").onclick = () => runAction(() => copyText(migrationGuideText(), "换站部署清单"));
+      $("pageAuditBtn").onclick = () => runAction(runPageAudit);
+      $("pageAuditSource").onchange = () => {
+        const local = $("pageAuditSource").value === "local";
+        renderPageAuditOptions();
+        $("pageAuditUrlInput").value = local
+          ? currentReport?.config?.localTestBaseUrl || currentUrls.find((item) => item.localUrl)?.localUrl || ""
+          : currentReport?.config?.siteBaseUrl || currentUrls.find((item) => item.url)?.url || "";
+      };
       $("severityFilter").onchange = () => { issuePage = 1; renderIssues(); };
+      $("languageFilter").onchange = () => { issuePage = 1; renderIssues(); };
+      $("typeFilter").onchange = () => { issuePage = 1; renderIssues(); };
       $("issueSearchInput").oninput = () => { issuePage = 1; renderIssues(); };
+      $("exportIssuesBtn").onclick = () => runAction(exportFilteredIssues);
+      $("copyIssueSummaryBtn").onclick = () => runAction(() => copyText(issueSummaryText(), "诊断摘要"));
       $("issuePrevBtn").onclick = () => { if (issuePage > 1) { issuePage -= 1; renderIssues(); } };
       $("issueNextBtn").onclick = () => {
         const count = Math.ceil(filteredIssues().length / issuePageSize);
@@ -2419,7 +3759,7 @@
       $("aiStopBtn").onclick = () => {
         $("aiStopBtn").disabled = true;
         $("aiStopBtn").textContent = "正在停止...";
-        setStatus("已请求停止，当前批次完成后即停止（数据库不会写入）...");
+        setStatus("已请求停止，当前批次结束后停止；已完成批次保持不变...");
         api("/api/ai/stop", { method: "POST" }).catch(() => {});
       };
       $("aiKeyGrid").onclick = (event) => {
@@ -2446,8 +3786,18 @@
           setStatus(`已保存 ${model.label} 的 API Key，模型列表已更新`);
         });
       };
-      $("aiPreviewBtn").onclick = () => runAction(previewAiFix);
       $("aiFixBtn").onclick = () => runAction(startAiFix);
+      $("configExportScope").onchange = syncConfigExportScope;
+      $("exportConfigBackupBtn").onclick = () => runAction(exportConfigBackup);
+      $("selectConfigBackupBtn").onclick = () => $("configBackupFileInput").click();
+      $("configBackupFileInput").onchange = () => {
+        const input = $("configBackupFileInput");
+        const file = input.files?.[0];
+        runAction(async () => {
+          await importConfigBackupFile(file);
+          input.value = "";
+        });
+      };
       $("aiTestBtn").onclick = () =>
         runAction(async () => {
           const model = $("aiModelSelect").value;
@@ -2468,7 +3818,7 @@
           setStatus("模型连接测试通过");
         });
 
-      Promise.all([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus(), loadBaiduStatus(), loadChineseEngines(), loadOverview()]).then(refresh).catch((error) => {
+      Promise.all([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus(), loadBaiduStatus(), loadChineseEngines(), loadOverview(), loadIndexCoverage(), loadConfigBackupStatus()]).then(refresh).catch((error) => {
         setStatus(error.message || String(error), true);
       });
       loadAiStatus();

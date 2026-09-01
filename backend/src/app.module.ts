@@ -16,6 +16,7 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { SyncGuardModule } from './common/sync-guard.module';
 import { DatabaseBackupModule } from './database-backup/database-backup.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { QuotationModule } from './quotation/quotation.module';
 
 const entities = [__dirname + '/**/*.entity{.ts,.js}'];
 
@@ -56,6 +57,7 @@ const createDatabaseConfig = (config: ConfigService): TypeOrmModuleOptions =>
     PageModule,
     VideoModule,
     DatabaseBackupModule,
+    QuotationModule,
     
   ],
   controllers: [AppController],

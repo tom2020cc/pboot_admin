@@ -17,6 +17,25 @@ export function isRetryableAiErrorText(text: string) {
   );
 }
 
+export function isFallbackableAiErrorText(text: string) {
+  const lower = String(text || '').toLowerCase();
+  return (
+    isRetryableAiErrorText(lower) ||
+    lower.includes('insufficient_quota') ||
+    lower.includes('quota exceeded') ||
+    lower.includes('quota exhausted') ||
+    lower.includes('额度已用完') ||
+    lower.includes('额度耗尽') ||
+    lower.includes('余额不足') ||
+    lower.includes('insufficient balance') ||
+    lower.includes('model_not_found') ||
+    lower.includes('model not found') ||
+    lower.includes('does not exist') ||
+    lower.includes('service unavailable') ||
+    lower.includes('503')
+  );
+}
+
 export function formatAiErrorMessage(error: unknown) {
   const raw = error instanceof Error ? error.message : String(error);
   if (isRetryableAiErrorText(raw)) {

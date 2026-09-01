@@ -3,10 +3,10 @@
     <a
       v-for="item in items"
       :key="item.id"
-      :class="{ active: item.id === 'admin' }"
+      :class="{ active: item.id === activeId }"
       :href="item.url"
-      :target="item.id === 'admin' ? undefined : '_blank'"
-      :rel="item.id === 'admin' ? undefined : 'noopener'"
+      :target="isLocalTool(item.id) ? undefined : '_blank'"
+      :rel="isLocalTool(item.id) ? undefined : 'noopener'"
     >
       {{ item.label }}
     </a>
@@ -14,12 +14,14 @@
 </template>
 
 <script setup lang="ts">
+withDefaults(defineProps<{ activeId?: string }>(), { activeId: "admin" });
+
 const numberEnv = (value: unknown, fallback: number) => {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const frontendPort = numberEnv(import.meta.env.VITE_FRONTEND_PORT, 5173);
+const frontendPort = numberEnv(import.meta.env.VITE_FRONTEND_PORT, 5178);
 const backendPort = numberEnv(import.meta.env.VITE_BACKEND_PORT, 5000);
 const configPort = numberEnv(import.meta.env.VITE_CONFIG_WIZARD_PORT, 5190);
 const seoPort = numberEnv(import.meta.env.VITE_SEO_TOOL_PORT, 5188);
@@ -29,11 +31,14 @@ const items = [
   { id: "admin", label: "🖥️ 管理后台", url: `http://localhost:${frontendPort}/#/` },
   { id: "backend", label: "🔌 后端接口", url: `http://localhost:${backendPort}/api-docs` },
   { id: "config", label: "⚙️ 项目配置", url: `http://localhost:${configPort}` },
+  { id: "quotation", label: "报价单生成", url: `http://localhost:${frontendPort}/#/quotations` },
   { id: "seo", label: "📊 SEO 检查", url: `http://localhost:${seoPort}` },
   { id: "models", label: "🧠 模型总览", url: `http://localhost:${seoPort}/models.html` },
   { id: "models-config", label: "🔑 模型配置", url: `http://localhost:${seoPort}/models-config.html` },
   { id: "ftp", label: "📤 FTP 发布", url: `http://localhost:${ftpPort}` },
 ];
+
+const isLocalTool = (id: string) => id === "admin" || id === "quotation";
 </script>
 
 <style scoped>

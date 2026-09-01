@@ -1,9 +1,17 @@
 import {
   applyImageAltsOnly,
+  buildLanguageSeoUrlName,
   findMissingAltImages,
 } from './seo-content-utils';
 
 describe('seo-content-utils alt helpers', () => {
+  describe('buildLanguageSeoUrlName', () => {
+    it('replaces an existing language prefix instead of stacking prefixes', () => {
+      expect(buildLanguageSeoUrlName('en', 'cn-1691', 'About us')).toBe('en-1691');
+      expect(buildLanguageSeoUrlName('pt', 'es-company-profile', 'Company profile')).toBe('pt-company-profile');
+    });
+  });
+
   describe('findMissingAltImages', () => {
     it('lists only images whose alt is missing or empty', () => {
       const html = [

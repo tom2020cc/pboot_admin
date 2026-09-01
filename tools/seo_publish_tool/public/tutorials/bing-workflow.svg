@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title desc">
+  <title id="title">Bing Webmaster 配置与提交流程</title>
+  <desc id="desc">从添加站点、验证文件到 API Key、Sitemap 和 IndexNow 的五步流程。</desc>
+  <rect width="1280" height="360" fill="#f6f9fc"/>
+  <rect x="32" y="28" width="1216" height="304" rx="8" fill="#ffffff" stroke="#d9e2ec"/>
+  <text x="64" y="76" fill="#152536" font-family="Microsoft YaHei, Arial" font-size="26" font-weight="700">Bing Webmaster：一次配置，持续主动通知</text>
+  <text x="64" y="106" fill="#60758a" font-family="Microsoft YaHei, Arial" font-size="16">验证站点和 API Key 用于管理；IndexNow 用于新建、更新、删除页面的快速通知。</text>
+  <g font-family="Microsoft YaHei, Arial">
+    <g transform="translate(64 142)"><rect width="200" height="142" rx="6" fill="#eef7ff" stroke="#8bc8f8"/><circle cx="28" cy="30" r="16" fill="#0078d4"/><text x="28" y="36" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">1</text><text x="20" y="72" fill="#172b3a" font-size="18" font-weight="700">添加网站</text><text x="20" y="101" fill="#526779" font-size="14">登录 Bing Webmaster</text><text x="20" y="124" fill="#526779" font-size="14">填写真实线上域名</text></g>
+    <path d="M278 213h32" stroke="#8aa2b7" stroke-width="2"/><path d="m304 205 10 8-10 8" fill="none" stroke="#8aa2b7" stroke-width="2"/>
+    <g transform="translate(324 142)"><rect width="200" height="142" rx="6" fill="#f8fbfd" stroke="#ccd8e3"/><circle cx="28" cy="30" r="16" fill="#0078d4"/><text x="28" y="36" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">2</text><text x="20" y="72" fill="#172b3a" font-size="18" font-weight="700">完成验证</text><text x="20" y="101" fill="#526779" font-size="14">保存验证码并生成</text><text x="20" y="124" fill="#526779" font-size="14">BingSiteAuth.xml</text></g>
+    <path d="M538 213h32" stroke="#8aa2b7" stroke-width="2"/><path d="m564 205 10 8-10 8" fill="none" stroke="#8aa2b7" stroke-width="2"/>
+    <g transform="translate(584 142)"><rect width="200" height="142" rx="6" fill="#f8fbfd" stroke="#ccd8e3"/><circle cx="28" cy="30" r="16" fill="#0078d4"/><text x="28" y="36" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">3</text><text x="20" y="72" fill="#172b3a" font-size="18" font-weight="700">配置 API Key</text><text x="20" y="101" fill="#526779" font-size="14">设置 → API 访问</text><text x="20" y="124" fill="#526779" font-size="14">生成后保存到本工具</text></g>
+    <path d="M798 213h32" stroke="#8aa2b7" stroke-width="2"/><path d="m824 205 10 8-10 8" fill="none" stroke="#8aa2b7" stroke-width="2"/>
+    <g transform="translate(844 142)"><rect width="168" height="142" rx="6" fill="#f8fbfd" stroke="#ccd8e3"/><circle cx="28" cy="30" r="16" fill="#0078d4"/><text x="28" y="36" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">4</text><text x="20" y="72" fill="#172b3a" font-size="18" font-weight="700">提交 Sitemap</text><text x="20" y="101" fill="#526779" font-size="14">通知完整站点结构</text></g>
+    <path d="M1026 213h32" stroke="#8aa2b7" stroke-width="2"/><path d="m1052 205 10 8-10 8" fill="none" stroke="#8aa2b7" stroke-width="2"/>
+    <g transform="translate(1072 142)"><rect width="144" height="142" rx="6" fill="#eef9f1" stroke="#8ad2a4"/><circle cx="28" cy="30" r="16" fill="#218b4b"/><text x="28" y="36" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">5</text><text x="20" y="72" fill="#172b3a" font-size="18" font-weight="700">IndexNow</text><text x="20" y="101" fill="#526779" font-size="14">日常更新后</text><text x="20" y="124" fill="#526779" font-size="14">主动通知</text></g>
+  </g>
+</svg>

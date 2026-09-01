@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" role="img" aria-labelledby="title desc">
+  <title id="title">选择 Cloud 项目并启用 Google API</title>
+  <desc id="desc">依次选择项目、启用 Search Console API、启用 Web Search Indexing API。</desc>
+  <rect width="900" height="420" fill="#f7f9fc"/>
+  <rect x="24" y="24" width="852" height="62" rx="8" fill="#ffffff" stroke="#d8dee9"/>
+  <rect x="46" y="42" width="28" height="28" rx="5" fill="#4285f4"/>
+  <text x="60" y="61" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">G</text>
+  <text x="88" y="63" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#1f2937">Google Cloud</text>
+  <rect x="610" y="38" width="238" height="34" rx="6" fill="#e8f0fe" stroke="#8ab4f8"/>
+  <text x="630" y="60" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#174ea6">当前项目：shanbo-search-console</text>
+  <text x="24" y="118" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#5f6368">先确认右上角项目，下面两个 API 必须在同一项目中启用</text>
+  <rect x="24" y="142" width="264" height="222" rx="8" fill="#ffffff" stroke="#d8dee9"/>
+  <circle cx="60" cy="178" r="18" fill="#4285f4"/>
+  <text x="60" y="184" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff">1</text>
+  <text x="88" y="184" font-family="Arial, sans-serif" font-size="17" font-weight="700" fill="#1f2937">选择或创建项目</text>
+  <rect x="46" y="220" width="220" height="48" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="60" y="241" font-family="Arial, sans-serif" font-size="12" fill="#64748b">项目名称</text>
+  <text x="60" y="258" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#111827">shanbo-search-console</text>
+  <rect x="46" y="286" width="220" height="38" rx="6" fill="#4285f4"/>
+  <text x="156" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">选择此项目</text>
+  <path d="M305 252h34" stroke="#9aa0a6" stroke-width="2"/>
+  <path d="m334 246 8 6-8 6" fill="none" stroke="#9aa0a6" stroke-width="2"/>
+  <rect x="354" y="142" width="244" height="222" rx="8" fill="#ffffff" stroke="#4285f4" stroke-width="2"/>
+  <circle cx="390" cy="178" r="18" fill="#4285f4"/>
+  <text x="390" y="184" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff">2</text>
+  <text x="418" y="178" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#1f2937">Search Console API</text>
+  <text x="418" y="197" font-family="Arial, sans-serif" font-size="11" fill="#64748b">Sitemap / URL Inspection</text>
+  <rect x="376" y="228" width="200" height="72" rx="6" fill="#eef4ff"/>
+  <text x="392" y="252" font-family="Arial, sans-serif" font-size="12" fill="#52657a">状态</text>
+  <circle cx="397" cy="275" r="6" fill="#34a853"/>
+  <text x="411" y="280" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#137333">已启用</text>
+  <rect x="376" y="316" width="92" height="30" rx="5" fill="#ffffff" stroke="#4285f4"/>
+  <text x="422" y="336" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#1967d2">管理</text>
+  <path d="M615 252h34" stroke="#9aa0a6" stroke-width="2"/>
+  <path d="m644 246 8 6-8 6" fill="none" stroke="#9aa0a6" stroke-width="2"/>
+  <rect x="664" y="142" width="212" height="222" rx="8" fill="#ffffff" stroke="#ea4335" stroke-width="2"/>
+  <circle cx="700" cy="178" r="18" fill="#ea4335"/>
+  <text x="700" y="184" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff">3</text>
+  <text x="728" y="178" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#1f2937">Indexing API</text>
+  <text x="728" y="197" font-family="Arial, sans-serif" font-size="11" fill="#64748b">URL 通知 / 每日配额</text>
+  <rect x="686" y="228" width="168" height="72" rx="6" fill="#fce8e6"/>
+  <text x="702" y="252" font-family="Arial, sans-serif" font-size="12" fill="#52657a">状态</text>
+  <circle cx="707" cy="275" r="6" fill="#34a853"/>
+  <text x="721" y="280" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#137333">已启用</text>
+  <rect x="686" y="316" width="92" height="30" rx="5" fill="#ffffff" stroke="#ea4335"/>
+  <text x="732" y="336" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#b3261e">管理</text>
+  <text x="24" y="398" font-family="Arial, sans-serif" font-size="12" fill="#64748b">完成标准：两个 API 页面均显示“管理”或“停用 API”，且页面顶部项目名称一致。</text>
+</svg>

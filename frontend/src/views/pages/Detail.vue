@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { getAll, type MenuItem } from "@/api/menus";
@@ -104,6 +104,7 @@ const handleSync = async (all: boolean) => {
 };
 
 onMounted(loadDetail);
+watch(() => route.params.id, () => loadDetail());
 </script>
 
 <style scoped>

@@ -27,6 +27,7 @@ const AI_REQUIRED_PROBLEMS = new Set([
 const AI_TIMEOUT_MS = 300000;
 const AI_MAX_ATTEMPTS = 3;
 const AI_RETRY_DELAYS_MS = [15000, 45000];
+const AI_JOB_STATE_PATH = path.join(__dirname, "ai-repair-state.json");
 
 const QWEN_QUOTA_URL =
   "https://bailian.console.aliyun.com/cn-beijing/?tab=costing-balance#/costing-balance/free-quota";
@@ -190,6 +191,15 @@ const MODEL_DEFINITIONS = [
     purpose: "Highest-quality GPT-5.6 model; slower and more expensive.",
     quotaText: "Billed against the OpenAI project balance and usage.",
   },
+  {
+    value: "chat-latest",
+    label: "OpenAI ChatGPT Latest (Instant)",
+    provider: "openai",
+    priority: 43,
+    recommended: false,
+    purpose: "Tracks the latest Instant model used in ChatGPT; use a pinned GPT-5.6 model for predictable production jobs.",
+    quotaText: "Billed against the OpenAI project balance and usage.",
+  },
 ];
 
 // 适合批量操作的模型（快、便宜、非推理、结构化输出稳定），列表里置顶 + 打「适合批量」标。
@@ -206,7 +216,7 @@ const BATCH_SUITABLE = new Set([
 ]);
 
 let SQL_PROMISE;
-let currentJob = createIdleJob();
+let currentJob = loadPersistedJob();
 let stopRequested = false;
 let skippedBatches = 0;
 let pendingUpdates = null;
@@ -224,7 +234,44 @@ function createIdleJob() {
     error: "",
     startedAt: "",
     finishedAt: "",
+    committed: 0,
+    resumable: false,
   };
+}
+
+function loadPersistedJob() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(AI_JOB_STATE_PATH, "utf8"));
+    if (!saved || typeof saved !== "object") return createIdleJob();
+    if (saved.state === "running") {
+      return {
+        ...createIdleJob(),
+        ...saved,
+        state: "stopped",
+        resumable: true,
+        message: `上次任务被服务重启中断；已成功写入 ${Number(saved.committed || 0)} 条，重新开始会自动跳过已修复记录。`,
+        finishedAt: new Date().toISOString(),
+      };
+    }
+    return { ...createIdleJob(), ...saved };
+  } catch (_error) {
+    return createIdleJob();
+  }
+}
+
+function persistJobState() {
+  const tempPath = `${AI_JOB_STATE_PATH}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, `${JSON.stringify(currentJob, null, 2)}\n`, "utf8");
+    fs.copyFileSync(tempPath, AI_JOB_STATE_PATH);
+    fs.unlinkSync(tempPath);
+  } catch (_error) {
+    try {
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+    } catch (_cleanupError) {
+      // Job persistence must never interrupt a database repair transaction.
+    }
+  }
 }
 
 function throwIfStopped() {
@@ -236,6 +283,8 @@ function throwIfStopped() {
 function requestStop() {
   if (currentJob.state === "running") {
     stopRequested = true;
+    currentJob.message = "已请求停止；当前批次结束后保留已成功写入的修复。";
+    persistJobState();
   }
   return currentJob;
 }
@@ -1075,6 +1124,7 @@ async function generateContentRepairs(
   items,
   progressOffset,
   progressTotal,
+  onBatchSuccess = null,
 ) {
   const output = [];
   const aiItems = items.filter((item) => aiProblems(item.problems).length);
@@ -1109,9 +1159,27 @@ async function generateContentRepairs(
         prompt,
       );
       if (!Array.isArray(result)) throw new Error("AI 返回格式不是数组。");
+      const expectedIds = new Set(batch.map((item) => Number(item.row.id)));
+      const returnedIds = new Set(result.map((row) => Number(row.id)));
+      if (
+        returnedIds.size !== expectedIds.size ||
+        [...expectedIds].some((id) => !returnedIds.has(id))
+      ) {
+        throw new Error("AI 返回记录不完整，本批次没有写入数据库。");
+      }
+      if (onBatchSuccess) {
+        await onBatchSuccess(batch, result, {
+          index,
+          count: batches.length,
+          batchSize: batch.length,
+        });
+      }
       output.push(...result);
     } catch (error) {
       if (stopRequested) throw error;
+      if (onBatchSuccess) {
+        throw new Error(`第 ${index + 1}/${batches.length} 批未完成：${error.message || error}`);
+      }
       skippedBatches += 1;
       logAiRetry(`第 ${index + 1}/${batches.length} 批失败已跳过（${batch.length} 条）：${error.message || error}`);
     }
@@ -1119,12 +1187,27 @@ async function generateContentRepairs(
   return output;
 }
 
-async function generateMenuRepairs(toolRoot, model, languageCode, items) {
+async function generateMenuRepairs(
+  toolRoot,
+  model,
+  languageCode,
+  items,
+  progressOffset = 0,
+  progressTotal = items.length,
+  onBatchSuccess = null,
+) {
   if (!items.length) return [];
   const batches = chunks(items, 12);
   const output = [];
-  for (const batch of batches) {
+  let processed = 0;
+  for (let index = 0; index < batches.length; index += 1) {
+    const batch = batches[index];
     throwIfStopped();
+    updateJob(
+      progressOffset + processed,
+      progressTotal,
+      `AI 正在处理 ${LANGUAGE_NAMES[languageCode]} 栏目第 ${index + 1}/${batches.length} 批`,
+    );
     const prompt = [
       `Repair these PbootCMS menu SEO fields in ${LANGUAGE_NAMES[languageCode]}.`,
       "Only repair fields listed in problems. Preserve product model names and numbers.",
@@ -1151,9 +1234,28 @@ async function generateMenuRepairs(toolRoot, model, languageCode, items) {
         prompt,
       );
       if (!Array.isArray(result)) throw new Error("AI 返回的栏目格式不是数组。");
+      const expectedIds = new Set(batch.map((item) => Number(item.row.id)));
+      const returnedIds = new Set(result.map((row) => Number(row.id)));
+      if (
+        returnedIds.size !== expectedIds.size ||
+        [...expectedIds].some((id) => !returnedIds.has(id))
+      ) {
+        throw new Error("AI 返回的栏目记录不完整，本批次没有写入数据库。");
+      }
+      if (onBatchSuccess) {
+        await onBatchSuccess(batch, result, {
+          index,
+          count: batches.length,
+          batchSize: batch.length,
+        });
+      }
       output.push(...result);
+      processed += batch.length;
     } catch (error) {
       if (stopRequested) throw error;
+      if (onBatchSuccess) {
+        throw new Error(`栏目第 ${index + 1}/${batches.length} 批未完成：${error.message || error}`);
+      }
       skippedBatches += 1;
       logAiRetry(`一批栏目处理失败已跳过（${batch.length} 条）：${error.message || error}`);
     }
@@ -1395,6 +1497,40 @@ function prepareUpdates(contents, menus, aiContents, aiMenus, languageCode) {
   return { contentUpdates, menuUpdates };
 }
 
+function validateRepairUpdates(contents, menus, updates) {
+  const contentMap = new Map(updates.contentUpdates.map((row) => [Number(row.id), row]));
+  const menuMap = new Map(updates.menuUpdates.map((row) => [Number(row.id), row]));
+  const unresolved = [];
+
+  for (const item of contents) {
+    const next = contentMap.get(Number(item.row.id));
+    if (!next) {
+      unresolved.push(`内容 #${item.row.id} 缺少修复结果`);
+      continue;
+    }
+    const remaining = contentProblems({ ...item.row, ...next }).filter((problem) =>
+      item.problems.includes(problem),
+    );
+    if (remaining.length) unresolved.push(`内容 #${item.row.id}: ${remaining.join(", ")}`);
+  }
+
+  for (const item of menus) {
+    const next = menuMap.get(Number(item.row.id));
+    if (!next) {
+      unresolved.push(`栏目 #${item.row.id} 缺少修复结果`);
+      continue;
+    }
+    const remaining = menuProblems({ ...item.row, ...next }).filter((problem) =>
+      item.problems.includes(problem),
+    );
+    if (remaining.length) unresolved.push(`栏目 #${item.row.id}: ${remaining.join(", ")}`);
+  }
+
+  if (unresolved.length) {
+    throw new Error(`修复结果校验未通过：${unresolved.slice(0, 5).join("；")}`);
+  }
+}
+
 function truncatePreviewText(value, max = 200) {
   const text = stripHtml(value);
   return text.length > max ? `${text.slice(0, max)}…` : text;
@@ -1562,6 +1698,7 @@ function updateJob(current, total, message) {
   currentJob.message = message;
   currentJob.logs.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${message}`);
   currentJob.logs = currentJob.logs.slice(-80);
+  persistJobState();
 }
 
 async function runJob(toolRoot, dbPath, mode, model, targetAcode = "", problems = [], dryRun = false) {
@@ -1671,6 +1808,115 @@ async function runJob(toolRoot, dbPath, mode, model, targetAcode = "", problems 
       (sum, item) => sum + item.contents.length + item.menus.length,
       0,
     );
+
+    if (!dryRun) {
+      if (!totalRecords) {
+        currentJob.result = {
+          changed: 0,
+          contentChanged: 0,
+          menuChanged: 0,
+          backupPath: "",
+          resumable: true,
+          message: "没有需要修改的问题。",
+        };
+        updateJob(0, 0, "没有需要修改的问题。");
+        return;
+      }
+
+      let backupPath = "";
+      let committed = 0;
+      let contentChanged = 0;
+      let menuChanged = 0;
+      let progressOffset = 0;
+
+      const ensureBackup = () => {
+        if (!backupPath) {
+          backupPath = backupDatabase(
+            toolRoot,
+            dbPath,
+            mode === "fix-cn" ? "seo_cn_resumable" : "seo_languages_resumable",
+          );
+        }
+      };
+
+      const persistBatch = (contents, menus, updates, message) => {
+        validateRepairUpdates(contents, menus, updates);
+        ensureBackup();
+        applyUpdates(db, updates);
+        persistDatabase(db, dbPath);
+        contentChanged += updates.contentUpdates.length;
+        menuChanged += updates.menuUpdates.length;
+        committed = contentChanged + menuChanged;
+        currentJob.committed = committed;
+        currentJob.resumable = true;
+        currentJob.result = {
+          changed: committed,
+          contentChanged,
+          menuChanged,
+          slugChanged,
+          backupPath,
+          resumable: true,
+          message: `已分批写入 ${committed} 条，未完成记录可继续修复。`,
+        };
+        updateJob(committed, totalRecords, message);
+      };
+
+      for (const { languageCode, contents, menus } of work) {
+        const languageName = LANGUAGE_NAMES[languageCode] || languageCode;
+        await generateContentRepairs(
+          toolRoot,
+          model,
+          languageCode,
+          contents,
+          progressOffset,
+          totalRecords,
+          async (batch, aiRows, batchMeta) => {
+            const updates = prepareUpdates(batch, [], aiRows, [], languageCode);
+            persistBatch(
+              batch,
+              [],
+              updates,
+              `${languageName} 内容第 ${batchMeta.index + 1}/${batchMeta.count} 批已校验并写入（累计 ${committed + updates.contentUpdates.length} 条）`,
+            );
+          },
+        );
+        progressOffset += contents.length;
+
+        await generateMenuRepairs(
+          toolRoot,
+          model,
+          languageCode,
+          menus,
+          progressOffset,
+          totalRecords,
+          async (batch, aiRows, batchMeta) => {
+            const updates = prepareUpdates([], batch, [], aiRows, languageCode);
+            persistBatch(
+              [],
+              batch,
+              updates,
+              `${languageName} 栏目第 ${batchMeta.index + 1}/${batchMeta.count} 批已校验并写入（累计 ${committed + updates.menuUpdates.length} 条）`,
+            );
+          },
+        );
+        progressOffset += menus.length;
+      }
+
+      currentJob.result = {
+        changed: committed,
+        contentChanged,
+        menuChanged,
+        slugChanged,
+        skippedBatches: 0,
+        backupPath,
+        resumable: true,
+        message: `全部修复完成，共校验并写入 ${committed} 条。`,
+      };
+      currentJob.committed = committed;
+      updateJob(totalRecords, totalRecords, currentJob.result.message);
+      return;
+    }
+
     const allContentUpdates = [];
     const allMenuUpdates = [];
     let progressOffset = 0;
@@ -1795,7 +2041,9 @@ function startJob(toolRoot, dbPath, body) {
     message: "任务已启动",
     startedAt: new Date().toISOString(),
     logs: [`[${new Date().toLocaleTimeString("zh-CN")}] 任务已启动`],
+    resumable: !dryRun && !["generate-languages", "translate-language"].includes(mode),
   };
+  persistJobState();
   setImmediate(async () => {
     try {
       await runJob(toolRoot, dbPath, mode, model, targetAcode, problems, dryRun);
@@ -1803,21 +2051,27 @@ function startJob(toolRoot, dbPath, body) {
       currentJob.percent = 100;
       currentJob.finishedAt = new Date().toISOString();
     } catch (error) {
+      const committed = Number(currentJob.committed || currentJob.result?.changed || 0);
       if (stopRequested) {
         currentJob.state = "stopped";
         currentJob.error = "";
-        currentJob.message = "任务已被用户停止，数据库未写入";
-        currentJob.logs.push(`[${new Date().toLocaleTimeString("zh-CN")}] 已停止`);
+        currentJob.message = committed
+          ? `任务已停止；已成功写入 ${committed} 条，剩余记录下次会自动继续。`
+          : "任务已停止，尚未写入任何记录。";
+        currentJob.logs.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${currentJob.message}`);
       } else {
         currentJob.state = "failed";
         currentJob.error = error.message || String(error);
-        currentJob.message = "任务失败，数据库未写入或已保留自动备份";
+        currentJob.message = committed
+          ? `任务暂停；已成功写入 ${committed} 条，失败批次未写入，下次会从剩余问题继续。`
+          : "任务失败，尚未写入任何记录；数据库保持原状。";
         currentJob.logs.push(
           `[${new Date().toLocaleTimeString("zh-CN")}] ERROR: ${currentJob.error}`,
         );
       }
       currentJob.finishedAt = new Date().toISOString();
     }
+    persistJobState();
   });
   return currentJob;
 }
@@ -1882,5 +2136,6 @@ module.exports = {
     contentProblems,
     fillMissingImageAlt,
     persistDatabase,
+    validateRepairUpdates,
   },
 };

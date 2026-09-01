@@ -4,9 +4,11 @@
   "private": true,
   "description": "Local SEO helper for PbootCMS sitemap, robots, IndexNow and SEO checks.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "submit:google": "node auto-submit-google.js"
   },
   "dependencies": {
+    "cheerio": "1.0.0",
     "sql.js": "^1.14.1"
   }
 }

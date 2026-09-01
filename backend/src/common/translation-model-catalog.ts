@@ -184,6 +184,15 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     quotaText: 'Billed against the OpenAI project balance and usage.',
   },
   {
+    value: 'chat-latest',
+    label: 'OpenAI ChatGPT Latest (Instant)',
+    provider: 'openai',
+    priority: 43,
+    recommended: false,
+    purpose: 'Tracks the latest Instant model used in ChatGPT; useful when ChatGPT parity matters more than a pinned production model.',
+    quotaText: 'Billed against the OpenAI project balance and usage.',
+  },
+  {
     value: 'google-free',
     label: 'Google Translate free test',
     provider: 'google',
@@ -243,4 +252,20 @@ export function buildTranslationModelCatalog(availability: ProviderAvailability)
       displayLabel: `#${definition.priority}${BATCH_SUITABLE.has(definition.value) ? ' \u9002\u5408\u6279\u91cf' : ''}${definition.recommended ? ' \u63a8\u8350' : ''} | ${definition.label} | \u989d\u5ea6: ${quotaLabel}`,
     };
   }).sort((left, right) => (left.batch === right.batch ? left.priority - right.priority : left.batch ? -1 : 1));
+}
+
+export function buildTranslationModelFallbackChain<
+  T extends { value: string; provider: TranslationModelProvider; available: boolean },
+>(models: T[], requestedValue: string) {
+  const selected = models.find((item) => item.value === requestedValue);
+  if (!selected) return [];
+
+  const chain: T[] = [];
+  const seenProviders = new Set<TranslationModelProvider>();
+  for (const model of [selected, ...models]) {
+    if (!model.available || seenProviders.has(model.provider)) continue;
+    chain.push(model);
+    seenProviders.add(model.provider);
+  }
+  return chain;
 }

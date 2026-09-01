@@ -3,401 +3,94 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PbootCMS FTP 上传工具</title>
-    <style>
-      /* 设计令牌 —— 同步维护:
-         frontend/src/assets/styles.scss | seo_publish_tool/public/index.html | ftp_publish_tool/public/index.html */
-      :root {
-        --el-color-primary: #1677ff;
-        --el-color-primary-light-3: #4096ff;
-        --el-color-primary-light-5: #69b1ff;
-        --el-color-primary-light-7: #91caff;
-        --el-color-primary-light-8: #bae0ff;
-        --el-color-primary-light-9: #e6f4ff;
-        --el-color-primary-dark-2: #0958d9;
-        --el-color-success: #2f9e5b;
-        --el-color-success-light-8: #d6f0e0;
-        --el-color-success-light-9: #edf9f1;
-        --el-color-success-dark-2: #257e48;
-        --el-color-warning: #ee9418;
-        --el-color-warning-light-8: #fdeccd;
-        --el-color-warning-light-9: #fff8ed;
-        --el-color-warning-dark-2: #be7613;
-        --el-color-danger: #f04438;
-        --el-color-danger-light-8: #fdcfcc;
-        --el-color-danger-light-9: #fff1f0;
-        --el-color-danger-dark-2: #c0362d;
-        --text-success: #176b3a;
-        --text-warning: #b25e09;
-        --text-danger: #d94b35;
-        --el-text-color-primary: #303133;
-        --el-text-color-regular: #606266;
-        --el-text-color-secondary: #909399;
-        --el-border-color: #dcdfe6;
-        --el-border-color-light: #e4e7ed;
-        --el-border-color-lighter: #ebeef5;
-        --el-bg-color: #ffffff;
-        --el-bg-color-page: #f5f7fa;
-        --el-fill-color-light: #f5f7fa;
-        --radius-card: 8px;
-        --radius-pill: 999px;
-        --shadow-card: 0 1px 2px rgba(16, 24, 40, .04), 0 1px 3px rgba(16, 24, 40, .06);
-        --space-page: 24px;
-      }
-
-      /* ---------- 基础 ---------- */
-      * { box-sizing: border-box; }
-      body { margin: 0; font-family: "PingFang SC", "Microsoft YaHei", Inter, Arial, sans-serif; background: var(--el-bg-color-page); color: var(--el-text-color-primary); }
-      button, input, select { font: inherit; }
-      input, select { height: 36px; width: 100%; border: 1px solid var(--el-border-color); border-radius: 6px; padding: 0 12px; color: var(--el-text-color-primary); background: var(--el-bg-color); outline: none; }
-      input:focus, select:focus { border-color: var(--el-color-primary); }
-      button { height: 36px; padding: 0 16px; border: 1px solid var(--el-border-color); border-radius: 6px; background: var(--el-bg-color); color: var(--el-text-color-primary); font-weight: 600; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
-      button:hover { border-color: var(--el-color-primary-light-5); color: var(--el-color-primary); }
-      button.primary { background: var(--el-color-primary); border-color: var(--el-color-primary); color: #fff; }
-      button.success { background: var(--el-color-success); border-color: var(--el-color-success); color: #fff; }
-      button.warn { background: var(--el-color-warning); border-color: var(--el-color-warning); color: #fff; }
-      button:disabled { opacity: .6; cursor: not-allowed; }
-
-      /* ---------- 布局 ---------- */
-      header { min-height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: var(--el-bg-color); border-bottom: 1px solid var(--el-border-color-light); }
-      .brand { display: flex; align-items: center; gap: 11px; font-size: 22px; font-weight: 700; }
-      .mark { width: 36px; height: 36px; border-radius: 8px; background: var(--el-color-primary); color: #fff; display: grid; place-items: center; font-size: 14px; }
-      .tool-nav { display: flex; align-items: center; gap: 6px; min-height: 48px; padding: 6px 20px; border-bottom: 1px solid var(--el-border-color-light); background: var(--el-bg-color); overflow-x: auto; box-shadow: 0 1px 3px rgba(16, 24, 40, .03); }
-      .tool-nav a { flex: 0 0 auto; padding: 7px 14px; border-radius: 999px; color: var(--el-text-color-regular); font-size: 13.5px; font-weight: 600; text-decoration: none; transition: all .15s ease; }
-      .tool-nav a:hover { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
-      .tool-nav a.active { color: #fff; background: var(--el-color-primary); box-shadow: 0 2px 6px rgba(22, 119, 255, .28); }
-      main { padding: 18px var(--space-page) 36px; }
-
-      /* ---------- 卡片与表单 ---------- */
-      .card { background: var(--el-bg-color); border: 1px solid var(--el-border-color-light); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 18px; margin-bottom: 18px; }
-      h2 { margin: 0 0 14px; font-size: 18px; }
-      .grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 12px; }
-      .form-grid { display: grid; grid-template-columns: 2fr .7fr 1.5fr 1.5fr; gap: 12px; }
-      label { display: grid; gap: 6px; color: var(--el-text-color-secondary); font-size: 13px; }
-      .checks { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; color: var(--el-text-color-regular); }
-      .checks label { display: inline-flex; align-items: center; gap: 6px; color: var(--el-text-color-regular); }
-      .mode-note { margin-top: 10px; color: var(--el-text-color-secondary); font-size: 13px; line-height: 1.7; }
-      .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
-
-      /* ---------- 统计与表格 ---------- */
-      .metric { background: var(--el-bg-color); border: 1px solid var(--el-border-color-light); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 16px 18px; }
-      .metric span { color: var(--el-text-color-secondary); font-size: 13px; }
-      .metric strong { display: block; margin-top: 8px; font-size: 24px; font-variant-numeric: tabular-nums; }
-      .split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { padding: 10px 12px; border-bottom: 1px solid var(--el-border-color-lighter); text-align: left; font-size: 13px; vertical-align: top; }
-      th { background: var(--el-fill-color-light); color: var(--el-text-color-secondary); font-weight: 600; }
-
-      /* ---------- 状态与结果 ---------- */
-      .log { height: 300px; overflow: auto; background: #0f172a; color: #d7e5ff; border-radius: var(--radius-card); padding: 12px; font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; }
-      .status { color: var(--el-text-color-regular); min-height: 22px; }
-      .error { color: var(--text-danger); }
-      .ok { color: var(--text-success); }
-      .warn-text { color: var(--text-warning); }
-      .hint { color: var(--el-text-color-secondary); line-height: 1.8; }
-      .result-banner { display: none; border-width: 1px; border-style: solid; border-radius: var(--radius-card); padding: 16px 18px; margin-bottom: 18px; }
-      .result-banner h2 { margin-bottom: 6px; }
-      .result-banner p { margin: 0; color: var(--el-text-color-regular); line-height: 1.7; }
-      .result-banner.running { display: block; background: var(--el-color-primary-light-9); border-color: var(--el-color-primary-light-8); }
-      .result-banner.success { display: block; background: var(--el-color-success-light-9); border-color: var(--el-color-success-light-8); }
-      .result-banner.fail { display: block; background: var(--el-color-danger-light-9); border-color: var(--el-color-danger-light-8); }
-      .result-banner.running h2 { color: var(--el-color-primary-dark-2); }
-      .result-banner.success h2 { color: var(--el-color-success-dark-2); }
-      .result-banner.fail h2 { color: var(--text-danger); }
-
-      /* ---------- 远程目录预览 ---------- */
-      .remote-preview { display: none; }
-      .remote-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-      .pill { border: 1px solid var(--el-border-color-light); border-radius: var(--radius-pill); padding: 4px 10px; font-size: 12px; color: var(--el-text-color-regular); background: var(--el-fill-color-light); }
-      .remote-list { max-height: 220px; overflow: auto; border: 1px solid var(--el-border-color-lighter); border-radius: 6px; }
-
-      @media (max-width: 1100px) { .grid, .form-grid, .split { grid-template-columns: 1fr; } header { padding: 10px 18px; } main { padding: 18px; } }
-    </style>
+    <title>PbootCMS FTP 发布</title>
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header>
-      <div class="brand"><div class="mark">FTP</div><span>PbootCMS FTP 上传工具</span></div>
-      <div class="status" id="status">准备中</div>
+    <header class="app-header">
+      <div class="brand"><div class="mark">FTP</div><span>PbootCMS FTP 发布</span></div>
+      <div class="header-status" id="status">正在读取配置</div>
     </header>
     <nav class="tool-nav" id="toolNav" aria-label="项目工具导航"></nav>
+
     <main>
+      <nav class="page-switch" aria-label="FTP 功能">
+        <a class="active" href="/">发布管理</a>
+        <a href="/security.html">安全巡检</a>
+      </nav>
+
       <section class="card">
-        <h2>FTP 配置</h2>
+        <div class="section-heading">
+          <div><h1>FTP 发布配置</h1><p class="subtitle">管理连接、上传范围和覆盖前备份。</p></div>
+          <span class="status-badge" id="connectionBadge">尚未测试</span>
+        </div>
         <div class="form-grid">
-          <label>FTP 地址<input id="host" placeholder="ftp.example.com" /></label>
-          <label>端口<input id="port" type="number" value="21" /></label>
-          <label>用户名<input id="user" /></label>
-          <label>密码<input id="password" type="password" placeholder="留空则保留原密码" /></label>
-          <label>远程网站根目录<input id="remoteRoot" placeholder="/ 或 /wwwroot" /></label>
-          <label>加密方式<select id="secure"><option value="false">普通 FTP</option><option value="true">FTPS</option></select></label>
-          <label>上传范围<select id="uploadScope"><option value="site">网站数据与图片</option><option value="seo">仅 SEO 收录文件</option><option value="full">整站上传</option></select></label>
-          <label>上传模式<select id="uploadMode"><option value="quick">快速上传（日常推荐）</option><option value="full">完整校验（首次/大改）</option></select></label>
-          <label>最近图片天数<input id="recentImageDays" type="number" min="1" value="14" /></label>
+          <label class="field">FTP 地址<input id="host" placeholder="ftp.example.com" autocomplete="off" /></label>
+          <label class="field">端口<input id="port" type="number" min="1" max="65535" value="21" /></label>
+          <label class="field">用户名<input id="user" autocomplete="off" /></label>
+          <label class="field">密码<input id="password" type="password" placeholder="留空则保留原密码" autocomplete="new-password" /></label>
+          <label class="field">远程网站根目录<input id="remoteRoot" placeholder="/ 或 /wwwroot" /></label>
+          <label class="field">连接方式<select id="secure"><option value="false">普通 FTP</option><option value="true">FTPS 加密</option></select></label>
+          <label class="field">上传范围<select id="uploadScope"><option value="site">网站数据与图片</option><option value="seo">仅 SEO 收录文件</option><option value="full">整站上传</option></select></label>
+          <label class="field">上传模式<select id="uploadMode"><option value="quick">快速上传（日常）</option><option value="full">完整校验（首次/大改）</option></select></label>
+          <label class="field">最近图片天数<input id="recentImageDays" type="number" min="1" value="14" /></label>
+          <label class="field">单文件备份上限（MB）<input id="backupMaxFileSizeMb" type="number" min="1" value="20" /></label>
         </div>
         <div class="checks">
-          <label><input id="uploadDatabase" type="checkbox" checked /> 上传数据库</label>
-          <label><input id="uploadImages" type="checkbox" checked /> 上传图片目录</label>
-          <label><input id="skipSameSizeAssets" type="checkbox" checked /> 图片/二进制文件同大小自动跳过</label>
+          <label class="check"><input id="uploadDatabase" type="checkbox" checked />上传数据库</label>
+          <label class="check"><input id="uploadImages" type="checkbox" checked />上传图片目录</label>
+          <label class="check"><input id="skipSameSizeAssets" type="checkbox" checked />同大小二进制文件跳过</label>
+          <label class="check"><input id="backupBeforeOverwrite" type="checkbox" checked />覆盖前下载备份</label>
         </div>
-        <div class="mode-note" id="modeNote">快速上传只传数据库、sitemap/robots/IndexNow，以及最近改动的图片；完整校验才会检查全部图片。</div>
+        <div class="mode-note" id="modeNote"></div>
         <div class="toolbar">
           <button class="primary" id="saveBtn">保存配置</button>
           <button id="planBtn">刷新上传计划</button>
-          <button id="testBtn">测试 FTP 连接</button>
-          <button class="warn" id="uploadBtn">开始上传</button>
+          <button id="testBtn">测试连接</button>
+          <button class="warning" id="uploadBtn">开始发布</button>
+          <a class="hint" href="/security.html" style="margin-left:auto">前往安全巡检</a>
         </div>
       </section>
 
       <section class="card remote-preview" id="remotePreview">
-        <h2>远程目录预览</h2>
+        <div class="section-heading"><div><h2>远程目录预览</h2><p class="subtitle" id="remoteHint"></p></div></div>
         <div class="remote-meta">
-          <span class="pill" id="loginDir">登录目录：-</span>
-          <span class="pill" id="currentDir">当前目录：-</span>
+          <span class="meta-tag" id="loginDir">登录目录：-</span>
+          <span class="meta-tag" id="currentDir">当前目录：-</span>
         </div>
-        <div class="hint" id="remoteHint">测试 FTP 连接后，这里会显示当前远程目录是否像网站根目录。</div>
-        <div class="remote-list">
-          <table>
-            <thead><tr><th>名称</th><th style="width: 120px">类型</th><th style="width: 140px">大小</th></tr></thead>
-            <tbody id="remoteItems"></tbody>
-          </table>
+        <div class="table-wrap">
+          <table><thead><tr><th>名称</th><th>类型</th><th>大小</th></tr></thead><tbody id="remoteItems"></tbody></table>
         </div>
       </section>
 
-      <section class="grid">
-        <div class="metric"><span>文件数量</span><strong id="fileCount">-</strong></div>
-        <div class="metric"><span>总大小</span><strong id="totalSize">-</strong></div>
+      <section class="metrics" aria-label="上传统计">
+        <div class="metric"><span>计划文件</span><strong id="fileCount">-</strong></div>
+        <div class="metric"><span>计划大小</span><strong id="totalSize">-</strong></div>
         <div class="metric"><span>已上传</span><strong id="uploaded">0</strong></div>
         <div class="metric"><span>已跳过</span><strong id="skipped">0</strong></div>
+        <div class="metric safe"><span>覆盖前备份</span><strong id="backedUp">0</strong></div>
       </section>
 
-      <section class="result-banner" id="resultBanner">
-        <h2 id="resultTitle">上传状态</h2>
-        <p id="resultMessage">等待上传。</p>
-      </section>
+      <section class="result-banner" id="resultBanner"><h2 id="resultTitle">发布状态</h2><p id="resultMessage">等待发布。</p></section>
 
       <section class="split">
         <div class="card">
-          <h2>上传范围</h2>
-          <div class="hint" id="planMeta">会上传正式数据库、图片目录、sitemap.xml、robots.txt 和 IndexNow key。</div>
-          <table>
-            <thead><tr><th>分组</th><th>数量</th><th>大小</th></tr></thead>
-            <tbody id="groups"></tbody>
-          </table>
+          <div class="section-heading"><div><h2>上传范围</h2><p class="subtitle" id="planMeta"></p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>分组</th><th>数量</th><th>大小</th></tr></thead><tbody id="groups"></tbody></table></div>
         </div>
         <div class="card">
-          <h2>上传日志</h2>
-          <div class="log" id="logs"></div>
+          <div class="section-heading"><div><h2>发布日志</h2><p class="subtitle" id="backupPath">尚无覆盖备份。</p></div></div>
+          <div class="log" id="logs">等待操作。</div>
         </div>
       </section>
 
       <section class="card">
-        <h2>文件预览</h2>
-        <table>
-          <thead><tr><th>路径</th><th style="width: 120px">大小</th></tr></thead>
-          <tbody id="files"></tbody>
-        </table>
+        <div class="section-heading"><div><h2>文件预览</h2><p class="subtitle">最多显示前 300 个待发布文件。</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>路径</th><th>大小</th></tr></thead><tbody id="files"></tbody></table></div>
       </section>
     </main>
 
-    <script>
-      const $ = (id) => document.getElementById(id);
-      let busy = false;
-      let pollTimer = null;
-
-      function setStatus(text, isError = false) {
-        $("status").textContent = text;
-        $("status").className = isError ? "status error" : "status";
-      }
-
-      function setResult(kind, title, message) {
-        const banner = $("resultBanner");
-        banner.className = `result-banner ${kind || ""}`.trim();
-        $("resultTitle").textContent = title;
-        $("resultMessage").textContent = message;
-      }
-
-      async function api(path, options = {}) {
-        const response = await fetch(path, options);
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || "请求失败");
-        return data;
-      }
-
-      function formData() {
-        return {
-          host: $("host").value,
-          port: Number($("port").value || 21),
-          user: $("user").value,
-          password: $("password").value,
-          remoteRoot: $("remoteRoot").value || "/",
-          secure: $("secure").value === "true",
-          uploadScope: $("uploadScope").value,
-          uploadMode: $("uploadMode").value,
-          recentImageDays: Number($("recentImageDays").value || 14),
-          uploadDatabase: $("uploadDatabase").checked,
-          uploadImages: $("uploadImages").checked,
-          skipSameSizeAssets: $("skipSameSizeAssets").checked,
-        };
-      }
-
-      function setBusy(value) {
-        busy = value;
-        document.querySelectorAll("button").forEach((button) => (button.disabled = value));
-      }
-
-      function formatBytes(bytes) {
-        if (!bytes || bytes < 0) return "-";
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
-      }
-
-      function itemType(type) {
-        if (type === 2 || type === "directory") return "目录";
-        if (type === 1 || type === "file") return "文件";
-        return String(type || "-");
-      }
-
-      function renderRemotePreview(result) {
-        $("remotePreview").style.display = "block";
-        $("loginDir").textContent = `登录目录：${result.loginDir || "-"}`;
-        $("currentDir").textContent = `当前目录：${result.currentDir || "-"}`;
-        const items = result.items || [];
-        const names = items.map((item) => String(item.name || "").toLowerCase());
-        const looksLikeRoot = names.includes("data") && (names.includes("static") || names.includes("template") || names.includes("apps"));
-        $("remoteHint").className = looksLikeRoot ? "hint ok" : "hint warn-text";
-        $("remoteHint").textContent = looksLikeRoot
-          ? "当前远程目录看起来是 PbootCMS 网站根目录，可以先小心上传。"
-          : "当前目录不像网站根目录。如果上传失败或列表里没有 data/static/template，请把远程根目录改成 wwwroot、public_html、htdocs，或者留空/使用 / 再测试。";
-        $("remoteItems").innerHTML = items.length
-          ? items.map((item) => `<tr><td>${item.name}</td><td>${itemType(item.type)}</td><td>${formatBytes(item.size)}</td></tr>`).join("")
-          : `<tr><td colspan="3">当前目录为空，或者空间商不允许列目录。</td></tr>`;
-      }
-
-      async function loadConfig() {
-        const result = await api("/api/config");
-        const config = result.config;
-        $("toolNav").innerHTML = (result.navigation || [])
-          .map((item) => `<a class="${item.active ? "active" : ""}" href="${item.url}">${item.label}</a>`)
-          .join("");
-        $("host").value = config.host || "";
-        $("port").value = config.port || 21;
-        $("user").value = config.user || "";
-        $("password").placeholder = config.passwordSet ? "已保存，留空不修改" : "请输入 FTP 密码";
-        $("remoteRoot").value = config.remoteRoot || "/";
-        $("secure").value = String(Boolean(config.secure));
-        $("uploadScope").value = config.uploadScope || "site";
-        $("uploadMode").value = config.uploadMode || "quick";
-        $("recentImageDays").value = config.recentImageDays || 14;
-        $("uploadDatabase").checked = config.uploadDatabase !== false;
-        $("uploadImages").checked = config.uploadImages !== false;
-        $("skipSameSizeAssets").checked = config.skipSameSizeAssets !== false;
-      }
-
-      async function saveConfig() {
-        setStatus("正在保存 FTP 配置...");
-        await api("/api/config", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData()),
-        });
-        $("password").value = "";
-        setStatus("FTP 配置已保存");
-        await refreshPlan();
-      }
-
-      async function refreshPlan() {
-        setStatus("正在读取本地文件...");
-        const plan = await api("/api/plan");
-        $("fileCount").textContent = plan.total;
-        $("totalSize").textContent = plan.totalSizeText;
-        const modeText = plan.uploadScope === "seo"
-          ? "仅 SEO 收录文件：sitemap、robots、IndexNow key、验证文件"
-          : plan.uploadScope === "full"
-            ? "整站上传：代码始终覆盖，图片等同大小跳过"
-            : plan.uploadMode === "full" ? "完整校验：检查全部图片" : `快速上传：只选最近 ${plan.recentImageDays} 天图片`;
-        $("planMeta").textContent = `本地根目录：${plan.localRoot}，远程根目录：${plan.remoteRoot}，${modeText}。${plan.truncated ? "文件预览只显示前 300 条。" : ""}`;
-        $("groups").innerHTML = plan.groups.map((item) => `<tr><td>${item.name}</td><td>${item.count}</td><td>${item.sizeText}</td></tr>`).join("");
-        $("files").innerHTML = plan.files.map((item) => `<tr><td>${item.relativePath}</td><td>${item.sizeText}</td></tr>`).join("");
-        setStatus(`上传计划完成：${plan.total} 个文件，${plan.totalSizeText}`);
-      }
-
-      async function testConnection() {
-        setStatus("正在测试 FTP 连接...");
-        const result = await api("/api/test", { method: "POST" });
-        renderRemotePreview(result);
-        setStatus(result.message || "FTP 连接成功");
-      }
-
-      async function startUpload() {
-        const scope = $("uploadScope").value;
-        const question = scope === "seo"
-          ? "确定只上传 sitemap.xml、robots.txt 和根目录收录/验证文件吗？"
-          : scope === "full"
-            ? "确定整站上传吗？代码/模板会覆盖线上同路径文件，图片/视频等同大小会自动跳过。"
-            : "确定开始上传到 FTP 吗？数据库会覆盖线上同路径文件。";
-        if (!confirm(question)) return;
-        setStatus("正在启动上传...");
-        setResult("running", "上传准备中", "正在连接 FTP 并准备上传文件。");
-        await api("/api/upload", { method: "POST" });
-        setStatus("上传已开始");
-        startPolling();
-      }
-
-      async function refreshStatus() {
-        const state = await api("/api/upload/status");
-        $("uploaded").textContent = state.uploaded;
-        $("skipped").textContent = state.skipped;
-        $("logs").textContent = (state.logs || []).join("\n");
-        $("logs").scrollTop = $("logs").scrollHeight;
-        if (state.error) {
-          setStatus(`上传失败：${state.error}`, true);
-          setResult("fail", "上传失败", `已上传 ${state.uploaded} 个，已跳过 ${state.skipped} 个。失败原因：${state.error}`);
-        } else if (state.running) {
-          const done = state.uploaded + state.skipped;
-          setStatus(`上传中：${done}/${state.total} ${state.current || ""}`);
-          setResult("running", `上传中：${done}/${state.total}`, state.current ? `当前文件：${state.current}` : "正在上传，请稍等。");
-        } else if (state.finishedAt) {
-          setStatus(`上传成功：上传 ${state.uploaded}，跳过 ${state.skipped}`);
-          setResult("success", "上传成功", `本次上传完成：上传 ${state.uploaded} 个文件，跳过 ${state.skipped} 个同大小文件。`);
-        }
-        if (!state.running && pollTimer) {
-          clearInterval(pollTimer);
-          pollTimer = null;
-          setBusy(false);
-        }
-      }
-
-      function startPolling() {
-        setBusy(true);
-        refreshStatus();
-        pollTimer = setInterval(refreshStatus, 1200);
-      }
-
-      $("saveBtn").onclick = () => saveConfig().catch((error) => setStatus(error.message, true));
-      $("planBtn").onclick = () => refreshPlan().catch((error) => setStatus(error.message, true));
-      $("testBtn").onclick = () => testConnection().catch((error) => setStatus(error.message, true));
-      $("uploadBtn").onclick = () => startUpload().catch((error) => { setBusy(false); setStatus(error.message, true); });
-      $("uploadScope").onchange = () => {
-        const scope = $("uploadScope").value;
-        const seoOnly = scope === "seo";
-        const fullSite = scope === "full";
-        $("uploadMode").disabled = seoOnly || fullSite;
-        $("recentImageDays").disabled = seoOnly || fullSite;
-        $("uploadDatabase").disabled = seoOnly || fullSite;
-        $("uploadImages").disabled = seoOnly || fullSite;
-        $("skipSameSizeAssets").disabled = seoOnly;
-        $("modeNote").textContent = seoOnly
-          ? "仅上传 sitemap.xml、robots.txt、IndexNow key（*.txt）、搜索引擎验证文件（*.html/*.xml）等收录文件。"
-          : fullSite
-            ? "整站上传：代码/模板/文本文件（php/html/js/css/json/xml/txt 等）始终覆盖上传；图片/视频/字体/压缩包等二进制文件在远端同大小时自动跳过。"
-            : "快速上传只传数据库、sitemap/robots/IndexNow，以及最近改动的图片；完整校验才会检查全部图片。";
-      };
-
-      loadConfig().then(() => {
-        $("uploadScope").onchange();
-        return refreshPlan();
-      }).then(refreshStatus).catch((error) => setStatus(error.message, true));
-    </script>
+    <script src="/common.js"></script>
+    <script src="/publish.js"></script>
   </body>
 </html>

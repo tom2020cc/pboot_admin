@@ -17,8 +17,13 @@ logs/
 .env.local
 seo.config.json
 ftp.config.json
+security-baseline.json
+security-scan-history.json
+security-evidence/
 ai.config.json
 google-submitted.json
+google-inspections.json
+search-index-coverage.json
 .runtime.json
 git.token
 *.token
@@ -26,3 +31,4 @@ git.token
 # 本地上传与备份
 uploads/
 backups/
+tmp/

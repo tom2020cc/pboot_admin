@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title desc">
+  <title id="title">Yandex Webmaster 配置与提交流程</title>
+  <desc id="desc">添加站点、HTML 验证、OAuth、Sitemap 和 IndexNow 的流程。</desc>
+  <rect width="1280" height="360" fill="#fff7f7"/>
+  <rect x="32" y="28" width="1216" height="304" rx="8" fill="#fff" stroke="#edd8d8"/>
+  <text x="64" y="76" fill="#311b1b" font-family="Microsoft YaHei, Arial" font-size="26" font-weight="700">Yandex：Webmaster 管理 + IndexNow 主动通知</text>
+  <text x="64" y="106" fill="#796262" font-family="Microsoft YaHei, Arial" font-size="16">HTML 文件证明站点所有权，OAuth 用于 API 数据和 Sitemap，IndexNow 用于更新通知。</text>
+  <g font-family="Microsoft YaHei, Arial">
+    <g transform="translate(64 142)"><rect width="210" height="142" rx="6" fill="#fff0f0" stroke="#efaaaa"/><circle cx="30" cy="31" r="17" fill="#e53935"/><text x="30" y="38" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">1</text><text x="20" y="78" fill="#351f1f" font-size="18" font-weight="700">添加真实站点</text><text x="20" y="108" fill="#725f5f" font-size="14">语言子域名分别管理</text></g>
+    <path d="M288 213h32" stroke="#b59191" stroke-width="2"/><path d="m314 205 10 8-10 8" fill="none" stroke="#b59191" stroke-width="2"/>
+    <g transform="translate(334 142)"><rect width="210" height="142" rx="6" fill="#fffafa" stroke="#e5cccc"/><circle cx="30" cy="31" r="17" fill="#e53935"/><text x="30" y="38" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">2</text><text x="20" y="78" fill="#351f1f" font-size="18" font-weight="700">HTML 文件验证</text><text x="20" y="108" fill="#725f5f" font-size="14">保存后通过 FTP 上传</text></g>
+    <path d="M558 213h32" stroke="#b59191" stroke-width="2"/><path d="m584 205 10 8-10 8" fill="none" stroke="#b59191" stroke-width="2"/>
+    <g transform="translate(604 142)"><rect width="210" height="142" rx="6" fill="#fffafa" stroke="#e5cccc"/><circle cx="30" cy="31" r="17" fill="#e53935"/><text x="30" y="38" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">3</text><text x="20" y="78" fill="#351f1f" font-size="18" font-weight="700">配置 OAuth</text><text x="20" y="108" fill="#725f5f" font-size="14">连接 Webmaster API</text></g>
+    <path d="M828 213h32" stroke="#b59191" stroke-width="2"/><path d="m854 205 10 8-10 8" fill="none" stroke="#b59191" stroke-width="2"/>
+    <g transform="translate(874 142)"><rect width="160" height="142" rx="6" fill="#fffafa" stroke="#e5cccc"/><circle cx="30" cy="31" r="17" fill="#e53935"/><text x="30" y="38" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">4</text><text x="20" y="78" fill="#351f1f" font-size="18" font-weight="700">Sitemap</text><text x="20" y="108" fill="#725f5f" font-size="14">提交站点地图</text></g>
+    <path d="M1048 213h32" stroke="#b59191" stroke-width="2"/><path d="m1074 205 10 8-10 8" fill="none" stroke="#b59191" stroke-width="2"/>
+    <g transform="translate(1094 142)"><rect width="122" height="142" rx="6" fill="#edf9f1" stroke="#8ad2a4"/><circle cx="30" cy="31" r="17" fill="#218b4b"/><text x="30" y="38" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">5</text><text x="20" y="78" fill="#173628" font-size="17" font-weight="700">IndexNow</text><text x="20" y="108" fill="#567064" font-size="13">更新即通知</text></g>
+  </g>
+</svg>

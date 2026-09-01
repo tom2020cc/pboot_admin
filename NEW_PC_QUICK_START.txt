@@ -8,12 +8,13 @@ Pboot Admin 新电脑快速启动
 第 3 步：双击 01-config.cmd。
 第 4 步：确认网站根目录和 data 目录中的数据库，点击“一键自检”。
 第 5 步：自检全部正常后保存配置。
-第 6 步：双击 02-start.cmd，保持前后端窗口打开。
+第 6 步：双击 07-start-all.cmd，保持“Pboot Admin Backend”后端窗口打开。
 
 首次没有账号：双击 03-create-admin.cmd。
 停止本项目端口：双击 04-stop-ports.cmd。
-启动 SEO 工具：双击 05-start-seo-tool.cmd。
-启动 FTP 工具：双击 06-start-ftp-tool.cmd。
+只启动管理后台：双击 02-start.cmd。
+只启动 SEO 工具：双击 05-start-seo-tool.cmd。
+只启动 FTP 工具：双击 06-start-ftp-tool.cmd。
 
 重要：
 1. 每个网站复制一套独立的 pboot_admin，不要跨网站共用。
@@ -21,3 +22,4 @@ Pboot Admin 新电脑快速启动
 3. 同步前核对页面显示的网站根目录和数据库路径。
 4. API Key、FTP 密码输入框留空表示保留原值。
 5. 完整教程请打开 docs\NEW_PC_SETUP_ZH.md。
+6. 配置向导只在修改配置时运行，日常总启动不会再启动它。

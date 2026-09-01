@@ -35,6 +35,7 @@ import { html } from "@codemirror/lang-html";
 import { ElMessage } from "element-plus";
 import { getImageUploadSizeError, getUploadUrl, normalizeHtmlImageUrls, uploadImages } from "@/api/uploads";
 import { getErrorMessage } from "@/utils/request";
+import { Picture } from "@element-plus/icons-vue";
 
 const model = defineModel<string>({ required: true });
 

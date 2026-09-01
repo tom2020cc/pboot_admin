@@ -73,6 +73,31 @@ export const ensurePageTranslations = (translations: PageTranslation[] = []) => 
   }));
 };
 
+export const buildPageUrlName = (sourceUrlName: string, targetLang: string, fallbackTitle: string) => {
+  const prefix = targetLang === DEFAULT_NEWS_LANG ? "cn" : String(targetLang || "cn").toLowerCase();
+  const normalized = String(sourceUrlName || fallbackTitle || "content")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\/[^/]+/i, "")
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/^(?:cn|en|es|fr|ru|ar|pt)-/i, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 56);
+  return `${prefix}-${normalized || "content"}`;
+};
+
+export const findMissingPageSeoFields = (translation: PageTranslation) => {
+  const fields: Array<[keyof PageTranslation, string]> = [
+    ["title", "标题"],
+    ["urlName", "URL 名称"],
+    ["keywords", "关键词"],
+    ["description", "描述"],
+    ["content", "正文"],
+  ];
+  return fields.filter(([field]) => !String(translation[field] || "").trim()).map(([, label]) => label);
+};
+
 export const createEmptyPageForm = (): PageForm => ({
   menuId: 0,
   title: "",

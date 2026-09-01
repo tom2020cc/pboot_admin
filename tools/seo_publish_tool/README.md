@@ -11,10 +11,16 @@
 ## 主要功能
 
 - 检查栏目、单页、新闻和产品的 SEO 问题。
+- 实际抓取本地或线上页面，检查 HTTP 响应、标题、描述、Canonical、H1、收录指令、图片 ALT、Hreflang、Open Graph、结构化数据和移动端配置。
+- 计算可解释的 SEO 健康度，并显示无问题记录和待关注记录数量。
+- SEO 问题可按风险、语言、内容类型和关键词筛选，并可导出 CSV 或复制诊断摘要。
 - 视频不参与 SEO 检查，新闻不检查 URL 名称。
 - 生成网站根目录下的 `sitemap.xml` 和 `robots.txt`。
 - 检查线上 sitemap、robots 是否公开可访问。
 - 打开 Google Search Console 的 Sitemap 和网址检查页面。
+- 使用 Google Indexing API 按每日配额分批提交 URL，保存成功记录并在下次从未提交 URL 继续。
+- 读取 Search Console 中的 Sitemap 处理状态和搜索表现，并按页面价值建立收录诊断优先队列。
+- 批量调用 URL Inspection 查询真实索引状态，缓存结果并给出 robots、noindex、抓取、404 和 canonical 修复建议。
 - 生成并提交 IndexNow Key，通知 Bing 等支持 IndexNow 的搜索引擎。
 - 在一个页面完成 SEO 文件生成、仅上传 SEO 文件、等待 FTP 完成和线上校验。
 - 显示当前项目根目录、数据库、公开域名和端口，防止误操作其他网站。
@@ -22,7 +28,7 @@
 ## 推荐操作顺序
 
 1. 先查看页面顶部的“当前项目身份”，确认站点名称、网站根目录、数据库、真实域名和端口都属于当前网站。
-2. 点击“一键准备 Google 提交”。工具会重新生成 SEO 文件、调用当前网站自己的 FTP 配置仅上传 SEO 文件，并等待上传结束。
+2. 点击“一键准备 Google Sitemap”。工具会重新生成 SEO 文件、调用当前网站自己的 FTP 配置仅上传 SEO 文件，并等待上传结束。
 3. 等线上检查显示 `sitemap.xml` 与 `robots.txt` 都是 HTTP 200，Sitemap XML 有效且 URL 数量大于 0。
 4. 新网站或第一次部署时，复制 Sitemap 线上地址，打开 Google Search Console 的 Sitemaps 页面提交一次。
 5. 新增重要新闻、产品或大幅修改页面后，复制真实 URL，打开“网址检查”，粘贴 URL 后点击“请求编入索引”。
@@ -30,7 +36,13 @@
 
 ## Google 收录流程
 
-本工具不再使用 Google Cloud、服务账号、JSON 密钥或 Search Console API。普通新闻和产品页面没有可以绕过 Search Console、直接强制 Google 收录的公开 API。
+生成 Sitemap、检查线上文件和手动打开 Search Console 都不需要 Google Cloud 或服务账号。普通新闻和产品页面没有可以绕过 Search Console、直接强制 Google 收录的公开 API。
+
+如需在工具内提交 Sitemap、调用 URL Inspection 或使用 Indexing API 断点续传，可以配置 Google 服务账号。同一份账号会按功能申请不同的访问令牌。
+
+Google Cloud 中必须分别启用 **Search Console API** 和 **Indexing API**。只启用 Indexing API 时，一键通知仍可使用，但 Sitemap 状态、搜索表现和 URL Inspection 会返回 403；页面中的“启用 Search Console API”可直达对应 API 页面。
+
+Google 官方当前只支持将 Indexing API 用于带 `JobPosting` 或带 `BroadcastEvent` 的直播页面。工具保留完整提交能力并显示该提示；普通新闻和产品页仍应以 Sitemap、内部链接和 Search Console 为主。
 
 推荐流程：
 
@@ -42,6 +54,22 @@
 6. 重要的新页面或大幅修改的页面，可复制真实 URL，打开 Search Console 的网址检查，粘贴后点击“请求编入索引”。
 
 Sitemap 提交成功只表示 Google 已收到地址，不保证立即抓取或收录。持续可访问的页面、正确的内部链接、稳定的服务器和高质量内容更重要。
+
+### Google Indexing 断点续传
+
+1. 页面会读取 `google-submitted.json`，自动跳过已有成功记录的 URL。
+2. 默认每日提交限额为 200，可在页面保存项目自己的本地限额。
+3. 每个实际 publish 请求都会立即写入今日计数，成功后同时写入 URL 提交记录。
+4. 遇到 429、所有权 403、本地配额耗尽或手动停止时会保留进度；配额重置后再次点击即可继续。
+5. 也可运行 `npm run submit:google` 执行一次无人值守续传，脚本只选择未提交 URL，并按今日剩余额度截断；先运行 `node auto-submit-google.js --dry-run` 可做不消耗配额的演练。
+
+### Search Console 收录诊断
+
+1. “读取 Sitemap 处理状态”会显示 Google 最后读取时间、待处理状态、错误、警告和 Sitemap 中的 URL 数量。
+2. “读取搜索表现”会读取近 7、28 或 90 天的页面点击、曝光、CTR 和平均位置；有搜索曝光的页面会提高诊断优先级。
+3. 批量诊断优先检查各语言首页、栏目页、高 Sitemap 优先级页面、近期更新页面和有搜索曝光页面。
+4. 每个成功的 URL Inspection 结果会写入本地 `google-inspections.json`，包含真实索引状态、抓取时间、robots、canonical 和下一步建议；停止或刷新后可从未检查 URL 继续。
+5. 默认缓存有效期为 7 天，可改为 14、30 天或总是重查。Google 官方 URL Inspection 单站配额为 2000 次/天、600 次/分钟，工具单批最多 100 条并控制请求速度。
 
 ### Google 状态含义
 
@@ -113,7 +141,7 @@ IndexNow 通知 Bing 等支持该协议的搜索引擎，不等于提交给 Goog
 3. 填写新网站的本地测试地址、真实线上地址和独立端口。
 4. 配置该网站自己的 FTP，不要复制旧网站保存的密码。
 5. 启动后先核对 SEO 页面“当前项目身份”；任何一项仍显示旧网站时立即停止操作并重新配置。
-6. 点击“一键准备 Google 提交”，确认生成文件、FTP 上传和线上检查都针对新域名。
+6. 点击“一键准备 Google Sitemap”，确认生成文件、FTP 上传和线上检查都针对新域名。
 7. 在新域名自己的 Search Console 资源中提交 Sitemap。
 
 建议同一台电脑上为不同网站分配不同端口，例如后台前端 `5173/5174`、NestJS `5008/5009`、SEO 工具 `5288/5290`、FTP 工具 `5289/5291`。页面显示的配置端口和实际运行端口必须一致。

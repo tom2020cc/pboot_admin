@@ -267,7 +267,7 @@ const loadMenus = async () => {
 
 const loadTranslationModels = async () => {
   const res = await getProductTranslationModels();
-  translationModels.value = [...res.data].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+  translationModels.value = [...res.data];
   const preferred = translationModels.value.find((item) => item.available);
   translationModel.value = preferred?.value || "";
 };

@@ -120,7 +120,7 @@ export const getMenuTranslationModels = () => {
   return request<MenuTranslationModel[]>({ method: "GET", url: "/menus/translation-models" });
 };
 
-export const translateMenusFromChinese = (model = "google-free") => {
+export const translateMenusFromChinese = (model: string) => {
   return request<MenuTranslateResult>({
     method: "POST",
     url: "/menus/translate-all",

@@ -28,7 +28,7 @@
               >
                 生成{{ getLanguageName(item.lang) }}
               </el-button>
-              <span class="translate-tip">从中文标签页的标题、副标题、关键词、描述和正文生成，URL 名称保持不变。</span>
+              <span class="translate-tip">从中文标签页生成内容；空白 URL 会自动补成当前语言前缀。</span>
             </div>
 
             <el-form-item label="页面标题" label-width="86px" required>
@@ -77,7 +77,9 @@ import type { MenuItem } from "@/api/menus";
 import {
   DEFAULT_NEWS_LANG,
   NEWS_LANGUAGES,
+  buildPageUrlName,
   ensurePageTranslations,
+  findMissingPageSeoFields,
   getPageTranslationModels,
   translatePageDraft,
   type PageForm,
@@ -107,7 +109,8 @@ const formRef = ref<FormInstance>();
 const activeLang = ref(DEFAULT_NEWS_LANG);
 const translatingLang = ref("");
 const translatingAll = ref(false);
-const translationModel = ref("google-free");
+const translationProgress = ref("");
+const translationModel = ref("");
 const translationModels = ref<TranslationModel[]>([]);
 const hasAvailableTranslationModel = computed(() => translationModels.value.some((item) => item.available));
 
@@ -145,7 +148,7 @@ const syncDefaultFields = () => {
 const loadTranslationModels = async () => {
   try {
     const res = await getPageTranslationModels();
-    translationModels.value = [...res.data].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+    translationModels.value = [...res.data];
     const preferredTranslation = translationModels.value.find((item) => item.available);
     if (preferredTranslation) translationModel.value = preferredTranslation.value;
   } catch (e) {
@@ -175,6 +178,7 @@ const generateTranslation = async (target: PageTranslation, showSuccess = true) 
     });
 
     target.title = res.data.title;
+    target.urlName = target.urlName?.trim() || buildPageUrlName(source.urlName, String(target.lang), res.data.title);
     target.subtitle = res.data.subtitle;
     target.keywords = res.data.keywords || target.keywords || res.data.title;
     target.description = res.data.summary;
@@ -195,8 +199,11 @@ const generateAllTranslations = async () => {
   if (!targets.length) return false;
 
   translatingAll.value = true;
+  translationProgress.value = `0/${targets.length}`;
   try {
-    for (const target of targets) {
+    for (let index = 0; index < targets.length; index += 1) {
+      const target = targets[index];
+      translationProgress.value = `${index + 1}/${targets.length}`;
       activeLang.value = String(target.lang);
       const success = await generateTranslation(target, false);
       if (!success) return false;
@@ -206,7 +213,20 @@ const generateAllTranslations = async () => {
     return true;
   } finally {
     translatingAll.value = false;
+    translationProgress.value = "";
   }
+};
+
+const validateSeoCompleteness = () => {
+  syncTranslations();
+  for (const translation of form.value.translations || []) {
+    const missing = findMissingPageSeoFields(translation);
+    if (!missing.length) continue;
+    activeLang.value = String(translation.lang);
+    ElMessage.warning(`${getLanguageName(String(translation.lang))}缺少：${missing.join("、")}`);
+    return false;
+  }
+  return true;
 };
 
 watch(
@@ -237,6 +257,8 @@ defineExpose({
   syncTranslations,
   syncDefaultFields,
   translatingAll,
+  translationProgress,
+  validateSeoCompleteness,
 });
 </script>
 

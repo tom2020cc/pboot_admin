@@ -130,6 +130,12 @@ export class SyncGuardService {
 
   private async countTable(tableName: string) {
     try {
+      if (tableName === 'news') {
+        const rows = await this.dataSource.query(
+          'select count(*) as count from news n where exists (select 1 from news_translations t where t.newsId=n.id)',
+        );
+        return Number(rows?.[0]?.count ?? rows?.[0]?.COUNT ?? 0);
+      }
       const rows = await this.dataSource.query(`select count(*) as count from "${tableName}"`);
       return Number(rows?.[0]?.count ?? rows?.[0]?.COUNT ?? 0);
     } catch {

@@ -13,7 +13,7 @@
           :disabled="loading || syncing"
           @click="translateAllLanguages"
         >
-          {{ translatingAll ? "正在顺序翻译..." : "一键翻译" }}
+          {{ translatingAll ? `正在翻译 ${translationProgress}` : "一键翻译" }}
         </el-button>
         <el-button type="success" :loading="syncing" :disabled="loading || translatingAll" @click="syncAllLanguages">
           一键同步
@@ -33,9 +33,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import PageForm from "@/components/PageForm.vue";
 import { getAll, type MenuItem } from "@/api/menus";
 import {
@@ -56,6 +56,7 @@ const translatingAll = ref(false);
 const menus = ref<MenuItem[]>([]);
 const pageFormRef = ref<InstanceType<typeof PageForm> | null>(null);
 const form = ref<PageFormType>(createEmptyPageForm());
+const translationProgress = computed(() => pageFormRef.value?.translationProgress || "");
 
 const loadPage = async () => {
   loading.value = true;
@@ -98,6 +99,12 @@ const submit = async () => {
 
 const translateAllLanguages = async () => {
   if (translatingAll.value) return;
+  const confirmed = await ElMessageBox.confirm(
+    "将按顺序调用当前模型生成其余 6 种语言，可能产生 API 费用。确认开始吗？",
+    "一键翻译单页",
+    { confirmButtonText: "开始翻译", cancelButtonText: "取消", type: "warning" },
+  ).catch(() => false);
+  if (!confirmed) return;
   translatingAll.value = true;
   try {
     await pageFormRef.value?.generateAllTranslations();
@@ -107,6 +114,7 @@ const translateAllLanguages = async () => {
 };
 
 const syncAllLanguages = async () => {
+  if (!pageFormRef.value?.validateSeoCompleteness()) return;
   syncing.value = true;
   try {
     pageFormRef.value?.syncTranslations();
@@ -127,6 +135,8 @@ onMounted(async () => {
   menus.value = res.data;
   await loadPage();
 });
+
+watch(() => route.params.id, () => loadPage());
 </script>
 
 <style scoped>

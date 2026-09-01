@@ -6,7 +6,7 @@
 
 1. 安装 Node.js LTS。安装时保持 `Add to PATH`（添加到环境变量）选中。
 2. 把整个 `pboot_admin` 文件夹放到目标 PbootCMS 网站根目录，然后依次双击 `00-install.cmd`、`01-config.cmd`。
-3. 在配置向导中确认网站目录、数据库和端口，保存后双击 `02-start.cmd`。
+3. 在配置向导中确认网站目录、数据库和端口，保存后双击 `07-start-all.cmd`，并保持后端终端打开。
 
 推荐目录结构：
 
@@ -22,6 +22,7 @@ D:\phpstudy_pro\WWW\example.com\
     00-install.cmd
     01-config.cmd
     02-start.cmd
+    07-start-all.cmd
 ```
 
 每个网站复制一套独立的 `pboot_admin`。不要让多个网站共用同一个管理项目。
@@ -65,7 +66,9 @@ node -v
 
 ### 4. 启动管理项目
 
-双击 `02-start.cmd`。脚本会分别启动后端和前端，并打开管理页面。两个命令行窗口需要保持打开。
+双击 `07-start-all.cmd`。后端会在一个可见终端中运行，前端、SEO 和 FTP 在后台运行。只需要保持标题为 `Pboot Admin Backend` 的后端终端打开。
+
+只使用管理后台、不需要 SEO 和 FTP 时，可以双击 `02-start.cmd`。
 
 首次没有登录账号时，双击 `03-create-admin.cmd` 创建管理员。
 
@@ -76,7 +79,7 @@ node -v
 3. 不要从旧项目复制 `backend/.env`、`backend/dev.sqlite`、SEO/FTP 私密配置或数据库备份。
 4. 运行 `00-install.cmd` 和 `01-config.cmd`。
 5. 配置向导会自动寻找当前网站 `data` 目录中最近更新的 `.db` 文件。
-6. 保存配置并运行 `02-start.cmd`。
+6. 保存配置并运行 `07-start-all.cmd`。
 7. 在管理后台先核对栏目语言和数量，再按“栏目、新闻、单页、视频、产品”的顺序从 PB 获取数据。
 
 如果网站只有两种语言，系统会以该网站数据库中真实存在的语言为准，不要求固定七种语言。
@@ -149,4 +152,4 @@ corepack prepare pnpm@9.15.4 --activate
 
 ## 日常使用
 
-以后通常只需双击 `02-start.cmd`。只有更换网站数据库、域名、端口、AI Key 或 FTP 配置时，才重新运行 `01-config.cmd`。
+以后通常只需双击 `07-start-all.cmd`，并保持后端终端打开。只有更换网站数据库、域名、端口、AI Key 或 FTP 配置时，才重新运行 `01-config.cmd`；配置向导不会随日常启动常驻。

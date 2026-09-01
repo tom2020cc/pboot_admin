@@ -34,6 +34,7 @@ import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { getUsers, removeUser, type UserInfo } from "@/api/users";
 import { getErrorMessage } from "@/utils/request";
+import { Plus } from "@element-plus/icons-vue";
 
 const router = useRouter();
 const users = ref<UserInfo[]>([]);

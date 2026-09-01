@@ -1,8 +1,9 @@
 @echo off
 setlocal
 set "ROOT=%~dp0"
+set "PROJECT_ROOT=%ROOT:~0,-1%"
 set "BACKEND_PORT=5000"
-set "FRONTEND_PORT=5173"
+set "FRONTEND_PORT=5178"
 set "CONFIG_WIZARD_PORT=5190"
 if exist "%ROOT%backend\.env" (
   for /f "usebackq tokens=1,* delims==" %%A in ("%ROOT%backend\.env") do (
@@ -23,13 +24,10 @@ REM Tip: for the cleanest backend shutdown (lets it finish writing dev.sqlite),
 REM press Ctrl+C (or close that window) in the BACKEND window. The backend now
 REM catches that and flushes before exiting. This script can only force-kill
 REM (Windows has no way to signal another console app gracefully from a script).
-echo Stopping backend/frontend/config-wizard on ports %BACKEND_PORT% / %FRONTEND_PORT% / %CONFIG_WIZARD_PORT%...
+echo Stopping this project's backend/frontend on ports %BACKEND_PORT% / %FRONTEND_PORT%...
 for %%P in (%BACKEND_PORT% %FRONTEND_PORT% %CONFIG_WIZARD_PORT%) do (
-  for /f "tokens=5" %%A in ('netstat -ano ^| findstr /R /C:":%%P .*LISTENING"') do (
-    echo Killing PID %%A on port %%P
-    taskkill /PID %%A /F >nul 2>&1
-  )
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\project-port.ps1" -Port %%P -Root "%PROJECT_ROOT%" -Mode Stop
 )
 
 echo Done.
-timeout /t 3 /nobreak >nul
+powershell -NoProfile -Command "Start-Sleep -Seconds 3"

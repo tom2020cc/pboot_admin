@@ -34,6 +34,7 @@ import type { UploadUserFile } from "element-plus";
 import { ElMessage } from "element-plus";
 import { uploadImages, getUploadUrl, validateImageUploadFiles } from "@/api/uploads";
 import { getErrorMessage } from "@/utils/request";
+import { Plus } from "@element-plus/icons-vue";
 
 const model = defineModel<string[]>({ required: true });
 const fileList = ref<UploadUserFile[]>([]);

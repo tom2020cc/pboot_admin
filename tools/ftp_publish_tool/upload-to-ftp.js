@@ -45,6 +45,17 @@ function readConfig() {
     uploadMode: "quick",
     recentImageDays: 14,
     skipSameSizeAssets: true,
+    backupBeforeOverwrite: true,
+    backupMaxFileSizeMb: 20,
+    securityMonitorEnabled: false,
+    securityIntervalMinutes: 360,
+    securityFullScanIntervalDays: 7,
+    securityMaxFileSizeKb: 2048,
+    securityMaxFiles: 30000,
+    securityTimeoutMs: 60000,
+    securityReconnectEvery: 60,
+    securityMaxRetries: 4,
+    securityRetryDelayMs: 750,
     confirmBeforeUpload: true,
     dryRun: false,
     ...config,
@@ -261,14 +272,28 @@ function isRetryableFtpError(error) {
   );
 }
 
+function safeBackupPath(root, relativePath) {
+  const resolvedRoot = path.resolve(root);
+  const target = path.resolve(resolvedRoot, toPosix(relativePath));
+  if (target !== resolvedRoot && !target.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new Error(`Unsafe backup path: ${relativePath}`);
+  }
+  return target;
+}
+
 async function uploadFiles(config, files, hooks = {}) {
   let client = null;
   let baseDir = "";
   let uploaded = 0;
   let skipped = 0;
+  let backedUp = 0;
   let operations = 0;
   const reconnectEvery = Number(config.reconnectEvery || 80);
   const maxRetries = Number(config.maxRetries || 4);
+  const backupEnabled = config.backupBeforeOverwrite !== false;
+  const backupMaxBytes = Math.max(0, Number(config.backupMaxFileSizeMb || 20)) * 1024 * 1024;
+  const backupStamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupRoot = path.join(__dirname, "backups", "ftp-overwrite", backupStamp);
 
   async function closeClient() {
     if (!client) return;
@@ -282,8 +307,8 @@ async function uploadFiles(config, files, hooks = {}) {
 
   async function connect(reason) {
     await closeClient();
-    client = new ftp.Client(Number(config.timeoutMs || 45000));
-    client.ftp.verbose = Boolean(config.verbose);
+    client = hooks.clientFactory ? hooks.clientFactory() : new ftp.Client(Number(config.timeoutMs || 45000));
+    if (client.ftp) client.ftp.verbose = Boolean(config.verbose);
     await client.access({
       host: config.host,
       port: Number(config.port || 21),
@@ -337,20 +362,42 @@ async function uploadFiles(config, files, hooks = {}) {
             await connectWithRetry("scheduled", { index: index + 1, total: files.length, file });
           }
           const remotePath = joinRemote(config.remoteRoot, file.relativePath);
+          let remoteSize = null;
           if (config.skipSameSizeAssets && isBinaryAssetFile(file.relativePath)) {
             try {
               if (baseDir) await client.cd(baseDir);
-              const remoteSize = await client.size(remotePath);
+              remoteSize = await client.size(remotePath);
               if (remoteSize === file.size) {
                 skipped += 1;
                 operations += 1;
-                hooks.onProgress?.({ index: index + 1, total: files.length, action: "skipped", file, uploaded, skipped });
+                hooks.onProgress?.({ index: index + 1, total: files.length, action: "skipped", file, uploaded, skipped, backedUp });
                 console.log(`[${index + 1}/${files.length}] Skipped ${file.relativePath} (same size)`);
                 break;
               }
             } catch (error) {
               if (isRetryableFtpError(error)) throw error;
               // Remote file does not exist or size cannot be read; upload it.
+            }
+          }
+          if (backupEnabled && remoteSize === null) {
+            try {
+              if (baseDir) await client.cd(baseDir);
+              remoteSize = await client.size(remotePath);
+            } catch (error) {
+              if (isRetryableFtpError(error)) throw error;
+              remoteSize = null;
+            }
+          }
+          if (backupEnabled && remoteSize !== null) {
+            if (backupMaxBytes > 0 && remoteSize > backupMaxBytes) {
+              hooks.onBackupSkipped?.({ file, remoteSize, reason: "too-large", backupMaxBytes });
+            } else {
+              if (baseDir) await client.cd(baseDir);
+              const backupPath = safeBackupPath(backupRoot, file.relativePath);
+              fs.mkdirSync(path.dirname(backupPath), { recursive: true });
+              await client.downloadTo(backupPath, remotePath);
+              backedUp += 1;
+              hooks.onBackup?.({ file, remoteSize, backupPath, backupRoot, backedUp });
             }
           }
           const slashIndex = remotePath.lastIndexOf("/");
@@ -360,7 +407,7 @@ async function uploadFiles(config, files, hooks = {}) {
           await client.uploadFrom(file.localPath, remoteName);
           uploaded += 1;
           operations += 1;
-          hooks.onProgress?.({ index: index + 1, total: files.length, action: "uploaded", file, uploaded, skipped });
+          hooks.onProgress?.({ index: index + 1, total: files.length, action: "uploaded", file, uploaded, skipped, backedUp });
           console.log(`[${index + 1}/${files.length}] Uploaded ${file.relativePath}`);
           break;
         } catch (error) {
@@ -376,7 +423,7 @@ async function uploadFiles(config, files, hooks = {}) {
   } finally {
     await closeClient();
   }
-  return { uploaded, skipped };
+  return { uploaded, skipped, backedUp, backupRoot: backedUp ? backupRoot : "" };
 }
 
 async function main() {
@@ -425,7 +472,7 @@ async function main() {
 
   const result = await uploadFiles(config, files);
   console.log("");
-  console.log(`FTP upload completed. Uploaded: ${result.uploaded}, skipped: ${result.skipped}.`);
+  console.log(`FTP upload completed. Uploaded: ${result.uploaded}, skipped: ${result.skipped}, backed up: ${result.backedUp}.`);
 }
 
 if (require.main === module) {

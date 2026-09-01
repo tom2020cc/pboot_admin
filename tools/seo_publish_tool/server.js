@@ -3,12 +3,18 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const initSqlJs = require("sql.js");
+const cheerio = require("cheerio");
 const seoAi = require("./ai-seo");
 
 const TOOL_ROOT = __dirname;
 const PACKAGE_ROOT = path.resolve(TOOL_ROOT, "..", "..");
 const PUBLIC_ROOT = path.join(TOOL_ROOT, "public");
 const CONFIG_PATH = path.join(TOOL_ROOT, "seo.config.json");
+const AI_CONFIG_PATH = path.join(TOOL_ROOT, "ai.config.json");
+const SEARCH_INDEX_COVERAGE_PATH = path.join(TOOL_ROOT, "search-index-coverage.json");
+const GOOGLE_INSPECTION_PATH = path.join(TOOL_ROOT, "google-inspections.json");
+const GOOGLE_SUBMITTED_PATH = path.join(TOOL_ROOT, "google-submitted.json");
+const AI_REPAIR_STATE_PATH = path.join(TOOL_ROOT, "ai-repair-state.json");
 const BACKEND_ENV_PATH = path.join(PACKAGE_ROOT, "backend", ".env");
 const FTP_CONFIG_PATH = path.join(PACKAGE_ROOT, "tools", "ftp_publish_tool", "ftp.config.json");
 const CONFIGURED_PORT = (() => {
@@ -39,6 +45,254 @@ function writeJson(file, data) {
   fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
+const CONFIG_BACKUP_FILES = [
+  { id: "seo", label: "SEO 与搜索引擎配置", file: CONFIG_PATH, format: "json", required: true },
+  { id: "ai", label: "AI 模型 API Key", file: AI_CONFIG_PATH, format: "json" },
+  { id: "ftp", label: "FTP 发布配置", file: FTP_CONFIG_PATH, format: "json" },
+  { id: "backendEnv", label: "后端环境配置", file: BACKEND_ENV_PATH, format: "env" },
+  { id: "googleSubmitted", label: "Google Indexing API 续传状态", file: GOOGLE_SUBMITTED_PATH, format: "json" },
+  { id: "googleInspections", label: "Google Search Console 诊断记录", file: GOOGLE_INSPECTION_PATH, format: "json" },
+  { id: "indexCoverage", label: "搜索引擎收录快照", file: SEARCH_INDEX_COVERAGE_PATH, format: "json" },
+  { id: "aiRepairState", label: "AI 修复断点状态", file: AI_REPAIR_STATE_PATH, format: "json" },
+];
+
+const PORTABLE_SEO_KEYS = ["localRoot", "databasePath", "localPort", "localTestBaseUrl"];
+const PORTABLE_FTP_KEYS = ["localRoot", "localPort"];
+const PORTABLE_ENV_KEYS = new Set([
+  "BACKEND_PORT",
+  "FRONTEND_PORT",
+  "CONFIG_WIZARD_PORT",
+  "SEO_TOOL_PORT",
+  "FTP_TOOL_PORT",
+  "DB_SQLJS_LOCATION",
+]);
+
+const MODEL_KEY_FIELDS = [
+  { configKey: "dashscopeApiKey", envKey: "DASHSCOPE_API_KEY", label: "Qwen / 阿里云百炼" },
+  { configKey: "zhipuApiKey", envKey: "ZHIPU_API_KEY", label: "智谱 GLM" },
+  { configKey: "deepseekApiKey", envKey: "DEEPSEEK_API_KEY", label: "DeepSeek" },
+  { configKey: "openaiApiKey", envKey: "OPENAI_API_KEY", label: "OpenAI" },
+];
+
+function configBackupTimestamp() {
+  return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function collectModelKeyConfig() {
+  const settings = seoAi.getAiSettings(TOOL_ROOT);
+  const result = {};
+  for (const item of MODEL_KEY_FIELDS) {
+    const value = String(settings.localConfig?.[item.configKey] || settings.env?.[item.envKey] || "").trim();
+    if (value) result[item.configKey] = value;
+  }
+  return result;
+}
+
+function buildConfigBackup(scope = "all") {
+  const normalizedScope = scope === "ai-keys" ? "ai-keys" : "all";
+  const files = {};
+  if (normalizedScope === "ai-keys") {
+    const modelKeys = collectModelKeyConfig();
+    files.ai = {
+      label: "AI 模型 API Key",
+      format: "json",
+      content: `${JSON.stringify(modelKeys, null, 2)}\n`,
+    };
+  } else {
+    for (const item of CONFIG_BACKUP_FILES) {
+      if (!fs.existsSync(item.file)) continue;
+      files[item.id] = {
+        label: item.label,
+        format: item.format,
+        content: fs.readFileSync(item.file, "utf8"),
+      };
+    }
+  }
+  const config = readConfig();
+  const payload = {
+    type: "pboot-seo-config-backup",
+    version: 1,
+    scope: normalizedScope,
+    exportedAt: new Date().toISOString(),
+    project: {
+      siteName: config.siteName || "PbootCMS",
+      siteBaseUrl: config.siteBaseUrl || "",
+    },
+    files,
+  };
+  payload.checksum = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(files))
+    .digest("hex");
+  return payload;
+}
+
+function replaceEnvValues(importedText, currentText, preservedKeys) {
+  const current = parseEnvText(currentText);
+  const seen = new Set();
+  const lines = String(importedText || "").split(/\r?\n/).map((line) => {
+    const match = line.match(/^(\s*)([^#=\s]+)(\s*=\s*)(.*)$/);
+    if (!match) return line;
+    const key = match[2];
+    seen.add(key);
+    if (preservedKeys.has(key) && Object.prototype.hasOwnProperty.call(current, key)) {
+      return `${match[1]}${key}${match[3]}${current[key]}`;
+    }
+    return line;
+  });
+  for (const key of preservedKeys) {
+    if (!seen.has(key) && Object.prototype.hasOwnProperty.call(current, key)) {
+      lines.push(`${key}=${current[key]}`);
+    }
+  }
+  return `${lines.join("\n").replace(/\n+$/, "")}\n`;
+}
+
+function parseEnvText(text) {
+  return String(text || "").split(/\r?\n/).reduce((result, line) => {
+    const match = line.match(/^\s*([^#=\s]+)\s*=\s*(.*)\s*$/);
+    if (match) result[match[1]] = match[2];
+    return result;
+  }, {});
+}
+
+function mergePortableJson(imported, current, keys) {
+  const next = { ...imported };
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(current, key)) next[key] = current[key];
+  }
+  return next;
+}
+
+function writeTextAtomic(file, content) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tempPath = `${file}.${process.pid}.import.tmp`;
+  fs.writeFileSync(tempPath, content, "utf8");
+  fs.copyFileSync(tempPath, file);
+  fs.unlinkSync(tempPath);
+}
+
+function upsertEnvValues(currentText, values) {
+  const pending = new Map(Object.entries(values || {}).filter(([, value]) => String(value || "").trim()));
+  const lines = String(currentText || "").split(/\r?\n/).map((line) => {
+    const match = line.match(/^(\s*)([^#=\s]+)(\s*=\s*)(.*)$/);
+    if (!match || !pending.has(match[2])) return line;
+    const value = pending.get(match[2]);
+    pending.delete(match[2]);
+    return `${match[1]}${match[2]}${match[3]}${value}`;
+  });
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  for (const [key, value] of pending) lines.push(`${key}=${value}`);
+  return `${lines.join("\n")}\n`;
+}
+
+function importConfigBackup(bundle, mode = "portable") {
+  if (!bundle || bundle.type !== "pboot-seo-config-backup" || Number(bundle.version) !== 1) {
+    throw new Error("这不是本工具生成的配置备份文件，或版本不受支持。");
+  }
+  if (!bundle.files || typeof bundle.files !== "object") {
+    throw new Error("配置备份缺少 files 数据。");
+  }
+  const checksum = crypto.createHash("sha256").update(JSON.stringify(bundle.files)).digest("hex");
+  if (bundle.checksum && bundle.checksum !== checksum) {
+    throw new Error("配置备份校验失败，文件可能不完整或已被修改。");
+  }
+
+  const scope = bundle.scope === "ai-keys" ? "ai-keys" : "all";
+  const importItems = scope === "ai-keys"
+    ? CONFIG_BACKUP_FILES.filter((item) => item.id === "ai")
+    : CONFIG_BACKUP_FILES;
+  if (scope === "ai-keys" && !bundle.files.ai) {
+    throw new Error("模型 Key 备份中缺少 AI 模型 API Key 数据。");
+  }
+
+  for (const item of importItems) {
+    const source = bundle.files[item.id];
+    if (!source) {
+      if (scope === "all" && item.required) throw new Error(`配置备份缺少必需项：${item.label}`);
+      continue;
+    }
+    if (typeof source.content !== "string") throw new Error(`${item.label} 内容格式错误。`);
+    if (item.format === "json") JSON.parse(source.content);
+  }
+
+  let incomingModelKeys = {};
+  if (scope === "ai-keys") {
+    const rawKeys = JSON.parse(bundle.files.ai.content);
+    for (const item of MODEL_KEY_FIELDS) {
+      const value = String(rawKeys?.[item.configKey] || "").trim();
+      if (value) incomingModelKeys[item.configKey] = value;
+    }
+    if (!Object.keys(incomingModelKeys).length) {
+      throw new Error("模型 Key 备份中没有可导入的 Key。");
+    }
+  }
+
+  const backupRoot = path.join(PACKAGE_ROOT, "backups", `config-import-${configBackupTimestamp()}`);
+  fs.mkdirSync(backupRoot, { recursive: true });
+  const currentBackupItems = scope === "ai-keys"
+    ? CONFIG_BACKUP_FILES.filter((item) => ["ai", "backendEnv"].includes(item.id))
+    : CONFIG_BACKUP_FILES;
+  for (const item of currentBackupItems) {
+    if (fs.existsSync(item.file)) {
+      fs.copyFileSync(item.file, path.join(backupRoot, `${item.id}.${item.format === "env" ? "env" : "json"}`));
+    }
+  }
+
+  const imported = [];
+  for (const item of importItems) {
+    const source = bundle.files[item.id];
+    if (!source) continue;
+    let content = source.content;
+    if (scope === "ai-keys" && item.id === "ai") {
+      let current = {};
+      try {
+        current = readJson(item.file);
+      } catch (_error) {
+        current = {};
+      }
+      content = `${JSON.stringify({ ...current, ...incomingModelKeys }, null, 2)}\n`;
+    } else if (mode !== "full" && item.format === "json" && ["seo", "ftp"].includes(item.id)) {
+      const incoming = JSON.parse(content);
+      let current = {};
+      try {
+        current = readJson(item.file);
+      } catch (_error) {
+        current = {};
+      }
+      const keys = item.id === "seo" ? PORTABLE_SEO_KEYS : PORTABLE_FTP_KEYS;
+      content = `${JSON.stringify(mergePortableJson(incoming, current, keys), null, 2)}\n`;
+    } else if (mode !== "full" && item.id === "backendEnv") {
+      const currentText = fs.existsSync(item.file) ? fs.readFileSync(item.file, "utf8") : "";
+      content = replaceEnvValues(content, currentText, PORTABLE_ENV_KEYS);
+    }
+    writeTextAtomic(item.file, content);
+    imported.push(item.label);
+  }
+
+  if (scope === "ai-keys") {
+    const envValues = {};
+    for (const item of MODEL_KEY_FIELDS) {
+      if (incomingModelKeys[item.configKey]) envValues[item.envKey] = incomingModelKeys[item.configKey];
+    }
+    const currentEnv = fs.existsSync(BACKEND_ENV_PATH) ? fs.readFileSync(BACKEND_ENV_PATH, "utf8") : "";
+    writeTextAtomic(BACKEND_ENV_PATH, upsertEnvValues(currentEnv, envValues));
+  }
+
+  return {
+    ok: true,
+    scope,
+    mode: scope === "ai-keys" ? "ai-keys" : mode === "full" ? "full" : "portable",
+    imported,
+    modelKeyCount: Object.keys(incomingModelKeys).length,
+    backupPath: backupRoot,
+    restartRecommended: true,
+    message: scope === "ai-keys"
+      ? `已导入 ${Object.keys(incomingModelKeys).length} 个模型厂商 Key，并同步到后台翻译环境；原配置已备份。`
+      : `已导入 ${imported.length} 项配置；当前配置已备份，建议重启整套工具后再继续操作。`,
+  };
+}
+
 function parseEnvFile(file) {
   if (!fs.existsSync(file)) return {};
   return fs.readFileSync(file, "utf8").split(/\r?\n/).reduce((result, line) => {
@@ -58,7 +312,7 @@ function getProjectSettings() {
   }
   return {
     backendPort: Number(env.BACKEND_PORT || 5000),
-    frontendPort: Number(env.FRONTEND_PORT || 5173),
+    frontendPort: Number(env.FRONTEND_PORT || 5178),
     configPort: Number(env.CONFIG_WIZARD_PORT || 5190),
     seoPort: PORT,
     ftpPort: Number(ftp.localPort || 5189),
@@ -69,13 +323,14 @@ function getProjectSettings() {
 function buildNavigation(active = "seo") {
   const ports = getProjectSettings();
   return [
-    { id: "admin", label: "🖥️ 管理后台", url: `http://localhost:${ports.frontendPort}/#/` },
-    { id: "backend", label: "🔌 后端接口", url: `http://localhost:${ports.backendPort}/api-docs` },
-    { id: "config", label: "⚙️ 项目配置", url: `http://localhost:${ports.configPort}` },
-    { id: "seo", label: "📊 SEO 检查", url: `http://localhost:${ports.seoPort}` },
-    { id: "models", label: "🧠 模型总览", url: `http://localhost:${ports.seoPort}/models.html` },
-    { id: "models-config", label: "🔑 模型配置", url: `http://localhost:${ports.seoPort}/models-config.html` },
-    { id: "ftp", label: "📤 FTP 发布", url: `http://localhost:${ports.ftpPort}` },
+    { id: "admin", label: "管理后台", url: `http://localhost:${ports.frontendPort}/#/` },
+    { id: "backend", label: "后端接口", url: `http://localhost:${ports.backendPort}/api-docs` },
+    { id: "config", label: "项目配置", url: `http://localhost:${ports.configPort}` },
+    { id: "quotation", label: "报价单生成", url: `http://localhost:${ports.frontendPort}/#/quotations` },
+    { id: "seo", label: "SEO 检查", url: `http://localhost:${ports.seoPort}` },
+    { id: "models", label: "模型总览", url: `http://localhost:${ports.seoPort}/models.html` },
+    { id: "models-config", label: "模型配置", url: `http://localhost:${ports.seoPort}/models-config.html` },
+    { id: "ftp", label: "FTP 发布", url: `http://localhost:${ports.ftpPort}` },
   ].map((item) => ({ ...item, active: item.id === active }));
 }
 
@@ -421,6 +676,26 @@ function addIssue(issues, severity, type, title, detail, url, meta = {}) {
   issues.push({ severity, type, title, detail, url, ...meta });
 }
 
+function calculateSeoHealth(stats, issues) {
+  const totalRecords = Math.max(1, Number(stats.menus || 0) + Number(stats.contents || 0));
+  const penalty = issues.reduce((sum, item) => {
+    if (item.severity === "high") return sum + 10;
+    if (item.severity === "medium") return sum + 3;
+    return sum + 0.5;
+  }, 0);
+  const affected = new Set(
+    issues
+      .filter((item) => item.recordKind && item.recordId)
+      .map((item) => `${item.recordKind}:${item.acode || ""}:${item.recordId}`),
+  ).size;
+  return {
+    score: Math.max(0, Math.round(100 - (penalty / totalRecords) * 25)),
+    affectedRecords: affected,
+    cleanRecords: Math.max(0, totalRecords - affected),
+    totalRecords,
+  };
+}
+
 async function inspectSite() {
   const config = readConfig();
   const siteRoot = resolveSiteRoot(config);
@@ -530,6 +805,8 @@ async function inspectSite() {
       if (!isVideo) {
         if (!keywords) addIssue(issues, "medium", type, `${title || `#${row.id}`} 缺少关键词`, "SEO 三要素之一，建议 3-8 个核心关键词。", url, contentMeta);
         if (!description) addIssue(issues, "medium", type, `${title || `#${row.id}`} 缺少描述`, "SEO 三要素之一，建议 80-160 字符。", url, contentMeta);
+        if (title.length > 65) addIssue(issues, "low", type, `${title || `#${row.id}`} 标题偏长`, `当前 ${title.length} 字符，搜索结果中可能被截断，建议控制在 65 字符以内。`, url, { ...contentMeta, code: "title-too-long" });
+        if (description && description.length < 50) addIssue(issues, "low", type, `${title || `#${row.id}`} 描述偏短`, `当前 ${description.length} 字符，建议补充到 50-160 字符并包含核心卖点。`, url, { ...contentMeta, code: "description-too-short" });
         if (description.length > 180) addIssue(issues, "low", type, `${title || `#${row.id}`} 描述偏长`, `当前 ${description.length} 字符，建议 80-160。`, url, contentMeta);
         if (bodyText.length < 120) addIssue(issues, "low", type, `${title || `#${row.id}`} 正文偏短`, `当前约 ${bodyText.length} 字符。`, url, contentMeta);
         for (const image of images) {
@@ -581,6 +858,33 @@ async function inspectSite() {
         );
       }
     }
+
+    const duplicateTitleMap = new Map();
+    for (const item of urls.filter((entry) => entry.kind === "内容" && entry.title)) {
+      const key = `${item.lang}|${item.type}|${item.title.trim().toLocaleLowerCase()}`;
+      const matches = duplicateTitleMap.get(key) || [];
+      matches.push(item);
+      duplicateTitleMap.set(key, matches);
+    }
+    for (const matches of duplicateTitleMap.values()) {
+      if (matches.length < 2) continue;
+      const first = matches[0];
+      addIssue(
+        issues,
+        "medium",
+        first.type,
+        `${first.title} 标题重复`,
+        `同一语言、同一内容类型中出现 ${matches.length} 次，建议为每个页面设置唯一标题。`,
+        first.url,
+        {
+          editUrl: first.editUrl || "",
+          recordKind: "content",
+          recordId: first.id || "",
+          acode: first.lang || "",
+          code: "duplicate-title",
+        },
+      );
+    }
     const uniqueUrls = [...new Map(urls.map((item) => [item.url, item])).values()];
 
     issues.sort((a, b) => severityWeight(b.severity) - severityWeight(a.severity));
@@ -594,6 +898,7 @@ async function inspectSite() {
       mediumIssues: issues.filter((item) => item.severity === "medium").length,
       lowIssues: issues.filter((item) => item.severity === "low").length,
     };
+    stats.health = calculateSeoHealth(stats, issues);
 
     return {
       config,
@@ -614,6 +919,165 @@ async function inspectSite() {
     if (localAdminDb) localAdminDb.close();
     db.close();
   }
+}
+
+function normalizeComparableUrl(value) {
+  try {
+    const parsed = new URL(String(value || ""));
+    parsed.hash = "";
+    parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+    return parsed.toString();
+  } catch (_error) {
+    return String(value || "").trim();
+  }
+}
+
+function pageCheck(id, label, status, summary, detail = "") {
+  return { id, label, status, summary, detail };
+}
+
+function collectJsonLdTypes(value, result = new Set()) {
+  if (!value || typeof value !== "object") return result;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectJsonLdTypes(item, result));
+    return result;
+  }
+  const type = value["@type"];
+  if (Array.isArray(type)) type.forEach((item) => result.add(String(item)));
+  else if (type) result.add(String(type));
+  if (value["@graph"]) collectJsonLdTypes(value["@graph"], result);
+  return result;
+}
+
+async function auditRenderedPage(targetUrl) {
+  let requestedUrl;
+  try {
+    requestedUrl = new URL(String(targetUrl || "").trim());
+  } catch (_error) {
+    throw new Error("页面地址格式不正确，请输入以 http:// 或 https:// 开头的完整 URL。");
+  }
+  if (!/^https?:$/.test(requestedUrl.protocol)) {
+    throw new Error("页面体检只支持 http:// 或 https:// 地址。");
+  }
+
+  const startedAt = Date.now();
+  const response = await fetch(requestedUrl, {
+    redirect: "follow",
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; PbootCMS-SEO-Audit/2.0; +https://shanbo.cc)",
+      Accept: "text/html,application/xhtml+xml",
+    },
+    signal: AbortSignal.timeout(20000),
+  });
+  const html = await response.text();
+  const loadMs = Date.now() - startedAt;
+  const finalUrl = response.url || requestedUrl.toString();
+  const contentTypeHeader = String(response.headers.get("content-type") || "");
+  const xRobotsTag = String(response.headers.get("x-robots-tag") || "");
+  const $ = cheerio.load(html);
+  const body = $("body").clone();
+  body.find("script,style,noscript,template").remove();
+  const bodyText = body.text().replace(/\s+/g, " ").trim();
+  const title = $("title").first().text().replace(/\s+/g, " ").trim();
+  const description = String($("meta[name='description']").first().attr("content") || "").trim();
+  const canonicalRaw = String($("link[rel='canonical']").first().attr("href") || "").trim();
+  let canonical = canonicalRaw;
+  if (canonicalRaw) {
+    try { canonical = new URL(canonicalRaw, finalUrl).toString(); } catch (_error) { /* keep source */ }
+  }
+  const metaRobots = String($("meta[name='robots']").first().attr("content") || "").trim();
+  const htmlLang = String($("html").first().attr("lang") || "").trim();
+  const viewport = String($("meta[name='viewport']").first().attr("content") || "").trim();
+  const charset = String($("meta[charset]").first().attr("charset") || $("meta[http-equiv='content-type']").first().attr("content") || "").trim();
+  const h1s = $("h1").map((_index, element) => $(element).text().replace(/\s+/g, " ").trim()).get().filter(Boolean);
+  const images = $("img").toArray();
+  const missingAlt = images.filter((element) => !String($(element).attr("alt") || "").trim());
+  const hreflangs = $("link[rel='alternate'][hreflang]").map((_index, element) => ({
+    lang: String($(element).attr("hreflang") || "").trim(),
+    href: String($(element).attr("href") || "").trim(),
+  })).get().filter((item) => item.lang && item.href);
+  const og = {
+    title: String($("meta[property='og:title']").first().attr("content") || "").trim(),
+    description: String($("meta[property='og:description']").first().attr("content") || "").trim(),
+    image: String($("meta[property='og:image']").first().attr("content") || "").trim(),
+  };
+  const jsonLdTypes = new Set();
+  let invalidJsonLd = 0;
+  $("script[type='application/ld+json']").each((_index, element) => {
+    try {
+      collectJsonLdTypes(JSON.parse($(element).html() || ""), jsonLdTypes);
+    } catch (_error) {
+      invalidJsonLd += 1;
+    }
+  });
+  const links = $("a[href]").map((_index, element) => String($(element).attr("href") || "").trim()).get().filter(Boolean);
+  let internalLinks = 0;
+  let externalLinks = 0;
+  for (const href of links) {
+    if (/^(#|javascript:|mailto:|tel:)/i.test(href)) continue;
+    try {
+      const parsed = new URL(href, finalUrl);
+      if (parsed.hostname === new URL(finalUrl).hostname) internalLinks += 1;
+      else externalLinks += 1;
+    } catch (_error) {
+      /* Ignore malformed links in the aggregate counts. */
+    }
+  }
+
+  const checks = [];
+  checks.push(pageCheck("http", "页面响应", response.ok ? "pass" : "fail", `HTTP ${response.status} · ${loadMs} ms`, response.ok ? "页面可正常访问。" : "页面返回异常状态，搜索引擎可能无法抓取。"));
+  checks.push(pageCheck("html", "HTML 文档", contentTypeHeader.toLowerCase().includes("text/html") ? "pass" : "fail", contentTypeHeader || "未返回 Content-Type", `响应大小约 ${Buffer.byteLength(html, "utf8")} 字节。`));
+  checks.push(pageCheck("title", "页面标题", !title ? "fail" : title.length < 8 || title.length > 65 ? "warn" : "pass", title ? `${title.length} 字符` : "缺失", title || "每个可收录页面都应有唯一标题。"));
+  checks.push(pageCheck("description", "Meta Description", !description ? "fail" : description.length < 50 || description.length > 180 ? "warn" : "pass", description ? `${description.length} 字符` : "缺失", description || "建议写 50-160 字符的自然摘要。"));
+  const blocked = /\bnoindex\b/i.test(`${metaRobots} ${xRobotsTag}`);
+  checks.push(pageCheck("indexable", "允许收录", blocked ? "fail" : "pass", blocked ? "检测到 noindex" : "未发现 noindex", [metaRobots && `meta robots: ${metaRobots}`, xRobotsTag && `X-Robots-Tag: ${xRobotsTag}`].filter(Boolean).join("；")));
+  checks.push(pageCheck("canonical", "Canonical", !canonical ? "warn" : normalizeComparableUrl(canonical) === normalizeComparableUrl(finalUrl) ? "pass" : "warn", canonical ? (normalizeComparableUrl(canonical) === normalizeComparableUrl(finalUrl) ? "指向当前页面" : "指向其它地址") : "缺失", canonical || "建议为可收录页面提供绝对 canonical 地址。"));
+  checks.push(pageCheck("h1", "H1 主标题", h1s.length === 1 ? "pass" : h1s.length === 0 ? "fail" : "warn", `${h1s.length} 个 H1`, h1s.slice(0, 3).join(" | ") || "页面应有且仅有一个清晰的 H1。"));
+  checks.push(pageCheck("content", "正文内容", bodyText.length >= 120 ? "pass" : "warn", `约 ${bodyText.length} 字符`, "正文长度只作提示，产品参数页和联系页可按实际用途判断。"));
+  const altRatio = images.length ? Math.round(((images.length - missingAlt.length) / images.length) * 100) : 100;
+  checks.push(pageCheck("image-alt", "图片 ALT", missingAlt.length === 0 ? "pass" : altRatio >= 90 ? "warn" : "fail", `${images.length - missingAlt.length}/${images.length} 完整`, missingAlt.length ? `${missingAlt.length} 张图片缺少有效 ALT。` : "页面图片 ALT 完整。"));
+  checks.push(pageCheck("hreflang", "多语言 Hreflang", hreflangs.length ? "pass" : "info", hreflangs.length ? `${hreflangs.length} 个页面声明` : "页面中未声明", hreflangs.map((item) => item.lang).join("、") || "本工具生成的 Sitemap 会写入多语言对应关系；也可以选择在页面 head 中声明。"));
+  checks.push(pageCheck("lang", "页面语言", htmlLang ? "pass" : "warn", htmlLang || "未声明", "HTML lang 有助于搜索引擎和辅助技术理解页面语言。"));
+  checks.push(pageCheck("mobile", "移动端适配", viewport ? "pass" : "fail", viewport ? "已配置 viewport" : "缺失 viewport", viewport));
+  const ogCount = [og.title, og.description, og.image].filter(Boolean).length;
+  checks.push(pageCheck("open-graph", "社交分享信息", ogCount === 3 ? "pass" : "warn", `${ogCount}/3 项完整`, "检查 og:title、og:description、og:image。"));
+  checks.push(pageCheck("structured-data", "结构化数据", jsonLdTypes.size ? (invalidJsonLd ? "warn" : "pass") : "info", jsonLdTypes.size ? [...jsonLdTypes].join("、") : "未发现 JSON-LD", invalidJsonLd ? `${invalidJsonLd} 段 JSON-LD 无法解析。` : "产品、新闻等页面可按内容类型添加 Schema.org 数据。"));
+  checks.push(pageCheck("encoding", "字符编码", charset ? "pass" : "warn", charset || "未显式声明", "建议在 head 前部声明 UTF-8。"));
+
+  const score = Math.max(0, checks.reduce((value, item) => value - (item.status === "fail" ? 12 : item.status === "warn" ? 5 : 0), 100));
+  const summary = checks.reduce((result, item) => {
+    result[item.status] = (result[item.status] || 0) + 1;
+    return result;
+  }, { pass: 0, warn: 0, fail: 0, info: 0 });
+
+  return {
+    requestedUrl: requestedUrl.toString(),
+    finalUrl,
+    statusCode: response.status,
+    contentType: contentTypeHeader,
+    loadMs,
+    sizeBytes: Buffer.byteLength(html, "utf8"),
+    score,
+    summary,
+    checks,
+    snippet: { title, description, url: canonical || finalUrl },
+    details: {
+      canonical,
+      metaRobots,
+      xRobotsTag,
+      htmlLang,
+      h1s,
+      imageCount: images.length,
+      missingAltCount: missingAlt.length,
+      hreflangs,
+      jsonLdTypes: [...jsonLdTypes],
+      invalidJsonLd,
+      internalLinks,
+      externalLinks,
+      bodyCharacters: bodyText.length,
+      og,
+    },
+  };
 }
 
 const HREFLANG_LANGS = ["en", "cn", "es", "fr", "ru", "ar", "pt"];
@@ -1260,8 +1724,8 @@ async function getIndexingOverview() {
   const sitemapUrl = `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`;
 
   const google = getGoogleIndexingConfig(config);
-  const gstore = loadGoogleSubmitted();
-  const gquota = googleQuotaInfo(gstore, config);
+  const googleStore = loadGoogleSubmitted();
+  const googleQuota = googleQuotaInfo(googleStore, config);
   const sc = getSearchConsoleConfig(config);
   const bing = getBingSettings(config);
   const yandex = getYandexSettings(config);
@@ -1274,15 +1738,16 @@ async function getIndexingOverview() {
       id: "google",
       name: "Google",
       flag: "🔍",
-      channel: "Indexing API + Search Console",
+      channel: "Sitemap + Search Console + Indexing API",
       configured: google.enabled,
       tone: google.enabled ? "success" : "error",
       stats: [
         { label: "服务账号", value: google.enabled ? "已配置" : "未配置" },
-        { label: "已提交", value: `${Object.keys(gstore.submitted).length} 条` },
-        { label: "今日配额", value: `${gquota.dailyUsed} / ${gquota.dailyLimit}` },
+        { label: "Sitemap", value: sc.sitemapUrl ? "已配置" : "待配置" },
+        { label: "Indexing 已提交", value: `${Object.keys(googleStore.submitted).length} 条` },
+        { label: "今日提交配额", value: `${googleQuota.dailyUsed} / ${googleQuota.dailyLimit}` },
       ],
-      nextAction: google.enabled ? "可查单页收录 / 继续每日提交" : "粘贴服务账号 JSON",
+      nextAction: google.enabled ? "可继续提交待处理 URL / 查询收录" : "配置服务账号后启用断点续传",
       queryable: google.enabled,
       link: "https://search.google.com/search-console",
     },
@@ -1564,6 +2029,261 @@ async function submitYandexSitemap(sitemapUrl) {
   return { ok: true, status: r.status, sitemapUrl: target, message: `已把 sitemap 提交给 Yandex：${target}` };
 }
 
+function loadSearchIndexCoverageStore() {
+  try {
+    const parsed = readJson(SEARCH_INDEX_COVERAGE_PATH);
+    return {
+      baidu: parsed?.baidu && typeof parsed.baidu === "object" ? parsed.baidu : null,
+      yandex: parsed?.yandex && typeof parsed.yandex === "object" ? parsed.yandex : null,
+      updatedAt: String(parsed?.updatedAt || ""),
+    };
+  } catch (_error) {
+    return { baidu: null, yandex: null, updatedAt: "" };
+  }
+}
+
+function saveSearchIndexCoverageStore(store) {
+  writeJson(SEARCH_INDEX_COVERAGE_PATH, store);
+}
+
+function normalizeIndexCoverageUrls(values) {
+  const input = Array.isArray(values) ? values : String(values || "").split(/\r?\n/);
+  const seen = new Set();
+  const urls = [];
+  for (const raw of input) {
+    const value = String(raw || "").trim();
+    if (!value || !/^https?:\/\//i.test(value)) continue;
+    try {
+      const parsed = new URL(value);
+      parsed.hash = "";
+      const url = parsed.toString();
+      const key = normalizeComparableUrl(url);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      urls.push(url);
+    } catch (_error) {
+      /* 忽略无法解析的明细行，索引量总数仍可单独保存。 */
+    }
+  }
+  return urls.slice(0, 5000);
+}
+
+function saveBaiduIndexCoverage(input = {}) {
+  const count = Number(input.count);
+  if (!Number.isInteger(count) || count < 0 || count > 100000000) {
+    throw new Error("百度索引量必须是 0 到 100000000 之间的整数。");
+  }
+  const urls = normalizeIndexCoverageUrls(input.urls || input.urlText || "");
+  if (urls.length > count) throw new Error("已收录 URL 明细数量不能大于百度索引量总数。");
+  const config = readConfig();
+  const store = loadSearchIndexCoverageStore();
+  const checkedAt = new Date().toISOString();
+  store.baidu = {
+    count,
+    urls,
+    note: String(input.note || "").trim().slice(0, 500),
+    checkedAt,
+    source: "baidu-dashboard-manual",
+    siteBaseUrl: cleanBaseUrl(config.siteBaseUrl || ""),
+  };
+  store.updatedAt = checkedAt;
+  saveSearchIndexCoverageStore(store);
+  return store.baidu;
+}
+
+function normalizeYandexSearchSample(item = {}) {
+  const url = String(item.url || item.page_url || item.pageUrl || "").trim();
+  if (!/^https?:\/\//i.test(url)) return null;
+  return {
+    url,
+    title: String(item.title || "").trim(),
+    lastAccess: String(item.last_access || item.lastAccess || ""),
+  };
+}
+
+async function refreshYandexIndexCoverage(maxDetails = 1000) {
+  const cfg = getYandexWebmasterConfig();
+  if (!cfg.oauthToken) throw new Error("请先在搜索引擎提交页配置 Yandex OAuth token。");
+  const { userId, hostId } = await resolveYandexHost();
+  const details = [];
+  const seen = new Set();
+  const limit = 100;
+  const safeMaxDetails = Math.max(100, Math.min(5000, Math.floor(Number(maxDetails) || 1000)));
+  let count = null;
+  let offset = 0;
+
+  while (offset < safeMaxDetails) {
+    const result = await yandexApi(
+      `/user/${userId}/hosts/${hostId}/search-urls/in-search/samples/?offset=${offset}&limit=${limit}`,
+      cfg.oauthToken,
+    );
+    if (!result.ok) throw new Error(`读取 Yandex 搜索中页面失败：${yandexApiError(result)}`);
+    const payload = result.data || {};
+    const rawCount = Number(payload.count);
+    if (count === null) {
+      if (!Number.isFinite(rawCount) || rawCount < 0) throw new Error("Yandex 返回结果中缺少有效的搜索页面总数。");
+      count = Math.floor(rawCount);
+    }
+    const samples = Array.isArray(payload.samples)
+      ? payload.samples
+      : Array.isArray(payload.urls)
+        ? payload.urls
+        : [];
+    for (const raw of samples) {
+      const item = normalizeYandexSearchSample(raw);
+      const key = item ? normalizeComparableUrl(item.url) : "";
+      if (!item || !key || seen.has(key)) continue;
+      seen.add(key);
+      details.push(item);
+      if (details.length >= safeMaxDetails) break;
+    }
+    if (!samples.length || samples.length < limit || details.length >= count || details.length >= safeMaxDetails) break;
+    offset += samples.length;
+  }
+
+  const config = readConfig();
+  const store = loadSearchIndexCoverageStore();
+  const checkedAt = new Date().toISOString();
+  store.yandex = {
+    count: count || 0,
+    urls: details,
+    checkedAt,
+    source: "yandex-webmaster-api",
+    siteBaseUrl: cleanBaseUrl(config.siteBaseUrl || ""),
+    sampled: details.length,
+    truncated: details.length < (count || 0),
+  };
+  store.updatedAt = checkedAt;
+  saveSearchIndexCoverageStore(store);
+  return store.yandex;
+}
+
+function coverageReportMeta(report) {
+  return new Map(report.urls.map((item) => [normalizeComparableUrl(item.url), item]));
+}
+
+async function getSearchIndexCoverage() {
+  const report = await inspectSite();
+  const config = report.config;
+  const baseUrl = cleanBaseUrl(config.siteBaseUrl || "");
+  const reportMeta = coverageReportMeta(report);
+  const totalUrls = report.urls.length;
+  const store = loadSearchIndexCoverageStore();
+
+  const searchConsole = getSearchConsoleConfig(config);
+  const googleState = getSearchConsoleInspectionState(searchConsole.siteUrl);
+  const googleByUrl = new Map(
+    Object.values(googleState.results || {}).map((item) => [normalizeComparableUrl(item.inspectionUrl), item]),
+  );
+  const googleDetails = report.urls.map((page) => {
+    const inspection = googleByUrl.get(normalizeComparableUrl(page.url)) || null;
+    const diagnosis = inspection?.diagnosis || null;
+    return {
+      url: page.url,
+      title: page.title || "",
+      lang: page.lang || "",
+      type: page.type || page.kind || "",
+      state: diagnosis?.state || "unchecked",
+      label: diagnosis?.label || "未检查",
+      tone: diagnosis?.tone || "info",
+      checkedAt: inspection?.checkedAt || "",
+      lastAccess: inspection?.lastCrawlTime || "",
+      detail: diagnosis?.nextAction || "尚未通过 Google URL Inspection 确认。",
+    };
+  });
+  const googleChecked = googleDetails.filter((item) => item.state !== "unchecked");
+  const googleIndexed = googleChecked.filter((item) => item.state === "indexed");
+
+  const yandexSnapshot = store.yandex?.siteBaseUrl === baseUrl ? store.yandex : null;
+  const yandexDetails = (yandexSnapshot?.urls || []).map((item) => {
+    const page = reportMeta.get(normalizeComparableUrl(item.url)) || {};
+    return {
+      url: item.url,
+      title: item.title || page.title || "",
+      lang: page.lang || "",
+      type: page.type || page.kind || "",
+      state: "indexed",
+      label: "在 Yandex 搜索中",
+      tone: "success",
+      checkedAt: yandexSnapshot.checkedAt || "",
+      lastAccess: item.lastAccess || "",
+      detail: item.lastAccess ? `Yandex 最后访问：${item.lastAccess}` : "来自 Yandex Webmaster 搜索中页面样本。",
+    };
+  });
+
+  const baiduSnapshot = store.baidu?.siteBaseUrl === baseUrl ? store.baidu : null;
+  const baiduDetails = (baiduSnapshot?.urls || []).map((url) => {
+    const page = reportMeta.get(normalizeComparableUrl(url)) || {};
+    return {
+      url,
+      title: page.title || "",
+      lang: page.lang || "",
+      type: page.type || page.kind || "",
+      state: "indexed",
+      label: "已录入收录",
+      tone: "success",
+      checkedAt: baiduSnapshot.checkedAt || "",
+      lastAccess: "",
+      detail: "来自百度搜索资源平台索引量快照的手动明细。",
+    };
+  });
+
+  return {
+    siteBaseUrl: baseUrl,
+    totalUrls,
+    updatedAt: store.updatedAt || googleState.updatedAt || "",
+    engines: {
+      google: {
+        id: "google",
+        name: "Google",
+        count: googleChecked.length ? googleIndexed.length : null,
+        checked: googleChecked.length,
+        total: totalUrls,
+        source: "Google URL Inspection API",
+        updatedAt: googleState.updatedAt || "",
+        configured: Boolean(searchConsole.enabled),
+        exact: googleChecked.length === totalUrls && totalUrls > 0,
+        details: googleDetails,
+        message: googleChecked.length
+          ? `已确认 ${googleChecked.length}/${totalUrls} 个站内 URL，其中 ${googleIndexed.length} 个已收录。`
+          : "尚无网址检查记录，先到 Google 收录页运行批量诊断。",
+      },
+      baidu: {
+        id: "baidu",
+        name: "百度",
+        count: baiduSnapshot ? Number(baiduSnapshot.count) : null,
+        checked: baiduDetails.length,
+        total: totalUrls,
+        source: "百度搜索资源平台索引量快照",
+        updatedAt: baiduSnapshot?.checkedAt || "",
+        configured: Boolean(baiduSnapshot),
+        exact: Boolean(baiduSnapshot),
+        details: baiduDetails,
+        note: baiduSnapshot?.note || "",
+        message: baiduSnapshot
+          ? `平台索引量 ${baiduSnapshot.count}，已录入 ${baiduDetails.length} 条 URL 明细。`
+          : "百度没有公开索引量查询 API，请把平台显示的索引量录入这里。",
+      },
+      yandex: {
+        id: "yandex",
+        name: "Yandex",
+        count: yandexSnapshot ? Number(yandexSnapshot.count) : null,
+        checked: yandexDetails.length,
+        total: totalUrls,
+        source: "Yandex Webmaster API",
+        updatedAt: yandexSnapshot?.checkedAt || "",
+        configured: Boolean(getYandexWebmasterConfig(config).oauthToken),
+        exact: Boolean(yandexSnapshot),
+        truncated: Boolean(yandexSnapshot?.truncated),
+        details: yandexDetails,
+        message: yandexSnapshot
+          ? `Yandex 搜索中共有 ${yandexSnapshot.count} 个页面，已保存 ${yandexDetails.length} 条明细。`
+          : "配置 OAuth 后可自动同步 Yandex 搜索中的页面总数和样本。",
+      },
+    },
+  };
+}
+
 function defaultGoogleProperty(config) {
   try {
     return `sc-domain:${new URL(cleanBaseUrl(config.siteBaseUrl)).hostname}`;
@@ -1725,6 +2445,7 @@ function getGoogleIndexingConfig(config = readConfig()) {
     serviceAccount,
     clientEmail: serviceAccount ? serviceAccount.client_email : "",
     property: defaultGoogleProperty(config),
+    dailyQuota: googleDailyLimit(config),
   };
 }
 
@@ -1897,7 +2618,7 @@ function getSearchConsoleConfig(config = readConfig()) {
   } catch (_error) {
     /* 无有效 baseUrl 时保持空 */
   }
-  const siteUrl = String(gsc.siteUrl || (host ? `sc-domain:${host}` : "")).trim();
+  const siteUrl = normalizeSearchConsoleSiteUrl(gsc.siteUrl || (host ? `sc-domain:${host}` : ""));
   const sitemapUrl = String(
     gsc.sitemapUrl || (baseUrl ? `${baseUrl}/${config.outputSitemap || "sitemap.xml"}` : ""),
   ).trim();
@@ -1911,9 +2632,61 @@ function getSearchConsoleConfig(config = readConfig()) {
   };
 }
 
+function normalizeSearchConsoleSiteUrl(value) {
+  const input = String(value || "").trim();
+  if (!input) return "";
+  if (/^sc-domain:/i.test(input)) {
+    const host = input.slice(input.indexOf(":") + 1).trim().replace(/^\/+|\/+$/g, "");
+    return host ? `sc-domain:${host.toLowerCase()}` : "";
+  }
+  if (/^https?:\/\//i.test(input)) return input.endsWith("/") ? input : `${input}/`;
+  return input;
+}
+
+function isValidSearchConsoleSiteUrl(value) {
+  const input = normalizeSearchConsoleSiteUrl(value);
+  if (/^sc-domain:[a-z0-9.-]+$/i.test(input)) return true;
+  try {
+    const parsed = new URL(input);
+    return /^https?:$/.test(parsed.protocol) && Boolean(parsed.hostname);
+  } catch (_error) {
+    return false;
+  }
+}
+
+function searchConsoleApiError(parsed, status) {
+  const rawMessage = parsed?.error?.message || `HTTP ${status}`;
+  if (/has not been used|is disabled|accessNotConfigured/i.test(rawMessage)) {
+    return {
+      reason: "api-disabled",
+      message: "当前 Google Cloud 项目尚未启用 Search Console API。启用后等待几分钟，再回来重试。",
+      detail: rawMessage,
+      action: "启用 Search Console API",
+      actionUrl: "https://console.cloud.google.com/apis/library/searchconsole.googleapis.com",
+    };
+  }
+  if (Number(status) === 403) {
+    return {
+      reason: "permission",
+      message: "服务账号没有该 Search Console 属性的访问权限。请在“设置 → 用户和权限”中添加服务账号并授予完整权限。",
+      detail: rawMessage,
+      action: "打开 Search Console",
+      actionUrl: "https://search.google.com/search-console",
+    };
+  }
+  if (Number(status) === 429) {
+    return {
+      reason: "quota",
+      message: "Google Search Console API 当前配额已用完或请求过快，请稍后继续。",
+      detail: rawMessage,
+    };
+  }
+  return { reason: "google-error", message: rawMessage, detail: rawMessage };
+}
+
 async function submitSearchConsoleSitemap(siteUrl, sitemapUrl) {
   const cfg = getSearchConsoleConfig();
-  if (!cfg.enabled) throw new Error("请先配置 Google 服务账号（与 Google Indexing 用的是同一份 JSON）。");
+  if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
   const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_SCOPE);
   const url = `https://searchconsole.googleapis.com/v1/sites/${encodeURIComponent(siteUrl)}/sitemaps/${encodeURIComponent(sitemapUrl)}`;
   const response = await fetch(url, {
@@ -1934,7 +2707,7 @@ async function submitSearchConsoleSitemap(siteUrl, sitemapUrl) {
       status: response.status,
       siteUrl,
       sitemapUrl,
-      message: (parsed && parsed.error && parsed.error.message) || `HTTP ${response.status}`,
+      ...searchConsoleApiError(parsed, response.status),
     };
   }
   return {
@@ -1946,9 +2719,100 @@ async function submitSearchConsoleSitemap(siteUrl, sitemapUrl) {
   };
 }
 
+async function listSearchConsoleSitemaps(siteUrl) {
+  const cfg = getSearchConsoleConfig();
+  if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
+  const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
+  const response = await fetch(
+    `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/sitemaps`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(30000),
+    },
+  );
+  const parsed = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      siteUrl,
+      ...searchConsoleApiError(parsed, response.status),
+    };
+  }
+  const sitemaps = (Array.isArray(parsed.sitemap) ? parsed.sitemap : []).map((item) => ({
+    path: String(item.path || ""),
+    lastSubmitted: String(item.lastSubmitted || ""),
+    lastDownloaded: String(item.lastDownloaded || ""),
+    isPending: Boolean(item.isPending),
+    isSitemapsIndex: Boolean(item.isSitemapsIndex),
+    type: String(item.type || ""),
+    warnings: Number(item.warnings || 0),
+    errors: Number(item.errors || 0),
+    contents: (Array.isArray(item.contents) ? item.contents : []).map((content) => ({
+      type: String(content.type || ""),
+      submitted: Number(content.submitted || 0),
+    })),
+  }));
+  return {
+    ok: true,
+    siteUrl,
+    sitemaps,
+    summary: {
+      total: sitemaps.length,
+      pending: sitemaps.filter((item) => item.isPending).length,
+      withErrors: sitemaps.filter((item) => item.errors > 0).length,
+      withWarnings: sitemaps.filter((item) => item.warnings > 0).length,
+      submittedUrls: sitemaps.reduce(
+        (sum, item) => sum + item.contents.reduce((count, content) => count + content.submitted, 0),
+        0,
+      ),
+    },
+    message: sitemaps.length
+      ? `已读取 ${sitemaps.length} 份 Sitemap 的 Google 处理状态。`
+      : "Search Console 中还没有已提交的 Sitemap。",
+  };
+}
+
+function diagnoseSearchConsoleInspection(result) {
+  const verdict = String(result.verdict || "").toUpperCase();
+  const coverage = String(result.coverageState || "");
+  const indexing = String(result.indexingState || "").toUpperCase();
+  const fetchState = String(result.pageFetchState || "").toUpperCase();
+  const robots = String(result.robotsTxtState || "").toUpperCase();
+  const inspectionUrl = String(result.inspectionUrl || "");
+  const googleCanonical = String(result.googleCanonical || "");
+  const canonicalMismatch = googleCanonical
+    && inspectionUrl
+    && googleCanonical.replace(/\/+$/, "") !== inspectionUrl.replace(/\/+$/, "");
+
+  if (robots === "DISALLOWED" || /ROBOTS/.test(indexing)) {
+    return { state: "blocked-robots", label: "robots 阻止", tone: "danger", indexed: false, nextAction: "检查 robots.txt 和页面级抓取规则，放行后等待 Google 重新抓取。" };
+  }
+  if (/BLOCKED_BY_META_TAG|NOINDEX/.test(indexing) || /NOINDEX/i.test(coverage)) {
+    return { state: "blocked-noindex", label: "noindex 阻止", tone: "danger", indexed: false, nextAction: "移除页面的 noindex 指令，确认规范网址后重新检查。" };
+  }
+  if (/NOT_FOUND|SOFT_404/.test(`${fetchState} ${coverage}`)) {
+    return { state: "not-found", label: "页面不可用", tone: "danger", indexed: false, nextAction: "修复 404、软 404 或跳转链，确保真实 URL 返回有效正文和 HTTP 200。" };
+  }
+  if (fetchState && !/SUCCESSFUL|UNKNOWN|UNSPECIFIED/.test(fetchState)) {
+    return { state: "fetch-error", label: "抓取失败", tone: "danger", indexed: false, nextAction: "检查服务器响应、超时、DNS 和防火墙，再等待 Googlebot 重试。" };
+  }
+  if (canonicalMismatch || /ALTERNATE|DUPLICATE|CANONICAL/i.test(coverage)) {
+    return { state: "canonical", label: "规范网址不同", tone: "warning", indexed: false, nextAction: `检查 canonical、内链和 Sitemap 是否统一指向 ${googleCanonical || "首选网址"}。` };
+  }
+  if (verdict === "PASS" || /SUBMITTED AND INDEXED|URL IS ON GOOGLE|INDEXED/i.test(coverage)) {
+    return { state: "indexed", label: "已收录", tone: "success", indexed: true, nextAction: "保持页面稳定，持续更新 Sitemap，无需重复请求收录。" };
+  }
+  if (/CRAWLED|DISCOVERED/.test(coverage.toUpperCase())) {
+    return { state: "known-not-indexed", label: "已发现未收录", tone: "warning", indexed: false, nextAction: "增强页面独特内容、内链和规范信号，避免频繁重复提交。" };
+  }
+  return { state: "not-indexed", label: "尚未收录", tone: "warning", indexed: false, nextAction: "确认页面可抓取、内容完整并进入 Sitemap，再从 Search Console 请求编入索引。" };
+}
+
 async function inspectSearchConsoleUrl(inspectionUrl, siteUrl) {
   const cfg = getSearchConsoleConfig();
-  if (!cfg.enabled) throw new Error("请先配置 Google 服务账号（与 Google Indexing 用的是同一份 JSON）。");
+  if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
   const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
   const response = await fetch("https://searchconsole.googleapis.com/v1/urlInspection/index:inspect", {
     method: "POST",
@@ -1966,29 +2830,146 @@ async function inspectSearchConsoleUrl(inspectionUrl, siteUrl) {
       status: response.status,
       inspectionUrl,
       siteUrl,
-      message: (parsed && parsed.error && parsed.error.message) || `HTTP ${response.status}`,
+      ...searchConsoleApiError(parsed, response.status),
     };
   }
   const result = (parsed && parsed.inspectionResult) || {};
   const idx = result.indexStatusResult || {};
-  return {
+  const inspection = {
     ok: true,
     inspectionUrl,
     siteUrl,
-    verdict: result.verdict || "",
+    inspectionResultLink: result.inspectionResultLink || "",
+    verdict: idx.verdict || "",
     coverageState: idx.coverageState || "",
     indexingState: idx.indexingState || "",
     pageFetchState: idx.pageFetchState || "",
     robotsTxtState: idx.robotsTxtState || "",
     googleCanonical: idx.googleCanonical || "",
+    userCanonical: idx.userCanonical || "",
+    crawledAs: idx.crawledAs || "",
+    sitemaps: Array.isArray(idx.sitemap) ? idx.sitemap.slice(0, 10) : [],
+    referringUrls: Array.isArray(idx.referringUrls) ? idx.referringUrls.slice(0, 10) : [],
     lastCrawlTime: idx.lastCrawlTime || "",
     message: `收录状态：${idx.coverageState || result.verdict || "未知"}`,
+  };
+  return { ...inspection, diagnosis: diagnoseSearchConsoleInspection(inspection) };
+}
+
+function loadGoogleInspectionStore() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(GOOGLE_INSPECTION_PATH, "utf8"));
+    return {
+      results: parsed && typeof parsed.results === "object" && parsed.results ? parsed.results : {},
+      updatedAt: String(parsed?.updatedAt || ""),
+    };
+  } catch (_error) {
+    return { results: {}, updatedAt: "" };
+  }
+}
+
+function saveGoogleInspectionStore(store) {
+  fs.writeFileSync(GOOGLE_INSPECTION_PATH, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+}
+
+function recordSearchConsoleInspection(result) {
+  if (!result?.ok || !result.inspectionUrl) return result;
+  const store = loadGoogleInspectionStore();
+  const checkedAt = new Date().toISOString();
+  store.results[result.inspectionUrl] = { ...result, checkedAt };
+  store.updatedAt = checkedAt;
+  saveGoogleInspectionStore(store);
+  return store.results[result.inspectionUrl];
+}
+
+function getSearchConsoleInspectionState(siteUrl) {
+  const store = loadGoogleInspectionStore();
+  const results = Object.fromEntries(
+    Object.entries(store.results)
+      .filter(([, item]) => !siteUrl || item.siteUrl === siteUrl)
+      .map(([url, item]) => [url, { ...item, diagnosis: diagnoseSearchConsoleInspection(item) }]),
+  );
+  const list = Object.values(results);
+  return {
+    results,
+    count: list.length,
+    updatedAt: store.updatedAt,
+    summary: {
+      indexed: list.filter((item) => item.diagnosis?.indexed).length,
+      attention: list.filter((item) => item.diagnosis && !item.diagnosis.indexed).length,
+      blocked: list.filter((item) => /^blocked-|fetch-error|not-found$/.test(item.diagnosis?.state || "")).length,
+    },
+  };
+}
+
+async function querySearchConsolePerformance(siteUrl, days = 28, rowLimit = 250) {
+  const cfg = getSearchConsoleConfig();
+  if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
+  const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
+  const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 28)));
+  const safeLimit = Math.max(1, Math.min(1000, Math.floor(Number(rowLimit) || 250)));
+  const endDate = pacificDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const startDate = pacificDateKey(new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000));
+  const response = await fetch(
+    `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        startDate,
+        endDate,
+        dimensions: ["page"],
+        type: "web",
+        aggregationType: "auto",
+        rowLimit: safeLimit,
+        dataState: "all",
+      }),
+      signal: AbortSignal.timeout(30000),
+    },
+  );
+  const parsed = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      siteUrl,
+      ...searchConsoleApiError(parsed, response.status),
+    };
+  }
+  const rows = (Array.isArray(parsed.rows) ? parsed.rows : []).map((row) => ({
+    url: String(row.keys?.[0] || ""),
+    clicks: Number(row.clicks || 0),
+    impressions: Number(row.impressions || 0),
+    ctr: Number(row.ctr || 0),
+    position: Number(row.position || 0),
+  })).filter((row) => row.url);
+  const clicks = rows.reduce((sum, row) => sum + row.clicks, 0);
+  const impressions = rows.reduce((sum, row) => sum + row.impressions, 0);
+  const weightedPosition = impressions
+    ? rows.reduce((sum, row) => sum + row.position * row.impressions, 0) / impressions
+    : 0;
+  return {
+    ok: true,
+    siteUrl,
+    startDate,
+    endDate,
+    days: safeDays,
+    rows,
+    summary: {
+      pages: rows.length,
+      clicks,
+      impressions,
+      ctr: impressions ? clicks / impressions : 0,
+      position: weightedPosition,
+    },
+    message: `已读取 ${startDate} 至 ${endDate} 的前 ${rows.length} 个搜索表现页面。`,
   };
 }
 
 // ===== Google 提交记录与每日配额（本地持久化，避免重复提交） =====
-
-const GOOGLE_SUBMITTED_PATH = path.join(TOOL_ROOT, "google-submitted.json");
 
 function loadGoogleSubmitted() {
   try {
@@ -2035,7 +3016,7 @@ function googleQuotaInfo(store, config = readConfig()) {
     dailyUsed,
     dailyRemaining: Math.max(0, dailyLimit - dailyUsed),
     pacificDate: today,
-    resetNote: "配额每天太平洋时间零点重置（约北京时间 15:00）",
+    resetNote: "配额每天在太平洋时间零点重置（北京时间约 15:00 或 16:00）",
   };
 }
 
@@ -2045,6 +3026,24 @@ function sendJson(res, data, status = 200) {
   res.end(JSON.stringify(data, null, 2));
 }
 
+function sendConfigBackup(res, scope = "all") {
+  const bundle = buildConfigBackup(scope);
+  let siteToken = "site";
+  try {
+    siteToken = new URL(bundle.project.siteBaseUrl).hostname.replace(/[^a-z0-9.-]+/gi, "-") || "site";
+  } catch (_error) {
+    siteToken = String(bundle.project.siteName || "site").replace(/[^a-z0-9.-]+/gi, "-") || "site";
+  }
+  const prefix = bundle.scope === "ai-keys" ? "pboot-model-keys" : "pboot-config";
+  const filename = `${prefix}-${siteToken}-${configBackupTimestamp()}.json`;
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${filename}"`,
+    "Cache-Control": "no-store",
+  });
+  res.end(JSON.stringify(bundle, null, 2));
+}
+
 function sendFile(res, filePath) {
   if (!fs.existsSync(filePath)) {
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
@@ -2052,13 +3051,49 @@ function sendFile(res, filePath) {
     return;
   }
   const ext = path.extname(filePath).toLowerCase();
-  const type = ext === ".html" ? "text/html; charset=utf-8" : ext === ".css" ? "text/css; charset=utf-8" : ext === ".js" ? "text/javascript; charset=utf-8" : "application/octet-stream";
+  const types = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".svg": "image/svg+xml; charset=utf-8",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+  };
+  const type = types[ext] || "application/octet-stream";
   res.writeHead(200, { "Content-Type": type });
   fs.createReadStream(filePath).pipe(res);
 }
 
 async function handleApi(req, res, pathname) {
   try {
+    if (req.method === "GET" && pathname === "/api/config-backup/status") {
+      const modelKeys = collectModelKeyConfig();
+      sendJson(res, {
+        type: "pboot-seo-config-backup",
+        version: 1,
+        items: CONFIG_BACKUP_FILES.map((item) => ({
+          id: item.id,
+          label: item.label,
+          available: fs.existsSync(item.file),
+        })),
+        modelKeyCount: Object.keys(modelKeys).length,
+        modelKeyProviders: MODEL_KEY_FIELDS.filter((item) => modelKeys[item.configKey]).map((item) => item.label),
+        portableDefault: true,
+      });
+      return;
+    }
+    if (req.method === "GET" && pathname === "/api/config-backup/export") {
+      const requestUrl = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+      sendConfigBackup(res, requestUrl.searchParams.get("scope"));
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/config-backup/import") {
+      const body = await readRequestBody(req);
+      sendJson(res, importConfigBackup(body.bundle, body.mode));
+      return;
+    }
     if (req.method === "GET" && pathname === "/api/ai/status") {
       const settings = seoAi.getAiSettings(TOOL_ROOT);
       sendJson(res, {
@@ -2176,6 +3211,12 @@ async function handleApi(req, res, pathname) {
       sendJson(res, report);
       return;
     }
+    if (req.method === "POST" && pathname === "/api/page-audit") {
+      const body = await readRequestBody(req);
+      const result = await auditRenderedPage(body.url);
+      sendJson(res, result);
+      return;
+    }
     if (req.method === "GET" && pathname === "/api/config") {
       const config = readConfig();
       sendJson(res, {
@@ -2213,7 +3254,7 @@ async function handleApi(req, res, pathname) {
         googleSearchConsole: {
           ...(current.googleSearchConsole || {}),
           ...(typeof body.gscSiteUrl === "string" && body.gscSiteUrl.trim()
-            ? { siteUrl: body.gscSiteUrl.trim() }
+            ? { siteUrl: normalizeSearchConsoleSiteUrl(body.gscSiteUrl) }
             : {}),
           ...(typeof body.gscSitemapUrl === "string" && body.gscSitemapUrl.trim()
             ? { sitemapUrl: body.gscSitemapUrl.trim() }
@@ -2266,10 +3307,13 @@ async function handleApi(req, res, pathname) {
     }
     if (req.method === "GET" && pathname === "/api/google-indexing/status") {
       const cfg = getGoogleIndexingConfig();
+      const quota = googleQuotaInfo(loadGoogleSubmitted(), readConfig());
       sendJson(res, {
         enabled: cfg.enabled,
         clientEmail: cfg.clientEmail,
         property: cfg.property,
+        dailyQuota: cfg.dailyQuota,
+        quota,
         helpUrl: "https://developers.google.com/search/apis/indexing-api/v3/using-api",
       });
       return;
@@ -2277,53 +3321,95 @@ async function handleApi(req, res, pathname) {
     if (req.method === "POST" && pathname === "/api/google-indexing/config") {
       const body = await readRequestBody(req);
       const config = readConfig();
+      const current = config.googleIndexing && typeof config.googleIndexing === "object"
+        ? config.googleIndexing
+        : {};
+      const requestedQuota = body.dailyQuota === undefined ? Number(current.dailyQuota || 200) : Number(body.dailyQuota);
+      if (!Number.isFinite(requestedQuota) || requestedQuota < 1 || requestedQuota > 100000) {
+        sendJson(res, { ok: false, message: "每日提交限额必须是 1 到 100000 之间的整数。" }, 400);
+        return;
+      }
+      const dailyQuota = Math.floor(requestedQuota);
       if (body.clear) {
-        config.googleIndexing = { serviceAccount: null, clientEmail: "" };
-        cachedGoogleToken = null;
+        config.googleIndexing = { ...current, serviceAccount: null, clientEmail: "", dailyQuota };
+        googleTokenCache.clear();
         writeJson(CONFIG_PATH, config);
         sendJson(res, { enabled: false, message: "已清除 Google 服务账号配置。" });
         return;
       }
+      if (body.quotaOnly) {
+        config.googleIndexing = { ...current, dailyQuota };
+        writeJson(CONFIG_PATH, config);
+        const quota = googleQuotaInfo(loadGoogleSubmitted(), config);
+        sendJson(res, { ok: true, dailyQuota, quota, message: `本地每日提交限额已保存为 ${dailyQuota} 条。` });
+        return;
+      }
       const serviceAccount = parseServiceAccount(body.serviceAccount);
-      config.googleIndexing = { serviceAccount, clientEmail: serviceAccount.client_email };
-      cachedGoogleToken = null;
+      config.googleIndexing = { ...current, serviceAccount, clientEmail: serviceAccount.client_email, dailyQuota };
+      googleTokenCache.clear();
       writeJson(CONFIG_PATH, config);
       sendJson(res, {
         enabled: true,
         clientEmail: serviceAccount.client_email,
+        dailyQuota,
         message: "Google 服务账号已保存。",
       });
       return;
     }
     if (req.method === "POST" && pathname === "/api/google-indexing/submit") {
       const cfg = getGoogleIndexingConfig();
-      if (!cfg.enabled) throw new Error("请先在上方配置 Google 服务账号。");
+      if (!cfg.enabled) {
+        sendJson(res, { ok: false, message: "请先配置 Google 服务账号。" }, 400);
+        return;
+      }
       const body = await readRequestBody(req);
-      const urls = Array.isArray(body.urls)
-        ? body.urls.map((value) => String(value || "").trim()).filter(Boolean)
+      const inputUrls = Array.isArray(body.urls)
+        ? body.urls
         : body.url
-          ? [String(body.url).trim()]
+          ? [body.url]
           : [];
-      if (!urls.length) throw new Error("没有可提交的 URL。");
-      if (urls.length > 100) throw new Error("单次最多提交 100 个 URL，请分批提交。");
+      const urls = [...new Set(inputUrls.map((value) => String(value || "").trim()).filter(Boolean))];
+      if (!urls.length) {
+        sendJson(res, { ok: false, message: "没有可提交的 URL。" }, 400);
+        return;
+      }
+      if (urls.length > 100) {
+        sendJson(res, { ok: false, message: "单次最多提交 100 个 URL，请分批提交。" }, 400);
+        return;
+      }
+
       const force = Boolean(body.force);
       const store = loadGoogleSubmitted();
       const quota = googleQuotaInfo(store, readConfig());
       const results = [];
-      for (const item of urls) {
+      let stopReason = "";
+
+      for (let index = 0; index < urls.length; index += 1) {
+        const item = urls[index];
         if (!force && store.submitted[item]) {
-          results.push({ ok: true, skipped: true, url: item, message: "此前已提交过，已自动跳过（如需重新提交请点该行“重新提交”）。" });
+          results.push({ ok: true, skipped: true, url: item, reason: "already-submitted", message: "此前已提交过，已自动跳过。" });
           continue;
         }
         if (!isPublicHttpUrl(item)) {
-          results.push({ ok: false, skipped: false, url: item, message: "不是有效的公开 http(s) URL（不能用本地/测试地址）。" });
+          results.push({ ok: false, skipped: false, url: item, reason: "invalid-url", message: "不是有效的公开 http(s) URL，不能使用本地或测试地址。" });
           continue;
         }
         if (quota.dailyRemaining <= 0) {
-          results.push({ ok: false, skipped: true, url: item, message: "Google 今日配额已用完，请明天再提交。" });
-          continue;
+          stopReason = "daily-quota";
+          results.push({ ok: false, skipped: true, url: item, reason: stopReason, message: "Google 今日提交限额已用完，请在配额重置后继续。" });
+          break;
         }
-        const result = await submitGoogleIndexingUrl(cfg.serviceAccount, item, "URL_UPDATED");
+
+        let result;
+        try {
+          result = await submitGoogleIndexingUrl(cfg.serviceAccount, item, "URL_UPDATED");
+        } catch (error) {
+          result = { ok: false, status: 0, url: item, message: error.message || String(error) };
+        }
+
+        store.daily[quota.pacificDate] = Number(store.daily[quota.pacificDate] || 0) + 1;
+        quota.dailyUsed += 1;
+        quota.dailyRemaining = Math.max(0, quota.dailyLimit - quota.dailyUsed);
         if (result.ok) {
           store.submitted[item] = {
             url: item,
@@ -2331,22 +3417,49 @@ async function handleApi(req, res, pathname) {
             type: result.type || "URL_UPDATED",
             notifyTime: result.notifyTime || "",
           };
-          store.daily[quota.pacificDate] = Number(store.daily[quota.pacificDate] || 0) + 1;
-          quota.dailyUsed += 1;
-          quota.dailyRemaining = Math.max(0, quota.dailyRemaining - 1);
         }
-        results.push({ ...result, skipped: false });
-        await wait(200);
+
+        if (Number(result.status) === 429) {
+          store.daily[quota.pacificDate] = Math.max(Number(store.daily[quota.pacificDate] || 0), quota.dailyLimit);
+          quota.dailyUsed = Number(store.daily[quota.pacificDate]);
+          quota.dailyRemaining = 0;
+          stopReason = "google-quota";
+        } else if (Number(result.status) === 403 && /ownership|permission|owner/i.test(result.message || "")) {
+          stopReason = "ownership";
+        } else if (Number(result.status) === 401 || Number(result.status) === 403) {
+          stopReason = "authorization";
+        } else if (Number(result.status) === 0 || Number(result.status) >= 500) {
+          stopReason = "transient-error";
+        } else if (quota.dailyRemaining <= 0) {
+          stopReason = "daily-quota";
+        }
+
+        results.push({ ...result, skipped: false, reason: stopReason || undefined });
+        saveGoogleSubmitted(store);
+        if (stopReason) break;
+        await wait(250);
+      }
+
+      const processedUrls = new Set(results.map((item) => item.url));
+      if (stopReason) {
+        for (const item of urls) {
+          if (processedUrls.has(item)) continue;
+          results.push({ ok: false, skipped: true, url: item, reason: stopReason, message: "本批次已停止，稍后可从该 URL 继续提交。" });
+        }
       }
       saveGoogleSubmitted(store);
       const succeeded = results.filter((item) => item.ok && !item.skipped).length;
       const skipped = results.filter((item) => item.skipped).length;
       const failed = results.filter((item) => !item.ok && !item.skipped).length;
+      const attempted = results.filter((item) => !item.skipped && item.reason !== "invalid-url").length;
       sendJson(res, {
+        ok: true,
         total: results.length,
+        attempted,
         succeeded,
         failed,
         skipped,
+        stopReason,
         results,
         quota,
       });
@@ -2354,11 +3467,16 @@ async function handleApi(req, res, pathname) {
     }
     if (req.method === "POST" && pathname === "/api/google-indexing/metadata") {
       const cfg = getGoogleIndexingConfig();
-      if (!cfg.enabled) throw new Error("请先在上方配置 Google 服务账号。");
+      if (!cfg.enabled) {
+        sendJson(res, { ok: false, message: "请先配置 Google 服务账号。" }, 400);
+        return;
+      }
       const body = await readRequestBody(req);
       const target = String(body.url || "").trim();
-      if (!target) throw new Error("缺少 url。");
-      if (!isPublicHttpUrl(target)) throw new Error("url 不是有效的公开 http(s) URL。");
+      if (!target || !isPublicHttpUrl(target)) {
+        sendJson(res, { ok: false, message: "请输入有效的公开 http(s) URL。" }, 400);
+        return;
+      }
       sendJson(res, await getGoogleIndexingMetadata(cfg.serviceAccount, target));
       return;
     }
@@ -2378,8 +3496,14 @@ async function handleApi(req, res, pathname) {
         sendJson(res, { ok: false, message: "缺少 clear 参数。" }, 400);
         return;
       }
-      saveGoogleSubmitted({ submitted: {}, daily: {} });
-      sendJson(res, { ok: true, message: "已清空 Google 提交记录与配额计数。" });
+      const store = loadGoogleSubmitted();
+      saveGoogleSubmitted({ submitted: {}, daily: body.resetQuota ? {} : store.daily });
+      sendJson(res, {
+        ok: true,
+        message: body.resetQuota
+          ? "已清空 Google 提交记录与本地配额计数。"
+          : "已清空 Google 提交记录；今日配额计数已保留。",
+      });
       return;
     }
     if (req.method === "POST" && pathname === "/api/google-indexing/test") {
@@ -2393,13 +3517,13 @@ async function handleApi(req, res, pathname) {
         sendJson(res, {
           ok: true,
           clientEmail: cfg.clientEmail,
-          message: `服务账号验证成功：已用 ${cfg.clientEmail} 取得 Google 访问令牌，可以提交了。`,
+          message: `服务账号验证成功：已用 ${cfg.clientEmail} 取得 Indexing API 访问令牌，可以继续提交。`,
         });
       } catch (error) {
         sendJson(res, {
           ok: false,
           clientEmail: cfg.clientEmail,
-          message: `验证失败：${error.message || String(error)}。请确认 JSON 正确、已在 Search Console 添加该邮箱为所有者/用户、且已在 Google Cloud 启用 Indexing API。`,
+          message: `验证失败：${error.message || String(error)}。请确认 JSON 正确、已在 Search Console 添加该邮箱为所有者或完整权限用户，并在 Google Cloud 启用 Indexing API。`,
         });
       }
       return;
@@ -2411,28 +3535,62 @@ async function handleApi(req, res, pathname) {
         clientEmail: cfg.clientEmail,
         siteUrl: cfg.siteUrl,
         sitemapUrl: cfg.sitemapUrl,
-        note: "siteUrl 为 Search Console 属性：域名属性填 sc-domain:example.com，网址前缀属性填 https://example.com/。URL 收录查询只支持网址前缀属性。",
+        inspectionQuota: { dailyPerSite: 2000, minutePerSite: 600 },
+        apiEnableUrl: "https://console.cloud.google.com/apis/library/searchconsole.googleapis.com",
+        note: "siteUrl 为 Search Console 属性：域名属性填 sc-domain:example.com，网址前缀属性填 https://example.com/（末尾带 /）。两种属性都支持 URL Inspection，待查 URL 必须属于该属性。",
       });
       return;
     }
     if (req.method === "POST" && pathname === "/api/search-console/sitemap") {
       const cfg = getSearchConsoleConfig();
       const body = await readRequestBody(req);
-      const siteUrl = String(body.siteUrl || cfg.siteUrl).trim();
+      const siteUrl = normalizeSearchConsoleSiteUrl(body.siteUrl || cfg.siteUrl);
       const sitemapUrl = String(body.sitemapUrl || cfg.sitemapUrl).trim();
-      if (!siteUrl) throw new Error("缺少 siteUrl（Search Console 属性）。");
-      if (!sitemapUrl) throw new Error("缺少 sitemapUrl。");
+      if (!isValidSearchConsoleSiteUrl(siteUrl)) throw new Error("Search Console 属性格式不正确。请填写 sc-domain:example.com 或以 / 结尾的网址前缀属性。");
+      if (!isPublicHttpUrl(sitemapUrl)) throw new Error("Sitemap 地址必须是有效的公开 http(s) URL。");
       sendJson(res, await submitSearchConsoleSitemap(siteUrl, sitemapUrl));
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/search-console/sitemaps") {
+      const cfg = getSearchConsoleConfig();
+      const body = await readRequestBody(req);
+      const siteUrl = normalizeSearchConsoleSiteUrl(body.siteUrl || cfg.siteUrl);
+      if (!isValidSearchConsoleSiteUrl(siteUrl)) throw new Error("Search Console 属性格式不正确。");
+      sendJson(res, await listSearchConsoleSitemaps(siteUrl));
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/search-console/performance") {
+      const cfg = getSearchConsoleConfig();
+      const body = await readRequestBody(req);
+      const siteUrl = normalizeSearchConsoleSiteUrl(body.siteUrl || cfg.siteUrl);
+      if (!isValidSearchConsoleSiteUrl(siteUrl)) throw new Error("Search Console 属性格式不正确。");
+      sendJson(res, await querySearchConsolePerformance(siteUrl, body.days, body.rowLimit));
+      return;
+    }
+    if (req.method === "GET" && pathname === "/api/search-console/inspections") {
+      const cfg = getSearchConsoleConfig();
+      sendJson(res, getSearchConsoleInspectionState(cfg.siteUrl));
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/search-console/inspections/clear") {
+      const body = await readRequestBody(req);
+      if (!body.clear) {
+        sendJson(res, { ok: false, message: "缺少 clear 参数。" }, 400);
+        return;
+      }
+      saveGoogleInspectionStore({ results: {}, updatedAt: new Date().toISOString() });
+      sendJson(res, { ok: true, message: "已清空本地 Google 收录诊断记录；Google 端数据没有变化。" });
       return;
     }
     if (req.method === "POST" && pathname === "/api/search-console/inspect") {
       const cfg = getSearchConsoleConfig();
       const body = await readRequestBody(req);
       const inspectionUrl = String(body.inspectionUrl || "").trim();
-      const siteUrl = String(body.siteUrl || cfg.siteUrl).trim();
-      if (!inspectionUrl) throw new Error("缺少 inspectionUrl（要查询的完整 URL）。");
-      if (!siteUrl) throw new Error("缺少 siteUrl（Search Console 属性，URL 收录查询需网址前缀属性，如 https://example.com/）。");
-      sendJson(res, await inspectSearchConsoleUrl(inspectionUrl, siteUrl));
+      const siteUrl = normalizeSearchConsoleSiteUrl(body.siteUrl || cfg.siteUrl);
+      if (!isPublicHttpUrl(inspectionUrl)) throw new Error("要查询的 URL 必须是有效的公开 http(s) 地址。");
+      if (!isValidSearchConsoleSiteUrl(siteUrl)) throw new Error("Search Console 属性格式不正确。");
+      const result = await inspectSearchConsoleUrl(inspectionUrl, siteUrl);
+      sendJson(res, result.ok ? recordSearchConsoleInspection(result) : result);
       return;
     }
     if (req.method === "GET" && pathname === "/api/yandex/status") {
@@ -2620,6 +3778,34 @@ async function handleApi(req, res, pathname) {
       sendJson(res, result);
       return;
     }
+    if (req.method === "GET" && pathname === "/api/index-coverage") {
+      sendJson(res, await getSearchIndexCoverage());
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/index-coverage/baidu") {
+      const body = await readRequestBody(req);
+      if (body.clear) {
+        const store = loadSearchIndexCoverageStore();
+        store.baidu = null;
+        store.updatedAt = new Date().toISOString();
+        saveSearchIndexCoverageStore(store);
+        sendJson(res, { ok: true, message: "已清除本地百度索引量快照；百度平台数据没有变化。" });
+        return;
+      }
+      const snapshot = saveBaiduIndexCoverage(body);
+      sendJson(res, { ok: true, snapshot, message: `已记录百度索引量 ${snapshot.count}。` });
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/index-coverage/yandex/refresh") {
+      const body = await readRequestBody(req);
+      const snapshot = await refreshYandexIndexCoverage(body.maxDetails);
+      sendJson(res, {
+        ok: true,
+        snapshot,
+        message: `已同步 Yandex：搜索中 ${snapshot.count} 个页面，保存 ${snapshot.sampled} 条明细。`,
+      });
+      return;
+    }
     if (req.method === "GET" && pathname === "/api/chinese-engines") {
       sendJson(res, getChineseEnginesInfo());
       return;
@@ -2640,13 +3826,27 @@ const server = http.createServer((req, res) => {
     handleApi(req, res, url.pathname);
     return;
   }
-  const filePath = url.pathname === "/" ? path.join(PUBLIC_ROOT, "index.html") : path.join(PUBLIC_ROOT, url.pathname.replace(/^\/+/, ""));
-  if (!path.resolve(filePath).startsWith(PUBLIC_ROOT)) {
+  const seoPageAliases = new Set([
+    "/",
+    "/index.html",
+    "/audit.html",
+    "/search-engines.html",
+    "/google.html",
+    "/bing.html",
+    "/baidu.html",
+    "/yandex.html",
+    "/settings.html",
+  ]);
+  const filePath = seoPageAliases.has(url.pathname)
+    ? path.join(PUBLIC_ROOT, "index.html")
+    : path.join(PUBLIC_ROOT, url.pathname.replace(/^\/+/, ""));
+  const resolvedPath = path.resolve(filePath);
+  if (resolvedPath !== PUBLIC_ROOT && !resolvedPath.startsWith(`${PUBLIC_ROOT}${path.sep}`)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
   }
-  sendFile(res, filePath);
+  sendFile(res, resolvedPath);
 });
 
 server.listen(PORT, () => {

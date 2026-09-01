@@ -1,24 +1,24 @@
 @echo off
 setlocal
 set "ROOT=%~dp0"
+set "PROJECT_ROOT=%ROOT:~0,-1%"
 set "BACKEND_PORT=5000"
-set "FRONTEND_PORT=5173"
+set "FRONTEND_PORT=5178"
 
 echo.
-echo Pboot Admin pnpm starter
-echo Root: %ROOT%
+echo ============================================
+echo   Pboot Admin - Start management service
+echo ============================================
 
 where pnpm >nul 2>nul
 if errorlevel 1 (
-  echo ERROR: pnpm was not found. Please run 00-install.cmd first.
+  echo ERROR: pnpm was not found. Run 00-install.cmd first.
   pause
   exit /b 1
 )
 
 if not exist "%ROOT%backend\.env" (
-  echo.
-  echo ERROR: backend\.env was not found.
-  echo Please run 01-config.cmd, save configuration, then run this file again.
+  echo ERROR: backend\.env was not found. Run 01-config.cmd first.
   pause
   exit /b 1
 )
@@ -29,56 +29,60 @@ for /f "usebackq tokens=1,* delims==" %%A in ("%ROOT%backend\.env") do (
 )
 
 if not exist "%ROOT%backend\node_modules" (
-  echo.
-  echo ERROR: backend dependencies were not found.
-  echo Please run 00-install.cmd first.
+  echo ERROR: backend dependencies are missing. Run 00-install.cmd first.
   pause
   exit /b 1
 )
-
 if not exist "%ROOT%frontend\node_modules" (
-  echo.
-  echo ERROR: frontend dependencies were not found.
-  echo Please run 00-install.cmd first.
+  echo ERROR: frontend dependencies are missing. Run 00-install.cmd first.
   pause
   exit /b 1
 )
 
-call :check_port %BACKEND_PORT%
-if "%PORT_BUSY%"=="1" (
-  echo.
-  echo ERROR: port %BACKEND_PORT% is already in use.
-  echo Run 04-stop-ports.cmd or close the old backend window.
+call :check_project_port %BACKEND_PORT%
+if "%PORT_STATUS%"=="FOREIGN" (
+  echo ERROR: backend port %BACKEND_PORT% belongs to another project.
   pause
   exit /b 1
 )
+set "BACKEND_STATUS=%PORT_STATUS%"
 
-call :check_port %FRONTEND_PORT%
-if "%PORT_BUSY%"=="1" (
-  echo.
-  echo ERROR: port %FRONTEND_PORT% is already in use.
-  echo Run 04-stop-ports.cmd or close the old frontend window.
+call :check_project_port %FRONTEND_PORT%
+if "%PORT_STATUS%"=="FOREIGN" (
+  echo ERROR: frontend port %FRONTEND_PORT% belongs to another project.
   pause
   exit /b 1
+)
+set "FRONTEND_STATUS=%PORT_STATUS%"
+
+echo.
+if "%BACKEND_STATUS%"=="PROJECT" (
+  echo Backend is already running on port %BACKEND_PORT% - skip.
+) else (
+  echo Opening the persistent backend terminal on port %BACKEND_PORT%...
+  start "Pboot Admin Backend - %BACKEND_PORT%" /D "%ROOT%backend" cmd /k "title Pboot Admin Backend - %BACKEND_PORT% ^&^& echo Keep this window open while using Pboot Admin. ^&^& pnpm run build ^&^& pnpm run start:prod"
+)
+
+if "%FRONTEND_STATUS%"=="PROJECT" (
+  echo Frontend is already running on port %FRONTEND_PORT% - skip.
+) else (
+  echo Starting frontend in the background on port %FRONTEND_PORT%...
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\start-hidden.ps1" -Exe "cmd" -CmdArgs "/c pnpm exec vite --host localhost --port %FRONTEND_PORT%" -Dir "%ROOT%frontend" -Log "%ROOT%logs\frontend"
 )
 
 echo.
-echo Starting backend and frontend with pnpm...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\start-hidden.ps1" -Exe "cmd" -CmdArgs "/c pnpm run start:dev" -Dir "%ROOT%backend" -Log "%ROOT%logs\backend"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\start-hidden.ps1" -Exe "cmd" -CmdArgs "/c pnpm run dev -- --host 0.0.0.0 --port %FRONTEND_PORT%" -Dir "%ROOT%frontend" -Log "%ROOT%logs\frontend"
+echo Backend terminal: keep the visible window open.
+echo Backend API:      http://localhost:%BACKEND_PORT%/api-docs
+echo Frontend:         http://localhost:%FRONTEND_PORT%
+echo Frontend log:     %ROOT%logs\frontend.out.log
 
-echo.
-echo Services run in the background (no terminal windows). Logs: %ROOT%logs\backend.out.log and frontend.out.log
-echo Backend docs: http://localhost:%BACKEND_PORT%/api-docs
-echo Frontend:     http://localhost:%FRONTEND_PORT%
-timeout /t 4 /nobreak >nul
+if /I "%~1"=="--no-browser" exit /b 0
+powershell -NoProfile -Command "Start-Sleep -Seconds 4"
 start "" "http://localhost:%FRONTEND_PORT%"
-timeout /t 5 /nobreak >nul
+timeout /t 2 /nobreak >nul
 exit /b 0
 
-:check_port
-set "PORT_BUSY=0"
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr /R /C:":%~1 .*LISTENING"') do (
-  set "PORT_BUSY=1"
-)
+:check_project_port
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\project-port.ps1" -Port %~1 -Root "%PROJECT_ROOT%" >nul 2>nul
+if errorlevel 20 (set "PORT_STATUS=FOREIGN") else if errorlevel 10 (set "PORT_STATUS=PROJECT") else (set "PORT_STATUS=FREE")
 exit /b 0

@@ -75,18 +75,34 @@
 
       @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
     </style>
+    <link rel="stylesheet" href="/seo-shell.css" />
+    <script defer src="/seo-model-shell.js"></script>
   </head>
   <body>
     <div class="topbar">
       <div class="topbar-inner">
-        <div class="title"><span class="logo">⚙️</span><div>AI 模型配置<div class="sub">填写各厂商 API Key，保存即生效（写入 ai.config.json）</div></div></div>
-        <div class="nav"><a href="/models.html">🧠 模型总览</a><a href="/">← 返回工具</a></div>
+        <div class="title"><span class="logo">AI</span><div>AI 模型配置<div class="sub">管理模型厂商 API Key 和连接状态</div></div></div>
+        <div class="nav"><a href="/models.html">模型总览</a><a href="/">SEO 总览</a></div>
       </div>
     </div>
+    <nav class="tool-nav" id="toolNav" aria-label="项目工具导航"></nav>
 
     <main>
+      <nav class="section-nav workspace-nav" aria-label="SEO 工作区导航">
+        <a href="/models.html" data-workspace-page="models">模型总览</a>
+        <a href="/models-config.html" data-workspace-page="models-config" class="active" aria-current="page">模型配置</a>
+      </nav>
+      <div class="workspace-intro model-intro">
+        <div><h1>模型配置</h1><p>API Key 保存后立即生效，可在对应厂商卡片中直接测试连接。</p></div>
+        <a class="workspace-action" href="/models.html">查看全部模型</a>
+      </div>
       <div class="banner" id="errBanner"></div>
-      <div class="hint">💡 填了 Key 的厂商，其模型在「SEO 问题 → AI 模型」下拉里才可选；没填的会置灰。Key 保存在 <b>ai.config.json</b>（千问也可写在 backend/.env 的 DASHSCOPE_API_KEY）。</div>
+      <div class="config-summary">
+        <div><span>模型厂商</span><strong id="providerTotal">-</strong></div>
+        <div><span>已配置厂商</span><strong id="providerReady">-</strong></div>
+        <div><span>可用模型</span><strong id="modelReady">-</strong></div>
+      </div>
+      <div class="hint">填入 Key 后，该厂商模型会在 SEO 内容优化的模型列表中启用。密钥保存在本地 <b>ai.config.json</b>，千问也可读取后端环境配置。</div>
       <div class="grid" id="providers"></div>
     </main>
 
@@ -95,10 +111,10 @@
       const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
       const PROVIDERS = [
-        { id: "qwen", icon: "☁️", color: "#7c3aed", name: "千问 · 阿里云百炼", keyUrl: "https://bailian.console.aliyun.com/", desc: "免费额度有上限，用尽返回 403。恢复：充值或关闭「仅使用免费额度」。", reset: "免费额度限时/限次，非每日固定重置" },
-        { id: "zhipu", icon: "🧠", color: "#0ea5e9", name: "智谱 GLM", keyUrl: "https://open.bigmodel.cn/", desc: "有免费额度，GLM-4-Flash 快且免费（当前推荐替代）。", reset: "免费开放（零成本）" },
-        { id: "deepseek", icon: "🐋", color: "#2563eb", name: "DeepSeek", keyUrl: "https://platform.deepseek.com/", desc: "付费但极便宜，中文理解好；新用户历史上有送免费 token。", reset: "按余额计费" },
-        { id: "openai", icon: "✨", color: "#10a37f", name: "OpenAI", keyUrl: "https://platform.openai.com/", desc: "付费，需绑卡。已加入 GPT-5.6 系列（Luna / Terra / Sol）。", reset: "按余额计费" },
+        { id: "qwen", icon: "QW", color: "#7c3aed", name: "千问 · 阿里云百炼", keyUrl: "https://bailian.console.aliyun.com/", desc: "免费额度有上限，用尽返回 403。恢复：充值或关闭「仅使用免费额度」。", reset: "免费额度限时/限次，非每日固定重置" },
+        { id: "zhipu", icon: "GLM", color: "#0ea5e9", name: "智谱 GLM", keyUrl: "https://open.bigmodel.cn/", desc: "有免费额度，GLM-4-Flash 快且免费（当前推荐替代）。", reset: "免费开放（零成本）" },
+        { id: "deepseek", icon: "DS", color: "#2563eb", name: "DeepSeek", keyUrl: "https://platform.deepseek.com/", desc: "付费但极便宜，中文理解好；新用户历史上有送免费 token。", reset: "按余额计费" },
+        { id: "openai", icon: "GPT", color: "#10a37f", name: "OpenAI", keyUrl: "https://platform.openai.com/", desc: "付费，需绑卡。已加入 GPT-5.6 系列（Luna / Terra / Sol）。", reset: "按余额计费" },
       ];
 
       let aiModels = [];
@@ -116,6 +132,10 @@
       }
 
       function render() {
+        const configuredProviders = PROVIDERS.filter((p) => aiModels.some((m) => m.provider === p.id && m.available)).length;
+        $("providerTotal").textContent = PROVIDERS.length;
+        $("providerReady").textContent = configuredProviders;
+        $("modelReady").textContent = aiModels.filter((m) => m.available).length;
         $("providers").innerHTML = PROVIDERS.map((p) => {
           const models = aiModels.filter((m) => m.provider === p.id);
           const configured = models.some((m) => m.available);
@@ -135,6 +155,7 @@
               <div class="row">
                 <input type="password" placeholder="粘贴 ${p.name} 的 API Key" autocomplete="off" />
                 <button class="primary" data-save>保存</button>
+                <button data-test ${configured ? "" : "disabled"}>测试连接</button>
               </div>
               <div class="links">
                 <a href="${p.keyUrl}" target="_blank" rel="noopener">获取 Key →</a>
@@ -145,14 +166,31 @@
       }
 
       document.addEventListener("click", async (e) => {
-        const btn = e.target.closest("button[data-save]");
+        const btn = e.target.closest("button[data-save], button[data-test]");
         if (!btn) return;
         const prov = btn.closest(".prov");
         const pid = prov.dataset.provider;
         const input = prov.querySelector("input");
-        const key = input.value.trim();
         const msg = $("msg-" + pid);
-        const model = aiModels.find((m) => m.provider === pid);
+        const model = aiModels.find((m) => m.provider === pid && (btn.hasAttribute("data-save") || m.available));
+        if (btn.hasAttribute("data-test")) {
+          if (!model) { msg.className = "msg err"; msg.textContent = "当前厂商没有已启用的模型。"; return; }
+          btn.disabled = true; btn.textContent = "测试中...";
+          try {
+            const res = await fetch("/api/ai/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: model.value }) });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error(data.message || ("HTTP " + res.status));
+            msg.className = "msg ok";
+            msg.textContent = `${model.label} 连接正常${data.elapsedMs ? `，耗时 ${(data.elapsedMs / 1000).toFixed(1)} 秒` : ""}。`;
+          } catch (err) {
+            msg.className = "msg err";
+            msg.textContent = err.message || String(err);
+          } finally {
+            btn.disabled = false; btn.textContent = "测试连接";
+          }
+          return;
+        }
+        const key = input.value.trim();
         if (!key) { msg.className = "msg err"; msg.textContent = "请输入 API Key。"; return; }
         if (!model) { msg.className = "msg err"; msg.textContent = "该厂商没有可选模型。"; return; }
         btn.disabled = true; btn.textContent = "保存中…";
@@ -162,11 +200,11 @@
           if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
           input.value = "";
           msg.className = "msg ok";
-          msg.textContent = `✅ 已保存 ${model.label} 的 API Key，模型列表已更新。`;
+          msg.textContent = `已保存 ${model.label} 的 API Key，模型列表已更新。`;
           await load();
         } catch (err) {
           msg.className = "msg err";
-          msg.textContent = "❌ " + (err.message || err);
+          msg.textContent = err.message || String(err);
         } finally {
           btn.disabled = false; btn.textContent = "保存";
         }

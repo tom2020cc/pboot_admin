@@ -13,8 +13,8 @@
 3. Double-click `01-config.cmd`.
 4. Fill in the PbootCMS site root, database path, public domain, translation keys, and FTP settings.
 5. Save the configuration.
-6. Double-click `02-start.cmd`.
-7. Open `http://localhost:5173`.
+6. Double-click `07-start-all.cmd` and keep the visible backend terminal open.
+7. Open `http://localhost:5178`.
 
 ## First data import
 
@@ -39,7 +39,7 @@ so an empty new installation cannot overwrite the website database.
 ## Default ports
 
 - Backend: `http://localhost:5000`
-- Frontend: `http://localhost:5173`
-- Config wizard: `http://localhost:5190`
+- Frontend: `http://localhost:5178`
+- Config wizard: `http://localhost:5190` (run `01-config.cmd` only when settings change)
 - SEO tool: `http://localhost:5188`
 - FTP tool: `http://localhost:5189`

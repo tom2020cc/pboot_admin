@@ -36,6 +36,7 @@ import { useMyTokenStore } from "@/stores/myToken";
 import { getInfo } from "@/api/users";
 import { ElMessageBox, ElMessage } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
+import { ArrowDown, Expand, Fold } from "@element-plus/icons-vue";
 
 const router = useRouter();
 const route = useRoute();
@@ -96,5 +97,13 @@ getUser();
   color: var(--el-text-color-primary);
   font-size: 13px;
   cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .header { padding: 0 8px; }
+  .header :deep(.el-breadcrumb) { display: none; }
+  .left, .user-trigger { gap: 6px; }
+  .user-trigger { margin-right: 0; }
+  .user-trigger > span { display: none; }
 }
 </style>

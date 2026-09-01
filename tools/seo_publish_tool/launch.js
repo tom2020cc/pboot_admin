@@ -88,9 +88,11 @@ async function main() {
     process.exitCode = code ?? 0;
   });
 
-  setTimeout(() => {
-    exec(`start "" "${url}"`);
-  }, 900);
+  if (!process.argv.includes("--no-browser")) {
+    setTimeout(() => {
+      exec(`start "" "${url}"`);
+    }, 900);
+  }
 }
 
 main().catch((error) => {

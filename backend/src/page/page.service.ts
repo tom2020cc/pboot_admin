@@ -10,6 +10,7 @@ import { TranslateNewsDto } from '../news/dto/translate-news.dto';
 import { NewsService } from '../news/news.service';
 import { normalizePbootImage, PBOOT_LANG_MAP, queryPbootRows, toPbootDate } from '../common/pboot-content-import';
 import { SyncGuardService } from '../common/sync-guard.service';
+import { buildLanguageSeoUrlName } from '../common/seo-content-utils';
 import { PageTranslation } from './entities/page-translation.entity';
 import { Page } from './entities/page.entity';
 import { SavePageDto, SyncPageDto } from './dto/page.dto';
@@ -198,21 +199,22 @@ export class PageService {
     const dbPath = this.getPbootDbPath();
     if (!fs.existsSync(dbPath)) throw new BadRequestException(`PbootCMS database not found: ${dbPath}`);
 
+    const langs = options.all ? NEWS_LANGUAGES.map((item) => item.code) : [resolveNewsLang(options.lang || DEFAULT_NEWS_LANG)];
+    const translations = await this.translationRepo.find({ where: { pageId: id }, order: { id: 'ASC' } });
+    const translationMap = new Map(translations.map((item) => [item.lang, item]));
+    for (const lang of langs) this.assertTranslationSeoReady(translationMap.get(lang), lang);
+
     await this.syncGuard.protectBeforeDangerousSync('page_push_one', 'page');
     const backupPath = this.backupPbootDatabase(dbPath);
     const SQL = await initSqlJs();
     const db = new SQL.Database(fs.readFileSync(dbPath));
-    const langs = options.all ? NEWS_LANGUAGES.map((item) => item.code) : [resolveNewsLang(options.lang || DEFAULT_NEWS_LANG)];
-    const translations = await this.translationRepo.find({ where: { pageId: id }, order: { id: 'ASC' } });
-    const translationMap = new Map(translations.map((item) => [item.lang, item]));
     const synced = [];
 
     try {
       for (const lang of langs) {
         const translation = translationMap.get(lang);
-        if (!translation?.title?.trim() && !translation?.content?.trim()) continue;
         const targetMenu = await this.findEquivalentMenu(page.menuId, lang);
-        if (!targetMenu) continue;
+        if (!targetMenu) throw new BadRequestException(`单页 ${lang} 缺少对应语言栏目，无法同步`);
         synced.push(this.upsertPbootSinglePage(db, page, translation, targetMenu));
       }
 
@@ -264,8 +266,7 @@ export class PageService {
       const input = inputMap.get(code);
       const current = existingMap.get(code);
       if (current) {
-        if (!updateExisting && !input) return null;
-        return {
+        const next = {
           ...current,
           title: input?.title ?? current.title,
           urlName: input?.urlName ?? current.urlName,
@@ -274,20 +275,43 @@ export class PageService {
           description: input?.description ?? current.description,
           content: this.compactHtmlForStorage(input?.content ?? current.content),
         };
+        next.urlName = String(next.urlName || '').trim() || buildLanguageSeoUrlName(code, seed.urlName, next.title);
+        next.keywords = String(next.keywords || '').trim() || String(next.title || '').trim();
+        const unchanged = next.urlName === current.urlName && next.keywords === current.keywords;
+        if (!updateExisting && !input && unchanged) return null;
+        return next;
       }
+      const title = input?.title ?? seed.title;
       return this.translationRepo.create({
         pageId: page.id,
         lang: code,
-        title: input?.title ?? seed.title,
-        urlName: input?.urlName ?? seed.urlName,
+        title,
+        urlName: String(input?.urlName || '').trim() || buildLanguageSeoUrlName(code, seed.urlName, title),
         subtitle: input?.subtitle ?? seed.subtitle,
-        keywords: input?.keywords ?? seed.keywords,
+        keywords: String(input?.keywords || seed.keywords || '').trim() || String(title || '').trim(),
         description: input?.description ?? seed.description,
         content: this.compactHtmlForStorage(input?.content ?? seed.content),
       });
     }).filter(Boolean) as PageTranslation[];
 
     if (rows.length) await this.translationRepo.save(rows);
+  }
+
+  private assertTranslationSeoReady(translation: PageTranslation | undefined, lang: string): asserts translation is PageTranslation {
+    const labels: Record<string, string> = {
+      title: '标题',
+      urlName: 'URL 名称',
+      keywords: '关键词',
+      description: '描述',
+      content: '正文',
+    };
+    const missing = (Object.keys(labels) as Array<keyof typeof labels>).filter(
+      (field) => !String(translation?.[field] || '').trim(),
+    );
+    if (missing.length) {
+      const languageName = NEWS_LANGUAGES.find((item) => item.code === lang)?.name || lang;
+      throw new BadRequestException(`${languageName} 的单页 SEO 信息不完整：缺少${missing.map((field) => labels[field]).join('、')}`);
+    }
   }
 
   private mergeTranslation(page: Page, translation?: PageTranslation, lang = DEFAULT_NEWS_LANG, translations?: PageTranslation[]) {

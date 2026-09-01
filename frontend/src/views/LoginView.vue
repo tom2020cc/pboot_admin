@@ -32,7 +32,7 @@ import { getErrorMessage } from "@/utils/request";
 
 const router = useRouter();
 const route = useRoute();
-const form = reactive<LoginInfo>({ email: "tom9@qq.com", password: "tom1993" });
+const form = reactive<LoginInfo>({ email: "tom@qq.com", password: "tom1993" });
 const formRef = ref<FormInstance>();
 const isLoading = ref(false);
 const isRegister = ref(false);

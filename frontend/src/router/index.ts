@@ -8,6 +8,12 @@ const router = createRouter({
   routes: [
     { path: "/login", name: "login", component: () => import("@/views/LoginView.vue") },
     {
+      path: "/quotations",
+      name: "quotations",
+      component: () => import("@/views/quotations/QuotationTool.vue"),
+      meta: { title: "报价单生成", requiresAuth: true },
+    },
+    {
       path: "/",
       component: AppLayout,
       meta: { requiresAuth: true },

@@ -62,15 +62,16 @@ export class DatabaseBackupService {
       const stat = fs.statSync(filePath);
       const metaPath = `${filePath}.json`;
       const meta = fs.existsSync(metaPath) ? this.safeReadJson(metaPath) : null;
+      const inspected = meta ? null : await this.inspectDatabase(filePath);
       backups.push({
         fileName: path.basename(filePath),
         backupPath: filePath,
         size: stat.size,
         createdAt: stat.mtime.toISOString(),
         sha256: meta?.sha256 || '',
-        counts: meta?.counts || {},
-        healthy: meta?.healthy ?? null,
-        warnings: meta?.warnings || [],
+        counts: meta?.counts || inspected?.counts || {},
+        healthy: meta?.healthy ?? inspected?.healthy ?? null,
+        warnings: meta?.warnings || inspected?.warnings || [],
       });
     }
     return backups;
@@ -103,11 +104,15 @@ export class DatabaseBackupService {
       for (const table of IMPORTANT_TABLES) {
         counts[table] = this.countTable(db, table);
       }
+      counts.news_records_raw = counts.news;
+      counts.news_orphans = this.countNewsWithoutTranslations(db);
+      counts.news = Math.max(0, counts.news_records_raw - counts.news_orphans);
     } finally {
       db.close();
     }
 
     if ((counts.menu || 0) <= 0) warnings.push('menu table is empty');
+    if ((counts.news_orphans || 0) > 0) warnings.push(`${counts.news_orphans} news records have no translations`);
     if ((counts.news || 0) <= 0 && (counts.product || 0) <= 0 && (counts.page || 0) <= 0 && (counts.video || 0) <= 0) {
       warnings.push('all content tables are empty');
     }
@@ -123,6 +128,24 @@ export class DatabaseBackupService {
     const exists = this.queryOne<{ count: number }>(db, `select count(*) as count from sqlite_master where type='table' and name=?`, [table]);
     if (!Number(exists?.count || 0)) return 0;
     return Number(this.queryOne<{ count: number }>(db, `select count(*) as count from "${table}"`)?.count || 0);
+  }
+
+  private countNewsWithoutTranslations(db: any) {
+    const newsTable = this.queryOne<{ count: number }>(
+      db,
+      `select count(*) as count from sqlite_master where type='table' and name='news'`,
+    );
+    const translationTable = this.queryOne<{ count: number }>(
+      db,
+      `select count(*) as count from sqlite_master where type='table' and name='news_translations'`,
+    );
+    if (!Number(newsTable?.count || 0) || !Number(translationTable?.count || 0)) return 0;
+    return Number(
+      this.queryOne<{ count: number }>(
+        db,
+        'select count(*) as count from news n where not exists (select 1 from news_translations t where t.newsId=n.id)',
+      )?.count || 0,
+    );
   }
 
   private queryOne<T>(db: any, sql: string, params: any[] = []) {

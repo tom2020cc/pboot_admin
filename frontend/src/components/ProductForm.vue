@@ -172,7 +172,7 @@ const translatingLang = ref("");
 const translatingAll = ref(false);
 const optimizingSeo = ref(false);
 const optimizingAlts = ref(false);
-const translationModel = ref("glm-4-flash-250414");
+const translationModel = ref("");
 const seoModel = ref("");
 const translationModels = ref<TranslationModel[]>([]);
 const translationStatus = ref("");
@@ -241,7 +241,7 @@ const syncDefaultFields = () => {
 const loadTranslationModels = async () => {
   try {
     const res = await getProductTranslationModels();
-    translationModels.value = [...res.data].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+    translationModels.value = [...res.data];
     const preferredTranslation = translationModels.value.find((item) => item.available);
     if (preferredTranslation) translationModel.value = preferredTranslation.value;
     const preferredSeoModel = availableSeoModels.value[0];

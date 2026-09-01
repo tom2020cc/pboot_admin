@@ -29,6 +29,7 @@ import type { UploadFile } from "element-plus";
 import { ElMessage } from "element-plus";
 import { getImageUploadSizeError, getUploadUrl, uploadImages } from "@/api/uploads";
 import { getErrorMessage } from "@/utils/request";
+import { UploadFilled } from "@element-plus/icons-vue";
 
 const images = defineModel<string[]>("images", { required: true });
 const titles = defineModel<string[]>("titles", { required: true });

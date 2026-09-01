@@ -30,6 +30,7 @@ export function buildLanguageSeoUrlName(
     .toLowerCase()
     .replace(/^https?:\/\/[^/]+/i, '')
     .replace(/^\/+|\/+$/g, '')
+    .replace(/^(?:cn|en|es|fr|ru|ar|pt)-/i, '')
     .replace(new RegExp(`^${prefix}-`, 'i'), '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')

@@ -34,9 +34,9 @@ import {
 import { TranslateMenuContentDto } from '../common/dto/translate-menu-content.dto';
 import { MenuTranslationJob } from '../common/menu-translation-job';
 import { resolveChineseMenuScope } from '../common/menu-translation-scope';
-import { fetchWithAiRetry, formatAiErrorMessage, sleep } from '../common/ai-retry';
+import { fetchWithAiRetry, formatAiErrorMessage, isFallbackableAiErrorText, sleep } from '../common/ai-retry';
 import { repairTranslatedHtml, translateHtmlContentSafely } from '../common/translation-html-utils';
-import { buildTranslationModelCatalog } from '../common/translation-model-catalog';
+import { buildTranslationModelCatalog, buildTranslationModelFallbackChain } from '../common/translation-model-catalog';
 import { extractTranslationJson } from '../common/ai-json';
 
 const initSqlJs = require('sql.js');
@@ -149,14 +149,35 @@ export class NewsService {
   }
 
   private async translateDraftRaw(postObj: TranslateNewsDto) {
-    const model = this.findTranslationModels().find((item) => item.value === postObj.model);
+    const models = this.findTranslationModels();
+    const model = models.find((item) => item.value === postObj.model);
     if (!model) throw new BadRequestException('不支持该翻译模型');
-    if (model.value === 'google-free') return await this.translateWithGoogleFree(postObj);
-    if (model.value === 'mymemory-free') return await this.translateWithMyMemoryFree(postObj);
     if (!model.available) {
       const envName = this.getAiProviderEnvName(model.provider as 'zhipu' | 'openai' | 'deepseek' | 'qwen');
       throw new BadRequestException(`未配置 ${envName}，暂时不能调用该翻译模型`);
     }
+
+    const chain = buildTranslationModelFallbackChain(models, model.value);
+    let lastError: unknown;
+    for (const candidate of chain) {
+      try {
+        const translated = await this.translateDraftWithModel({ ...postObj, model: candidate.value }, candidate);
+        return {
+          ...translated,
+          requestedModel: postObj.model,
+          fallbackUsed: candidate.value !== postObj.model,
+        };
+      } catch (error) {
+        lastError = error;
+        if (!isFallbackableAiErrorText(error instanceof Error ? error.message : String(error))) throw error;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new BadRequestException('所有可用翻译模型均调用失败');
+  }
+
+  private async translateDraftWithModel(postObj: TranslateNewsDto, model: ReturnType<NewsService['findTranslationModels']>[number]) {
+    if (model.value === 'google-free') return await this.translateWithGoogleFree(postObj);
+    if (model.value === 'mymemory-free') return await this.translateWithMyMemoryFree(postObj);
     if (model.value === 'qwen-mt-lite') return await this.translateWithQwenMtLite(postObj);
     if (model.provider === 'zhipu') return await this.translateWithZhipu(postObj);
     if (model.provider === 'deepseek') return await this.translateWithDeepSeek(postObj);

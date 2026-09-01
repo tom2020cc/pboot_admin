@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-// Google Indexing 每日自动提交（配额 200/天，太平洋零点=北京时间 15:00 重置）
-// 用法: node auto-submit-google.js
-// 流程: 确保 server.js 在跑 → 预检 Google 连通(/test) → 取 report 全部 URL(7 语首页置顶+按 priority 降序)
-//       → 分批 POST /api/google-indexing/submit(server 端去重+当日配额截断) → 打印汇总。
 
 const http = require("http");
 const fs = require("fs");
@@ -11,6 +7,8 @@ const { spawn } = require("child_process");
 
 const TOOL_ROOT = __dirname;
 const CONFIG_PATH = path.join(TOOL_ROOT, "seo.config.json");
+const LANGUAGE_SUBDOMAINS = ["cn", "es", "fr", "ru", "ar", "pt"];
+const DRY_RUN = process.argv.includes("--dry-run");
 
 function readConfig() {
   try {
@@ -20,25 +18,15 @@ function readConfig() {
   }
 }
 
-const PORT = Number(readConfig().localPort || 5288);
-
-// 各语言首页不在 report 里，手工放到最前面
-const HOMEPAGES = [
-  "https://shanbo.cc/", // 主域 = 英文站
-  "https://cn.shanbo.cc/",
-  "https://es.shanbo.cc/",
-  "https://fr.shanbo.cc/",
-  "https://ru.shanbo.cc/",
-  "https://ar.shanbo.cc/",
-  "https://pt.shanbo.cc/",
-];
+const initialConfig = readConfig();
+const PORT = Number(initialConfig.localPort || 5288);
 
 function request(method, pathname, body, timeoutMs = 120000) {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : null;
     const req = http.request(
       {
-        host: "127.0.0.1",
+        host: "localhost",
         port: PORT,
         path: pathname,
         method,
@@ -48,16 +36,12 @@ function request(method, pathname, body, timeoutMs = 120000) {
           : {},
       },
       (res) => {
-        let buf = "";
+        let buffer = "";
         res.setEncoding("utf8");
-        res.on("data", (c) => (buf += c));
+        res.on("data", (chunk) => (buffer += chunk));
         res.on("end", () => {
-          let parsed = buf;
-          try {
-            parsed = JSON.parse(buf);
-          } catch (_error) {
-            /* keep raw string */
-          }
+          let parsed = buffer;
+          try { parsed = JSON.parse(buffer); } catch (_error) { /* keep raw response */ }
           resolve({ status: res.statusCode, body: parsed });
         });
       },
@@ -69,12 +53,12 @@ function request(method, pathname, body, timeoutMs = 120000) {
   });
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function isServerUp() {
   try {
-    await request("GET", "/api/config", null, 3000);
-    return true;
+    const response = await request("GET", "/api/config", null, 3000);
+    return response.status === 200;
   } catch (_error) {
     return false;
   }
@@ -82,105 +66,126 @@ async function isServerUp() {
 
 async function ensureServer() {
   if (await isServerUp()) return;
-  console.log(`SEO 工具未运行，启动 server.js（端口 ${PORT}）...`);
+  console.log(`SEO 工具未运行，正在启动 server.js（端口 ${PORT}）...`);
   const child = spawn(process.execPath, ["server.js"], {
     cwd: TOOL_ROOT,
     detached: true,
     stdio: "ignore",
+    windowsHide: true,
   });
   child.unref();
-  for (let i = 0; i < 30; i += 1) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
     await sleep(1000);
-    if (await isServerUp()) {
-      console.log("server 已就绪。");
-      return;
-    }
+    if (await isServerUp()) return;
   }
-  throw new Error("server.js 启动失败或端口被占用，请手动运行 05-start-seo-tool.cmd 后重试。");
+  throw new Error("server.js 启动失败或端口被占用，请先启动 SEO 工具。");
+}
+
+function buildHomepages(config) {
+  try {
+    const base = new URL(String(config.siteBaseUrl || ""));
+    base.pathname = "/";
+    base.search = "";
+    base.hash = "";
+    const pages = [base.toString()];
+    if (config.useLanguageSubdomains === false) return pages;
+    const rootHost = base.hostname.replace(/^(cn|es|fr|ru|ar|pt)\./i, "");
+    for (const language of LANGUAGE_SUBDOMAINS) pages.push(`${base.protocol}//${language}.${rootHost}/`);
+    return pages;
+  } catch (_error) {
+    return [];
+  }
+}
+
+function requireSuccessful(response, label) {
+  if (response.status === 200 && response.body && typeof response.body === "object") return response.body;
+  const message = response.body && response.body.message ? response.body.message : `HTTP ${response.status}`;
+  throw new Error(`${label}失败：${message}`);
 }
 
 async function main() {
   await ensureServer();
 
-  // 预检：Google 连通性（代理是否开、SA 是否有效）
-  console.log("预检 Google 连通性（/api/google-indexing/test）...");
-  let pretest;
-  try {
-    pretest = await request("POST", "/api/google-indexing/test", {}, 30000);
-  } catch (e) {
-    throw new Error(`无法访问 SEO 工具: ${e.message}`);
+  const submittedState = requireSuccessful(
+    await request("GET", "/api/google-indexing/submitted"),
+    "读取 Google 提交状态",
+  );
+  const quota = submittedState.quota || { dailyLimit: 200, dailyUsed: 0, dailyRemaining: 200 };
+  console.log(`今日配额：已请求 ${quota.dailyUsed}/${quota.dailyLimit}，剩余 ${quota.dailyRemaining}`);
+  if (Number(quota.dailyRemaining) <= 0) {
+    console.log(`今日配额已用完。${quota.resetNote || "配额在太平洋时间零点重置。"}`);
+    return;
   }
-  if (!pretest.body || pretest.body.ok !== true) {
-    const msg = (pretest.body && pretest.body.message) || `HTTP ${pretest.status}`;
-    throw new Error(
-      `Google 预检失败：${msg}\n  → 请确认 Clash 代理已开启、服务账号 JSON 正确、且已在 Search Console 添加该邮箱为所有者。`,
+
+  if (!DRY_RUN) {
+    const pretest = requireSuccessful(
+      await request("POST", "/api/google-indexing/test", {}, 30000),
+      "Google Indexing API 预检",
     );
+    if (pretest.ok !== true) throw new Error(pretest.message || "Google Indexing API 预检未通过。");
+    console.log(`预检通过：${pretest.message}`);
   }
-  console.log(`  预检通过：${pretest.body.message}`);
 
-  // 取 report 全部 URL
-  const reportResp = await request("GET", "/api/report", null, 120000);
-  if (reportResp.status !== 200 || !reportResp.body || !Array.isArray(reportResp.body.urls)) {
-    throw new Error(`取 report 失败: HTTP ${reportResp.status}`);
+  const report = requireSuccessful(await request("GET", "/api/report"), "读取 SEO 报告");
+  if (!Array.isArray(report.urls)) throw new Error("SEO 报告中没有 URL 列表。");
+  const reportUrls = report.urls
+    .filter((item) => item && /^https?:\/\//i.test(item.url || ""))
+    .sort((left, right) => (Number(right.priority) || 0) - (Number(left.priority) || 0))
+    .map((item) => item.url);
+  const allUrls = [...new Set([...buildHomepages(report.config || initialConfig), ...reportUrls])];
+  const submitted = submittedState.submitted || {};
+  const pending = allUrls.filter((url) => !submitted[url]);
+  if (!pending.length) {
+    console.log(`全部 ${allUrls.length} 个 URL 均已有成功提交记录，无需继续。`);
+    return;
   }
-  const reportUrls = reportResp.body.urls
-    .filter((u) => u && /^https?:\/\//i.test(u.url))
-    .sort((a, b) => (Number(b.priority) || 0) - (Number(a.priority) || 0))
-    .map((u) => u.url);
-  const urls = [...new Set([...HOMEPAGES, ...reportUrls])];
-  console.log(`候选 URL 总数: ${urls.length}`);
 
-  // 分批提交（server 端自动去重 + 当日配额截断）
+  const todayUrls = pending.slice(0, Math.max(0, Number(quota.dailyRemaining)));
+  console.log(`总 URL ${allUrls.length}，已提交 ${allUrls.length - pending.length}，待提交 ${pending.length}，本次最多 ${todayUrls.length}。`);
+  console.log("提示：Google 官方当前仅支持 JobPosting 或带 BroadcastEvent 的直播页面使用 Indexing API。");
+  if (DRY_RUN) {
+    console.log("演练模式结束：未测试 Google 连接，也未发出任何提交请求。");
+    return;
+  }
+
   const batchSize = 20;
-  let ok = 0;
-  let skipped = 0;
+  let succeeded = 0;
   let failed = 0;
-  let quotaHit = false;
-  const samples = [];
-  for (let i = 0; i < urls.length && !quotaHit; i += batchSize) {
-    const batch = urls.slice(i, i + batchSize);
-    let r;
-    try {
-      r = await request("POST", "/api/google-indexing/submit", { urls: batch }, 120000);
-    } catch (e) {
-      console.error(`批次请求失败: ${e.message}`);
-      break;
-    }
-    if (r.status !== 200 || !r.body || !Array.isArray(r.body.results)) {
-      console.error(`批次响应异常: HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 200)}`);
-      break;
-    }
-    for (const item of r.body.results) {
-      if (item.ok && item.skipped) skipped += 1;
-      else if (item.ok) ok += 1;
-      else {
-        failed += 1;
-        if (samples.length < 3) samples.push(`${item.url} => ${item.message}`);
+  let attempted = 0;
+  let remaining = Number(quota.dailyRemaining);
+  let stopReason = "";
+  const failureSamples = [];
+
+  for (let offset = 0; offset < todayUrls.length; offset += batchSize) {
+    const batch = todayUrls.slice(offset, offset + batchSize);
+    const response = await request("POST", "/api/google-indexing/submit", { urls: batch }, 120000);
+    const result = requireSuccessful(response, `提交第 ${Math.floor(offset / batchSize) + 1} 批`);
+    succeeded += Number(result.succeeded || 0);
+    failed += Number(result.failed || 0);
+    attempted += Number(result.attempted || 0);
+    remaining = Number(result.quota?.dailyRemaining ?? remaining);
+    stopReason = result.stopReason || "";
+    for (const item of result.results || []) {
+      if (!item.ok && !item.skipped && failureSamples.length < 5) {
+        failureSamples.push(`${item.url}：${item.message || "未知错误"}`);
       }
     }
-    const remaining = r.body.quota ? r.body.quota.dailyRemaining : null;
-    console.log(
-      `进度: ${Math.min(i + batchSize, urls.length)}/${urls.length}  成功 ${ok}  跳过 ${skipped}  失败 ${failed}  剩余配额 ${remaining ?? "?"}`,
-    );
-    if (r.body.results.some((x) => x.status === 429)) {
-      console.log(">>> 遇到 429（配额耗尽），停止。");
-      quotaHit = true;
-    } else if (remaining !== null && remaining <= 0) {
-      console.log(">>> 当日配额已用完，停止。");
-      quotaHit = true;
-    }
+    console.log(`进度：实际请求 ${attempted}/${todayUrls.length}，成功 ${succeeded}，失败 ${failed}，今日剩余 ${remaining}`);
+    if (stopReason || remaining <= 0) break;
   }
 
-  console.log("");
-  console.log(`===== 完成: 成功 ${ok}, 跳过(已提交过) ${skipped}, 失败 ${failed} =====`);
-  if (samples.length) {
-    console.log("失败样例:");
-    samples.forEach((s) => console.log(`  ${s}`));
+  console.log(`完成：实际请求 ${attempted}，成功 ${succeeded}，失败 ${failed}，剩余待提交 ${Math.max(0, pending.length - succeeded)}。`);
+  if (stopReason) console.log(`停止原因：${stopReason}`);
+  if (failureSamples.length) {
+    console.log("失败样例：");
+    failureSamples.forEach((item) => console.log(`  ${item}`));
   }
-  process.exitCode = failed > 0 && ok === 0 ? 1 : 0;
+  if (failed > 0 && succeeded === 0 && stopReason !== "daily-quota" && stopReason !== "google-quota") {
+    process.exitCode = 1;
+  }
 }
 
-main().catch((e) => {
-  console.error(`✗ ${e.message || e}`);
+main().catch((error) => {
+  console.error(`ERROR: ${error.message || error}`);
   process.exit(1);
 });
