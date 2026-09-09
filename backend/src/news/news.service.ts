@@ -892,7 +892,7 @@ export class NewsService {
     return await this.findOneById(id);
   }
 
-  async syncToPboot(id: number, options: SyncNewsDto = {}) {
+  async syncToPboot(id: number, options: SyncNewsDto = {}, beforeWrite?: () => Promise<void>) {
     const news = await this.findNewsEntity(id);
     await this.ensureTranslations(news);
     const translations = await this.translationRepo.find({ where: { newsId: id }, order: { id: 'ASC' } });
@@ -932,7 +932,9 @@ export class NewsService {
         throw new BadRequestException('No publishable language content was found for PbootCMS sync.');
       }
 
+      if (beforeWrite) await beforeWrite();
       const exported = db.export();
+      if (!fs.readFileSync(dbPath).equals(dbFile)) throw new BadRequestException('PB 数据库已被其他操作修改，请重新同步');
       fs.writeFileSync(dbPath, Buffer.from(exported));
     } finally {
       db.close();

@@ -48,6 +48,7 @@ managed-sites/
 ## 文档
 
 - [2026-09-09 开发基线与备份说明](docs/PROJECT_BASELINE_20260909_ZH.md)
+- [SEO 内容计划与实施范围](docs/SEO_CONTENT_PLAN_ZH.md)
 - [新电脑集中版安装教程](docs/NEW_PC_SETUP_ZH.md)
 - [宝塔集中部署图文教程](docs/BAOTA_MULTI_SITE_DEPLOY_ZH.md)
 - [多站点配置目录说明](managed-sites/README.md)

@@ -48,6 +48,10 @@
             <el-icon><Tickets /></el-icon>
             <span>新闻管理</span>
           </el-menu-item>
+          <el-menu-item index="/seo-content">
+            <el-icon><Calendar /></el-icon>
+            <span>SEO 内容计划</span>
+          </el-menu-item>
           <el-menu-item index="/pages">
             <el-icon><Document /></el-icon>
             <span>单页管理</span>
@@ -74,7 +78,7 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from "vue-router";
 import { isCollapse } from "@/components/layout/isCollapse";
-import { Connection, Document, Goods, House, Menu, Monitor, Picture, Setting, SetUp, Tickets, User, VideoCamera } from "@element-plus/icons-vue";
+import { Calendar, Connection, Document, Goods, House, Menu, Monitor, Picture, Setting, SetUp, Tickets, User, VideoCamera } from "@element-plus/icons-vue";
 
 const route = useRoute();
 </script>

@@ -33,6 +33,7 @@ const router = createRouter({
         { path: "menus/create", name: "createMenus", component: () => import("@/views/menu/Create.vue"), meta: { title: "新增菜单" } },
         { path: "menus/edit/:id", name: "editMenus", component: () => import("@/views/menu/Edit.vue"), meta: { title: "编辑菜单" } },
         { path: "news", name: "news", component: () => import("@/views/news/NewsView.vue"), meta: { title: "新闻管理" } },
+        { path: "seo-content", name: "seoContent", component: () => import("@/views/seo/SeoContentView.vue"), meta: { title: "SEO 内容计划" } },
         { path: "news/create", name: "createNews", component: () => import("@/views/news/Create.vue"), meta: { title: "添加新闻" } },
         { path: "news/detail/:id", name: "newsDetail", component: () => import("@/views/news/Detail.vue"), meta: { title: "新闻详情" } },
         { path: "news/edit/:id", name: "editNews", component: () => import("@/views/news/Edit.vue"), meta: { title: "编辑新闻" } },

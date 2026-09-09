@@ -33,7 +33,7 @@ request.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${store.token}`;
   }
   const activeSiteId = getActiveSiteId();
-  if (activeSiteId) config.headers["X-Pboot-Site-Id"] = String(activeSiteId);
+  if (activeSiteId && !config.headers["X-Pboot-Site-Id"]) config.headers["X-Pboot-Site-Id"] = String(activeSiteId);
   return config;
 });
 

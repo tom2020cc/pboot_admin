@@ -20,6 +20,7 @@ import { QuotationModule } from './quotation/quotation.module';
 import { BrochureModule } from './brochure/brochure.module';
 import { SiteRequestContextMiddleware } from './sites/site-request-context.service';
 import { SitesModule } from './sites/sites.module';
+import { SeoContentModule } from './seo-content/seo-content.module';
 
 const entities = [__dirname + '/**/*.entity{.ts,.js}'];
 
@@ -63,6 +64,7 @@ const createDatabaseConfig = (config: ConfigService): TypeOrmModuleOptions =>
     DatabaseBackupModule,
     QuotationModule,
     BrochureModule,
+    SeoContentModule,
     
   ],
   controllers: [AppController],
