@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="520" viewBox="0 0 1320 520" role="img" aria-labelledby="title desc">
+  <title id="title">配置备份与迁移流程</title>
+  <desc id="desc">展示完整配置、仅模型 Key、业务数据库和敏感文件的备份恢复顺序。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <rect width="1320" height="520" fill="#f7f9fc"/>
+  <text x="48" y="54" font-family="Microsoft YaHei, Arial, sans-serif" font-size="28" font-weight="700" fill="#172033">配置备份与迁移</text>
+  <text x="48" y="86" font-family="Microsoft YaHei, Arial, sans-serif" font-size="16" fill="#667085">配置导出负责迁移设置，文件备份负责兜底；两者不能互相替代。</text>
+
+  <rect x="48" y="128" width="244" height="206" rx="8" fill="#ffffff" stroke="#8eadd6" stroke-width="2"/>
+  <rect x="48" y="128" width="244" height="38" rx="8" fill="#eaf3ff"/>
+  <rect x="48" y="158" width="244" height="8" fill="#eaf3ff"/>
+  <text x="66" y="153" font-family="Microsoft YaHei, Arial, sans-serif" font-size="18" font-weight="700" fill="#145dbf">旧电脑 / 本地版</text>
+  <text x="66" y="202" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">1. 导出完整配置</text>
+  <text x="66" y="234" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">2. 导出仅模型 Key</text>
+  <text x="66" y="266" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">3. 复制 SQLite 与私钥</text>
+  <text x="66" y="298" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">4. 加密保存压缩包</text>
+
+  <rect x="388" y="128" width="244" height="206" rx="8" fill="#ffffff" stroke="#64b585" stroke-width="2"/>
+  <rect x="388" y="128" width="244" height="38" rx="8" fill="#e9f8ef"/>
+  <rect x="388" y="158" width="244" height="8" fill="#e9f8ef"/>
+  <text x="406" y="153" font-family="Microsoft YaHei, Arial, sans-serif" font-size="18" font-weight="700" fill="#168047">加密备份位置</text>
+  <text x="406" y="202" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">完整配置 JSON</text>
+  <text x="406" y="234" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">模型 Key JSON</text>
+  <text x="406" y="266" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">pboot-admin.sqlite</text>
+  <text x="406" y="298" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">Google / FTP 敏感配置</text>
+
+  <rect x="728" y="128" width="244" height="206" rx="8" fill="#ffffff" stroke="#f0a24d" stroke-width="2"/>
+  <rect x="728" y="128" width="244" height="38" rx="8" fill="#fff4e6"/>
+  <rect x="728" y="158" width="244" height="8" fill="#fff4e6"/>
+  <text x="746" y="153" font-family="Microsoft YaHei, Arial, sans-serif" font-size="18" font-weight="700" fill="#b75b00">宝塔新环境</text>
+  <text x="746" y="202" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">1. 启动空白项目</text>
+  <text x="746" y="234" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">2. 先导入模型 Key</text>
+  <text x="746" y="266" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">3. 再导入完整配置</text>
+  <text x="746" y="298" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">4. 逐站测试读写</text>
+
+  <rect x="1068" y="128" width="204" height="206" rx="8" fill="#ffffff" stroke="#9b8bd7" stroke-width="2"/>
+  <rect x="1068" y="128" width="204" height="38" rx="8" fill="#f1edff"/>
+  <rect x="1068" y="158" width="204" height="8" fill="#f1edff"/>
+  <text x="1086" y="153" font-family="Microsoft YaHei, Arial, sans-serif" font-size="18" font-weight="700" fill="#5f49b5">上线验收</text>
+  <text x="1086" y="202" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">模型连接测试</text>
+  <text x="1086" y="234" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">站点路径自检</text>
+  <text x="1086" y="266" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">单条内容测试</text>
+  <text x="1086" y="298" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#172033">重新导出备份</text>
+
+  <path d="M292 232 H378" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M632 232 H718" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M972 232 H1058" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="48" y="386" width="1224" height="82" rx="8" fill="#fff7ed" stroke="#f3c78e"/>
+  <text x="70" y="418" font-family="Microsoft YaHei, Arial, sans-serif" font-size="16" font-weight="700" fill="#9a4d00">敏感信息规则</text>
+  <text x="70" y="448" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#7a4b16">包含 API Key、FTP 密码和 Google 私钥的备份不要放入 Git、公开下载目录或网站静态目录。</text>
+</svg>

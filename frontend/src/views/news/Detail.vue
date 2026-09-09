@@ -7,7 +7,7 @@
       </div>
       <div class="actions">
         <el-select v-model="currentLang" class="lang-select" @change="handleLangChange">
-          <el-option v-for="item in NEWS_LANGUAGES" :key="item.code" :label="item.name" :value="item.code" />
+          <el-option v-for="item in availableLanguages" :key="item.code" :label="item.name" :value="item.code" />
         </el-select>
         <el-button @click="router.push('/news')">返回列表</el-button>
         <el-button type="success" :loading="syncingCurrent" @click="handleSync(false)">同步当前语言</el-button>
@@ -74,9 +74,11 @@ import { getAll, type MenuItem } from "@/api/menus";
 import { DEFAULT_NEWS_LANG, NEWS_LANGUAGES, getNewsById, syncNewsToPboot, type NewsItem } from "@/api/news";
 import { getUploadUrl, normalizeHtmlImageUrls } from "@/api/uploads";
 import { getErrorMessage } from "@/utils/request";
+import { useAvailableLanguages } from "@/composables/useAvailableLanguages";
 
 const route = useRoute();
 const router = useRouter();
+const availableLanguages = useAvailableLanguages();
 const loading = ref(false);
 const news = ref<NewsItem>();
 const menus = ref<MenuItem[]>([]);

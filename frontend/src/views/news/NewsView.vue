@@ -6,6 +6,9 @@
         <p>维护每一篇新闻的栏目、标题、缩略图、多语言内容、状态和排序。</p>
       </div>
       <div class="page-actions">
+        <el-button type="success" :icon="Upload" :disabled="importing || pullingScope || pushingScope || syncingId !== null" @click="showScopeSync = true">
+          一键同步到 PB
+        </el-button>
         <el-button type="warning" plain :loading="importing" @click="handleImportFromPboot">
           {{ importing ? "正在重建..." : "全站从 PB 重建" }}
         </el-button>
@@ -21,7 +24,13 @@
         <el-option v-for="item in menuOptions" :key="item.id" :label="item.optionLabel" :value="Number(item.id)" />
       </el-select>
       <el-select v-model="currentLang" placeholder="显示语言" class="lang-select" @change="handleLangChange">
-        <el-option v-for="item in NEWS_LANGUAGES" :key="item.code" :label="item.name" :value="item.code" />
+        <el-option v-for="item in availableLanguages" :key="item.code" :label="item.name" :value="item.code" />
+      </el-select>
+      <el-select v-model="translationFilter" class="progress-select" aria-label="翻译状态筛选">
+        <el-option label="全部翻译状态" value="all" />
+        <el-option label="未完成翻译" value="incomplete" />
+        <el-option label="已全部翻译" value="complete" />
+        <el-option label="未翻译" value="untranslated" />
       </el-select>
       <el-button @click="loadNews">刷新</el-button>
     </div>
@@ -46,11 +55,10 @@
       <div class="translation-controls">
         <el-select v-model="translationModel" placeholder="选择翻译模型" class="model-select">
           <el-option
-            v-for="item in translationModels"
+            v-for="item in selectableTranslationModels"
             :key="item.value"
             :label="item.displayLabel || item.label"
             :value="item.value"
-            :disabled="!item.available"
           />
         </el-select>
         <el-button
@@ -106,7 +114,7 @@
       </el-tag>
     </div>
 
-    <el-table v-loading="loading" :data="newsList" border stripe class="data-table">
+    <el-table v-loading="loading" :data="filteredNews" border stripe class="data-table">
       <el-table-column prop="id" label="ID" width="90" align="center" />
       <el-table-column type="index" label="序号" width="70" align="center" />
       <el-table-column label="缩略图" width="120" align="center">
@@ -116,6 +124,24 @@
         </template>
       </el-table-column>
       <el-table-column prop="title" label="内容标题" min-width="260" />
+      <el-table-column label="翻译进度" width="180" align="center">
+        <template #default="{ row }">
+          <el-tooltip v-if="row.translationProgress" placement="top" :disabled="!row.translationProgress.missing.length">
+            <template #content>
+              <div class="missing-translations" v-for="item in row.translationProgress.missing" :key="item.lang">
+                {{ getLanguageName(item.lang) }}：缺少{{ item.fields.join('、') }}
+              </div>
+            </template>
+            <div class="news-translation-status" tabindex="0">
+              <el-tag :type="row.translationProgress.status === 'complete' ? 'success' : row.translationProgress.status === 'partial' ? 'warning' : 'info'" effect="light">
+                {{ translationStatusLabel(row.translationProgress.status) }}
+              </el-tag>
+              <span v-if="row.translationProgress.total">{{ row.translationProgress.completed }}/{{ row.translationProgress.total }} 种外语</span>
+            </div>
+          </el-tooltip>
+          <el-text v-else type="info">待检查</el-text>
+        </template>
+      </el-table-column>
       <el-table-column label="内容栏目" min-width="180">
         <template #default="{ row }">{{ getMenuName(row.menuId) }}</template>
       </el-table-column>
@@ -144,14 +170,15 @@
         </template>
       </el-table-column>
     </el-table>
+    <ContentScopeSyncDialog v-model="showScopeSync" content-type="news" :menus="menus" :initial-menu-id="sourceChineseMenu ? Number(sourceChineseMenu.id) : undefined" @synced="loadNews" />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Plus } from "@element-plus/icons-vue";
+import { Plus, Upload } from "@element-plus/icons-vue";
 import { getAll, type MenuItem } from "@/api/menus";
 import {
   DEFAULT_NEWS_LANG,
@@ -175,21 +202,38 @@ import {
 } from "@/api/news";
 import { getUploadUrl } from "@/api/uploads";
 import TranslationModelInfo from "@/components/TranslationModelInfo.vue";
+import ContentScopeSyncDialog from "@/components/ContentScopeSyncDialog.vue";
 import { getErrorMessage } from "@/utils/request";
 import { filterMenusByContentLang, filterMenusByContentLangAndModel, findEquivalentMenuForLang, formatMenuPathForLang } from "@/utils/menuLanguage";
+import { useAvailableLanguages } from "@/composables/useAvailableLanguages";
+import { resolvePreferredTranslationModel, savePreferredTranslationModel } from "@/utils/translationModelPreference";
 
 const router = useRouter();
+const availableLanguages = useAvailableLanguages();
 const loading = ref(false);
 const importing = ref(false);
 const pullingScope = ref(false);
 const pushingScope = ref(false);
 const newsList = ref<NewsItem[]>([]);
+const showScopeSync = ref(false);
+const translationFilter = ref('all');
+const filteredNews = computed(() => newsList.value.filter(item => {
+  const status = item.translationProgress?.status;
+  return translationFilter.value === 'all' || (translationFilter.value === 'incomplete'
+    ? status === 'partial' || status === 'untranslated' : status === translationFilter.value);
+}));
+const translationStatusLabel = (status: string) => ({
+  complete: '已全部翻译', partial: '部分未翻译', untranslated: '未翻译', 'not-required': '无需翻译',
+}[status] || '待检查');
 const menus = ref<MenuItem[]>([]);
 const filterMenuId = ref<number | undefined>();
 const currentLang = ref(DEFAULT_NEWS_LANG);
 const syncingId = ref<number | null>(null);
 const stats = ref<PbootContentStats | null>(null);
 const translationModels = ref<TranslationModel[]>([]);
+const selectableTranslationModels = computed(() =>
+  translationModels.value.filter((item) => item.available && item.operational !== false),
+);
 const translationModel = ref("");
 const translationJob = ref<MenuTranslationJob | null>(null);
 const retryingFailed = ref(false);
@@ -273,9 +317,10 @@ const loadMenus = async () => {
 const loadTranslationModels = async () => {
   const res = await getTranslationModels();
   translationModels.value = [...res.data];
-  const preferred = translationModels.value.find((item) => item.available);
-  translationModel.value = preferred?.value || "";
+  translationModel.value = resolvePreferredTranslationModel(translationModels.value, translationModel.value);
 };
+
+watch(translationModel, (value) => savePreferredTranslationModel(value));
 
 const loadNews = async () => {
   loading.value = true;
@@ -700,6 +745,11 @@ onBeforeUnmount(stopTranslationPolling);
   width: 160px;
 }
 
+.progress-select { width: 170px; }
+.news-translation-status { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.news-translation-status span:last-child { font-size: 12px; }
+.missing-translations { max-width: 340px; overflow-wrap: anywhere; }
+
 .thumb {
   width: 72px;
   height: 46px;
@@ -708,6 +758,10 @@ onBeforeUnmount(stopTranslationPolling);
 }
 
 @media (max-width: 900px) {
+  .page-bar, .page-actions, .filter-row, .translation-controls { flex-wrap: wrap; }
+  .page-actions { gap: 8px; }
+  .page-actions .el-button { margin-left: 0; }
+  .model-select { width: 100%; }
   .scope-sync-panel {
     align-items: stretch;
     flex-direction: column;

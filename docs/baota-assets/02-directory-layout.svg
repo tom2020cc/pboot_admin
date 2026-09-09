@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+  <title id="title">宝塔目录布局</title>
+  <desc id="desc">集中管理项目与多个 PbootCMS 网站平级放在 /www/wwwroot 目录。</desc>
+  <style>.title{font:700 28px "Microsoft YaHei",Arial;fill:#172033}.head{font:700 18px "Microsoft YaHei",Arial;fill:#172033}.code{font:15px Consolas,"Microsoft YaHei";fill:#334155}.note{font:14px "Microsoft YaHei",Arial;fill:#667085}.box{fill:#fff;stroke:#cfd8e6;stroke-width:2}</style>
+  <rect width="1200" height="650" fill="#f5f7fa"/>
+  <text x="50" y="52" class="title">推荐目录：管理系统与业务网站平级</text>
+  <rect x="50" y="84" width="710" height="520" rx="8" class="box"/>
+  <rect x="50" y="84" width="710" height="48" rx="8" fill="#172033"/>
+  <text x="78" y="115" style="font:700 18px Consolas;fill:#fff">/www/wwwroot/</text>
+  <text x="84" y="170" class="code">├── pboot_admin_center/</text>
+  <text x="124" y="204" class="code">├── backend/</text><text x="500" y="204" class="note">NestJS 与后台 SQLite</text>
+  <text x="124" y="238" class="code">├── frontend/dist/</text><text x="500" y="238" class="note">Nginx 直接提供</text>
+  <text x="124" y="272" class="code">├── tools/</text><text x="500" y="272" class="note">SEO、FTP 工具</text>
+  <text x="124" y="306" class="code">├── data/</text><text x="500" y="306" class="note">集中后台数据库</text>
+  <text x="124" y="340" class="code">└── backups/</text><text x="500" y="340" class="note">后台数据库备份</text>
+  <text x="84" y="392" class="code">├── shanbo.cc/</text>
+  <text x="124" y="426" class="code">├── data/1412...d22.db</text><text x="500" y="426" class="note">PbootCMS 数据库</text>
+  <text x="124" y="460" class="code">├── static/</text><text x="500" y="460" class="note">图片与生成文件</text>
+  <text x="124" y="494" class="code">└── runtime/</text><text x="500" y="494" class="note">PbootCMS 缓存</text>
+  <text x="84" y="546" class="code">├── site-b.com/</text>
+  <text x="84" y="578" class="code">└── site-c.com/</text>
+
+  <rect x="800" y="84" width="350" height="230" rx="8" fill="#edf9f1" stroke="#8fd4aa" stroke-width="2"/>
+  <text x="830" y="126" class="head">为什么平级放置</text>
+  <text x="830" y="166" class="note">1. 一套系统管理多个网站</text>
+  <text x="830" y="198" class="note">2. Linux 路径清晰、容易迁移</text>
+  <text x="830" y="230" class="note">3. 管理项目升级不碰业务网站</text>
+  <text x="830" y="262" class="note">4. Pboot 数据库仍留在各自 data/</text>
+
+  <rect x="800" y="344" width="350" height="260" rx="8" fill="#fff7e8" stroke="#f6c26b" stroke-width="2"/>
+  <text x="830" y="386" class="head">权限重点</text>
+  <text x="830" y="426" class="note">PM2 进程用户：建议 www</text>
+  <text x="830" y="458" class="note">必须可写：中心 data/、backups/</text>
+  <text x="830" y="490" class="note">必须可写：各站 data/、static/</text>
+  <text x="830" y="522" class="note">数据库不要复制到管理目录</text>
+  <text x="830" y="554" class="note">不要使用 chmod 777</text>
+</svg>

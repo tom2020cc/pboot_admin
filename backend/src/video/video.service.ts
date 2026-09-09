@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as fs from 'fs';
@@ -9,10 +8,10 @@ import { SyncGuardService } from '../common/sync-guard.service';
 import { UpdatePlaylistDto, UpdateVideoItemDto } from './dto/video.dto';
 import { VideoItem } from './entities/video-item.entity';
 import { VideoPlaylist } from './entities/video-playlist.entity';
+import { SitesService } from '../sites/sites.service';
 
 const initSqlJs = require('sql.js');
 
-const DEFAULT_YOUTUBE_CHANNEL_ID = 'UCa10M55g3tNru5VTCqI4hww';
 const VIDEO_ROOT_SCODE = '303';
 
 @Injectable()
@@ -21,17 +20,22 @@ export class VideoService {
     @InjectRepository(VideoPlaylist) private readonly playlistRepo: Repository<VideoPlaylist>,
     @InjectRepository(VideoItem) private readonly itemRepo: Repository<VideoItem>,
     @InjectRepository(Menu) private readonly menusRepo: Repository<Menu>,
-    private readonly config: ConfigService,
     private readonly syncGuard: SyncGuardService,
+    private readonly sitesService: SitesService,
   ) {}
 
   /** 拉取油管频道全部播放列表，按 playlistId 增量同步到辅助库 */
   async syncFromYoutube() {
-    const apiKey = this.config.get<string>('YOUTUBE_API_KEY');
+    const siteId = this.sitesService.getCurrentSiteId();
+    await this.adoptLegacyRows(siteId);
+    const apiKey = this.sitesService.getYoutubeApiKey();
     if (!apiKey) {
-      throw new BadRequestException('未配置 YouTube API Key：请在 backend/.env 里添加 YOUTUBE_API_KEY=你的Key，然后重启后端。');
+      throw new BadRequestException('未配置全站共用的 YouTube Data API Key，请在“站点管理”页面配置。');
     }
-    const channelId = this.config.get<string>('YOUTUBE_CHANNEL_ID') || DEFAULT_YOUTUBE_CHANNEL_ID;
+    const channelId = this.sitesService.getYoutubeChannelId();
+    if (!channelId) {
+      throw new BadRequestException('当前站点没有配置 YouTube 频道 ID，请到“站点管理 → 编辑站点”中填写。');
+    }
 
     const remote: { playlistId: string; title: string; thumbUrl: string; itemCount: number }[] = [];
     let pageToken = '';
@@ -61,7 +65,7 @@ export class VideoService {
     if (!remote.length) throw new BadRequestException('该油管频道没有播放列表，请确认频道 ID。');
 
     const remoteIds = new Set(remote.map((item) => item.playlistId));
-    const existing = await this.playlistRepo.find();
+    const existing = await this.playlistRepo.find({ where: { siteId } });
     const existingById = new Map(existing.map((row) => [row.playlistId, row]));
     let maxOrder = existing.reduce((max, row) => Math.max(max, Number(row.orderNum || 0)), 0);
 
@@ -73,6 +77,7 @@ export class VideoService {
         maxOrder += 1;
         await this.playlistRepo.save(
           this.playlistRepo.create({
+            siteId,
             playlistId: item.playlistId,
             title: item.title,
             thumbUrl: item.thumbUrl,
@@ -95,7 +100,7 @@ export class VideoService {
     const stale = existing.filter((row) => !remoteIds.has(row.playlistId));
     if (stale.length) await this.playlistRepo.remove(stale);
 
-    const items = await this.syncPlaylistItems(remote, apiKey);
+    const items = await this.syncPlaylistItems(remote, apiKey, siteId);
 
     return { msg: '油管播放列表同步完成', total: remote.length, created, updated, removed: stale.length, ...items };
   }
@@ -104,8 +109,9 @@ export class VideoService {
   private async syncPlaylistItems(
     playlists: { playlistId: string }[],
     apiKey: string,
+    siteId: number,
   ): Promise<{ videoTotal: number; videosCreated: number; videosUpdated: number; videosRemoved: number }> {
-    const existingItems = await this.itemRepo.find();
+    const existingItems = await this.itemRepo.find({ where: { siteId } });
     const existingByKey = new Map(existingItems.map((row) => [`${row.playlistId}|${row.videoId}`, row]));
     const remoteKeys = new Set<string>();
 
@@ -143,7 +149,7 @@ export class VideoService {
           const current = existingByKey.get(key);
           if (!current) {
             await this.itemRepo.save(
-              this.itemRepo.create({ playlistId: playlist.playlistId, videoId, title, coverUrl, position, publishedAt, show: true }),
+              this.itemRepo.create({ siteId, playlistId: playlist.playlistId, videoId, title, coverUrl, position, publishedAt, show: true }),
             );
             created += 1;
           } else if (
@@ -172,12 +178,15 @@ export class VideoService {
   }
 
   async findAll() {
-    const playlists = await this.playlistRepo.find({ order: { orderNum: 'ASC', id: 'ASC' } });
+    const siteId = this.sitesService.getCurrentSiteId();
+    await this.adoptLegacyRows(siteId);
+    const playlists = await this.playlistRepo.find({ where: { siteId }, order: { orderNum: 'ASC', id: 'ASC' } });
     const counts = await this.itemRepo
       .createQueryBuilder('item')
       .select('item.playlistId', 'playlistId')
       .addSelect('count(*)', 'total')
       .addSelect('sum(case when item.show = 1 then 1 else 0 end)', 'shown')
+      .where('item.siteId = :siteId', { siteId })
       .groupBy('item.playlistId')
       .getRawMany();
     const byPlaylist = new Map(counts.map((row) => [String(row.playlistId), row]));
@@ -189,8 +198,10 @@ export class VideoService {
   }
 
   async getStats() {
-    const all = await this.playlistRepo.find();
-    const videos = await this.itemRepo.find();
+    const siteId = this.sitesService.getCurrentSiteId();
+    await this.adoptLegacyRows(siteId);
+    const all = await this.playlistRepo.find({ where: { siteId } });
+    const videos = await this.itemRepo.find({ where: { siteId } });
     return {
       localCount: all.length,
       publishableCount: all.filter((row) => row.show).length,
@@ -200,15 +211,17 @@ export class VideoService {
     };
   }
 
-  findItems(playlistId?: string) {
+  async findItems(playlistId?: string) {
+    const siteId = this.sitesService.getCurrentSiteId();
+    await this.adoptLegacyRows(siteId);
     if (playlistId) {
-      return this.itemRepo.find({ where: { playlistId }, order: { position: 'ASC', id: 'ASC' } });
+      return this.itemRepo.find({ where: { siteId, playlistId }, order: { position: 'ASC', id: 'ASC' } });
     }
-    return this.itemRepo.find({ order: { playlistId: 'ASC', position: 'ASC', id: 'ASC' } });
+    return this.itemRepo.find({ where: { siteId }, order: { playlistId: 'ASC', position: 'ASC', id: 'ASC' } });
   }
 
   async updateItem(id: number, body: UpdateVideoItemDto) {
-    const item = await this.itemRepo.findOneBy({ id });
+    const item = await this.itemRepo.findOneBy({ id, siteId: this.sitesService.getCurrentSiteId() });
     if (!item) throw new NotFoundException('没有找到该视频');
     return this.itemRepo.save({
       ...item,
@@ -218,7 +231,7 @@ export class VideoService {
   }
 
   async update(id: number, body: UpdatePlaylistDto) {
-    const playlist = await this.playlistRepo.findOneBy({ id });
+    const playlist = await this.playlistRepo.findOneBy({ id, siteId: this.sitesService.getCurrentSiteId() });
     if (!playlist) throw new NotFoundException('没有找到该播放列表');
     const saved = await this.playlistRepo.save({
       ...playlist,
@@ -233,11 +246,13 @@ export class VideoService {
    * 供模板直接读取渲染，不写 PbootCMS 数据库内容。
    */
   async pushVideoList() {
-    const playlists = await this.playlistRepo.find({ where: { show: true }, order: { orderNum: 'ASC', id: 'ASC' } });
+    const siteId = this.sitesService.getCurrentSiteId();
+    await this.adoptLegacyRows(siteId);
+    const playlists = await this.playlistRepo.find({ where: { siteId, show: true }, order: { orderNum: 'ASC', id: 'ASC' } });
     const shownIds = new Set(playlists.map((p) => p.playlistId));
     const titleById = new Map(playlists.map((p) => [p.playlistId, p.title || p.playlistId]));
     const orderById = new Map(playlists.map((p) => [p.playlistId, Number(p.orderNum || 0)]));
-    const items = await this.itemRepo.find({ where: { show: true } });
+    const items = await this.itemRepo.find({ where: { siteId, show: true } });
 
     const videos = items
       .filter((item) => shownIds.has(item.playlistId))
@@ -250,7 +265,7 @@ export class VideoService {
       }))
       .sort((a, b) => a.playlistOrder - b.playlistOrder || a.position - b.position);
 
-    const siteRoot = this.config.get<string>('PBOOT_SITE_ROOT') || path.resolve(process.cwd(), '..', '..');
+    const siteRoot = this.sitesService.getPbootSiteRoot();
     const outPath = path.join(siteRoot, 'static', 'videos.js');
     const payload = videos.map(({ title, id, playlist }) => ({ title, id, playlist }));
     // 防标题里出现 </script> 破坏脚本标签
@@ -351,6 +366,18 @@ export class VideoService {
     }
   }
 
+  private async adoptLegacyRows(siteId: number) {
+    if (!siteId || !this.sitesService.isDefaultSite(siteId)) return;
+    const [scopedPlaylists, legacyPlaylists, scopedItems, legacyItems] = await Promise.all([
+      this.playlistRepo.countBy({ siteId }),
+      this.playlistRepo.countBy({ siteId: 0 }),
+      this.itemRepo.countBy({ siteId }),
+      this.itemRepo.countBy({ siteId: 0 }),
+    ]);
+    if (!scopedPlaylists && legacyPlaylists) await this.playlistRepo.update({ siteId: 0 }, { siteId });
+    if (!scopedItems && legacyItems) await this.itemRepo.update({ siteId: 0 }, { siteId });
+  }
+
   private pickYoutubeThumb(thumbnails: any) {
     const pick = (key: string) => String(thumbnails?.[key]?.url || '').trim();
     return pick('maxres') || pick('standard') || pick('high') || pick('medium') || pick('default');
@@ -396,11 +423,7 @@ export class VideoService {
   }
 
   private getPbootDbPath() {
-    const configured = this.config.get<string>('PBOOT_DB_PATH');
-    if (!configured) {
-      throw new BadRequestException('PbootCMS database is not configured. Run 01-config.cmd first.');
-    }
-    return configured;
+    return this.sitesService.getPbootDbPath();
   }
 
   private backupPbootDatabase(dbPath: string) {
@@ -411,9 +434,7 @@ export class VideoService {
   }
 
   private clearPbootCache() {
-    const root = path.resolve(
-      this.config.get<string>('PBOOT_SITE_ROOT') || path.resolve(process.cwd(), '..', '..'),
-    );
+    const root = path.resolve(this.sitesService.getPbootSiteRoot());
     for (const relative of ['runtime/cache', 'runtime/complile']) {
       const dir = path.resolve(root, relative);
       if (!dir.startsWith(root + path.sep) || !fs.existsSync(dir)) continue;

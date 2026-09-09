@@ -5,7 +5,7 @@ const path = require("path");
 const TOOL_ROOT = __dirname;
 const PACKAGE_ROOT = path.resolve(TOOL_ROOT, "..", "..");
 const PUBLIC_ROOT = path.join(TOOL_ROOT, "public");
-const PORT = Number(process.env.CONFIG_WIZARD_PORT || 5190);
+const PORT = Number(process.env.CONFIG_WIZARD_PORT || 5290);
 
 const BACKEND_ENV = path.join(PACKAGE_ROOT, "backend", ".env");
 const FRONTEND_ENV = path.join(PACKAGE_ROOT, "frontend", ".env.local");
@@ -70,8 +70,8 @@ function validateProjectIsolation(values) {
   const siteDataDir = path.join(siteRoot, "data");
   const backendDir = path.join(PACKAGE_ROOT, "backend");
   const backendDb = path.resolve(backendDir, String(values.backendDb || "dev.sqlite"));
-  const backendPort = Number(values.backendPort || 5000);
-  const frontendPort = Number(values.frontendPort || 5178);
+  const backendPort = Number(values.backendPort || 5108);
+  const frontendPort = Number(values.frontendPort || 5278);
   const requestBodyLimit = String(values.requestBodyLimit || "10mb").trim().toLowerCase();
 
   if (!values.pbootSiteRoot || !fs.existsSync(siteRoot) || !fs.statSync(siteRoot).isDirectory()) {
@@ -106,18 +106,18 @@ function validateProjectIsolation(values) {
   }
 }
 
-function writeBackendEnv(values, seoPort = 5188, ftpPort = 5189) {
+function writeBackendEnv(values, seoPort = 5388, ftpPort = 5389) {
   validateProjectIsolation(values);
   const current = parseEnv(readText(BACKEND_ENV));
   const lines = [
     "DB_TYPE=sqljs",
     `DB_SQLJS_LOCATION=${values.backendDb || "dev.sqlite"}`,
-    `BACKEND_PORT=${Number(values.backendPort || 5000)}`,
-    `FRONTEND_PORT=${Number(values.frontendPort || 5178)}`,
+    `BACKEND_PORT=${Number(values.backendPort || 5108)}`,
+    `FRONTEND_PORT=${Number(values.frontendPort || 5278)}`,
     `REQUEST_BODY_LIMIT=${String(values.requestBodyLimit || current.REQUEST_BODY_LIMIT || "10mb").trim().toLowerCase()}`,
     `CONFIG_WIZARD_PORT=${PORT}`,
-    `SEO_TOOL_PORT=${Number(seoPort || 5188)}`,
-    `FTP_TOOL_PORT=${Number(ftpPort || 5189)}`,
+    `SEO_TOOL_PORT=${Number(seoPort || 5388)}`,
+    `FTP_TOOL_PORT=${Number(ftpPort || 5389)}`,
     "",
     "# Target PbootCMS website",
     `PBOOT_DB_PATH=${normalizeSlash(values.pbootDbPath)}`,
@@ -142,12 +142,12 @@ function writeBackendEnv(values, seoPort = 5188, ftpPort = 5189) {
   fs.writeFileSync(
     FRONTEND_ENV,
     [
-      `VITE_API_BASE_URL=http://localhost:${Number(values.backendPort || 5000)}`,
-      `VITE_FRONTEND_PORT=${Number(values.frontendPort || 5178)}`,
-      `VITE_BACKEND_PORT=${Number(values.backendPort || 5000)}`,
+      `VITE_API_BASE_URL=http://localhost:${Number(values.backendPort || 5108)}`,
+      `VITE_FRONTEND_PORT=${Number(values.frontendPort || 5278)}`,
+      `VITE_BACKEND_PORT=${Number(values.backendPort || 5108)}`,
       `VITE_CONFIG_WIZARD_PORT=${PORT}`,
-      `VITE_SEO_TOOL_PORT=${Number(seoPort || 5188)}`,
-      `VITE_FTP_TOOL_PORT=${Number(ftpPort || 5189)}`,
+      `VITE_SEO_TOOL_PORT=${Number(seoPort || 5388)}`,
+      `VITE_FTP_TOOL_PORT=${Number(ftpPort || 5389)}`,
       "",
     ].join("\n"),
     "utf8",
@@ -158,8 +158,8 @@ function loadBackendEnv() {
   const env = parseEnv(readText(BACKEND_ENV) || readText(path.join(PACKAGE_ROOT, "backend", ".env.example")));
   return {
     backendDb: env.DB_SQLJS_LOCATION || "dev.sqlite",
-    backendPort: Number(env.BACKEND_PORT || 5000),
-    frontendPort: Number(env.FRONTEND_PORT || 5178),
+    backendPort: Number(env.BACKEND_PORT || 5108),
+    frontendPort: Number(env.FRONTEND_PORT || 5278),
     requestBodyLimit: env.REQUEST_BODY_LIMIT || "10mb",
     pbootDbPath: env.PBOOT_DB_PATH || "",
     pbootSiteRoot: env.PBOOT_SITE_ROOT || normalizeSlash(DEFAULT_SITE_ROOT),
@@ -191,7 +191,7 @@ function listDatabases(siteRoot) {
 
 function publicFtpConfig(config) {
   return {
-    localPort: Number(config.localPort || 5189),
+    localPort: Number(config.localPort || 5389),
     host: config.host || "",
     port: Number(config.port || 21),
     user: config.user || "",
@@ -210,10 +210,10 @@ function collectDiagnostics(config = loadConfig(false)) {
   const siteRoot = path.resolve(String(backend.pbootSiteRoot || DEFAULT_SITE_ROOT));
   const databasePath = path.resolve(String(backend.pbootDbPath || ""));
   const ports = [
-    ["后端", Number(backend.backendPort || 5000)],
-    ["前端", Number(backend.frontendPort || 5178)],
-    ["SEO", Number(seo.localPort || 5188)],
-    ["FTP", Number(ftp.localPort || 5189)],
+    ["后端", Number(backend.backendPort || 5108)],
+    ["前端", Number(backend.frontendPort || 5278)],
+    ["SEO", Number(seo.localPort || 5388)],
+    ["FTP", Number(ftp.localPort || 5389)],
   ];
   const items = [];
   const add = (id, label, ok, detail) => items.push({ id, label, ok: Boolean(ok), detail });
@@ -252,7 +252,7 @@ function loadConfig(withDiagnostics = true) {
   if (!backend.pbootDbPath && dbs.length > 0) {
     backend.pbootDbPath = dbs[0].path;
   }
-  const seoPort = Number(seo.localPort || 5188);
+  const seoPort = Number(seo.localPort || 5388);
   const navigation = [
     { id: "admin", label: "🖥️ 管理后台", url: `http://localhost:${backend.frontendPort}/#/` },
     { id: "backend", label: "🔌 后端接口", url: `http://localhost:${backend.backendPort}/api-docs` },
@@ -261,7 +261,7 @@ function loadConfig(withDiagnostics = true) {
     { id: "seo", label: "📊 SEO 检查", url: `http://localhost:${seoPort}` },
     { id: "models", label: "🧠 模型总览", url: `http://localhost:${seoPort}/models.html` },
     { id: "models-config", label: "🔑 模型配置", url: `http://localhost:${seoPort}/models-config.html` },
-    { id: "ftp", label: "📤 FTP 发布", url: `http://localhost:${Number(ftp.localPort || 5189)}` },
+    { id: "ftp", label: "📤 FTP 发布", url: `http://localhost:${Number(ftp.localPort || 5389)}` },
   ];
   const result = {
     packageRoot: normalizeSlash(PACKAGE_ROOT),
@@ -270,7 +270,7 @@ function loadConfig(withDiagnostics = true) {
     detectedDatabases: dbs,
     ftp: publicFtpConfig(ftp),
     seo: {
-      localPort: Number(seo.localPort || 5188),
+      localPort: Number(seo.localPort || 5388),
       siteName: seo.siteName || "Your Site",
       siteBaseUrl: seo.siteBaseUrl || backend.publicBaseUrl || "https://www.example.com",
       localTestBaseUrl: seo.localTestBaseUrl || "",
@@ -287,11 +287,11 @@ function saveConfig(body) {
   const ftpInput = body.ftp || {};
   const seoInput = body.seo || {};
   const pbootSiteRoot = normalizeSlash(backend.pbootSiteRoot);
-  const seoLocalPort = Number(seoInput.localPort || 5188);
-  const ftpLocalPort = Number(ftpInput.localPort || 5189);
+  const seoLocalPort = Number(seoInput.localPort || 5388);
+  const ftpLocalPort = Number(ftpInput.localPort || 5389);
   const reservedPorts = [
-    ["后端", Number(backend.backendPort || 5000)],
-    ["前端", Number(backend.frontendPort || 5178)],
+    ["后端", Number(backend.backendPort || 5108)],
+    ["前端", Number(backend.frontendPort || 5278)],
     ["SEO 工具", seoLocalPort],
     ["FTP 网页工具", ftpLocalPort],
   ];

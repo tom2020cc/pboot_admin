@@ -2,14 +2,37 @@ const ftp = require("basic-ftp");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const siteRuntime = require("../site-runtime");
 
 const CONFIG_FILE = path.join(__dirname, "ftp.config.json");
 
-function readConfig() {
-  if (!fs.existsSync(CONFIG_FILE)) {
-    throw new Error(`Missing config file: ${CONFIG_FILE}`);
+function currentConfigFile() {
+  const site = siteRuntime.currentSite();
+  const configFile = siteRuntime.siteFile("ftp", "ftp.config.json", site?.isDefault ? CONFIG_FILE : "");
+  if (!fs.existsSync(configFile)) {
+    let template = {};
+    try {
+      template = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+    } catch (_error) {
+      template = {};
+    }
+    fs.writeFileSync(configFile, `${JSON.stringify({
+      ...template,
+      localRoot: site?.rootPath || template.localRoot || "..",
+      host: "",
+      user: "",
+      password: "",
+    }, null, 2)}\n`, "utf8");
   }
-  const config = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8").replace(/^\uFEFF/, ""));
+  return configFile;
+}
+
+function readConfig() {
+  const configFile = currentConfigFile();
+  if (!fs.existsSync(configFile)) {
+    throw new Error(`Missing config file: ${configFile}`);
+  }
+  const config = JSON.parse(fs.readFileSync(configFile, "utf8").replace(/^\uFEFF/, ""));
   return {
     port: 21,
     secure: false,
@@ -63,7 +86,7 @@ function readConfig() {
 }
 
 function writeConfig(config) {
-  fs.writeFileSync(CONFIG_FILE, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  fs.writeFileSync(currentConfigFile(), `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }
 
 function isDatabaseFile(relativePath) {

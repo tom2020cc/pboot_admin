@@ -5,7 +5,9 @@ import "element-plus/dist/index.css";
 import "@/assets/styles.scss";
 import App from "./App.vue";
 import router from "./router";
+import { applySiteSelectionFromUrl } from "@/utils/siteSelection";
 
+applySiteSelectionFromUrl();
 const app = createApp(App);
 app.use(createPinia());
 app.use(router);

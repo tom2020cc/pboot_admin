@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import {  IsArray, IsBoolean, IsNumber, IsOptional, IsString } from "class-validator";
+import {  IsArray, IsBoolean, IsNumber, IsOptional, IsString, IsInt, Min } from "class-validator";
 
 export class CreateMenuDto {
 
@@ -24,6 +24,12 @@ export class CreateMenuDto {
     @IsOptional()
     code:string;
 
+    @ApiProperty({ description: '中文主栏目 ID，仅用于确认未关联译文的来源', required: false })
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    sourceMenuId?: number;
+
     @ApiProperty({description:'URL名称',example:'aboutUs',required:false})
     @IsString()
     @IsOptional()
@@ -47,6 +53,31 @@ export class CreateMenuDto {
     @ApiProperty({description:'图标地址',example:['aa','bb','cc']})
     @IsArray()
     icon:string[];
+
+    @ApiProperty({ description: '栏目缩略图，对应 PB ico', required: false })
+    @IsOptional()
+    @IsString()
+    thumbnail?: string | null;
+
+    @ApiProperty({ description: '栏目大图，对应 PB pic', required: false })
+    @IsOptional()
+    @IsString()
+    largeImage?: string | null;
+
+    @ApiProperty({ description: '栏目 SEO 标题，对应 PB title', required: false })
+    @IsOptional()
+    @IsString()
+    seoTitle?: string | null;
+
+    @ApiProperty({ description: '栏目 SEO 关键字，对应 PB keywords', required: false })
+    @IsOptional()
+    @IsString()
+    seoKeywords?: string | null;
+
+    @ApiProperty({ description: '栏目 SEO 描述，对应 PB description', required: false })
+    @IsOptional()
+    @IsString()
+    seoDescription?: string | null;
 
     @ApiProperty({description:'排序',example:255,default:0})
     @IsNumber()

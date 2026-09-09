@@ -4,24 +4,33 @@ import { Repository } from 'typeorm';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
 import { UpdateQuotationDto } from './dto/update-quotation.dto';
 import { Quotation } from './entities/quotation.entity';
+import { SitesService } from '../sites/sites.service';
 
 @Injectable()
 export class QuotationService {
-  constructor(@InjectRepository(Quotation) private readonly quotationRepo: Repository<Quotation>) {}
+  constructor(
+    @InjectRepository(Quotation) private readonly quotationRepo: Repository<Quotation>,
+    private readonly sitesService: SitesService,
+  ) {}
 
   async create(body: CreateQuotationDto) {
+    const siteId = await this.currentSiteId();
     const quotationNo = body.quotationNo.trim();
-    if (await this.quotationRepo.findOneBy({ quotationNo })) {
+    if (await this.quotationRepo.findOneBy({ siteId, quotationNo })) {
       throw new BadRequestException(`报价单编号 ${quotationNo} 已存在`);
     }
-    return this.quotationRepo.save(this.quotationRepo.create({ ...body, quotationNo }));
+    return this.quotationRepo.save(this.quotationRepo.create({ ...body, siteId, quotationNo }));
   }
 
   async findAll(search = '') {
-    const query = this.quotationRepo.createQueryBuilder('quotation').orderBy('quotation.updateTime', 'DESC');
+    const siteId = await this.currentSiteId();
+    const query = this.quotationRepo
+      .createQueryBuilder('quotation')
+      .where('quotation.siteId = :siteId', { siteId })
+      .orderBy('quotation.updateTime', 'DESC');
     const keyword = search.trim();
     if (keyword) {
-      query.where(
+      query.andWhere(
         '(quotation.quotationNo LIKE :keyword OR quotation.customerCompany LIKE :keyword OR quotation.customerContact LIKE :keyword)',
         { keyword: `%${keyword}%` },
       );
@@ -30,7 +39,8 @@ export class QuotationService {
   }
 
   async findOne(id: number) {
-    const quotation = await this.quotationRepo.findOneBy({ id });
+    const siteId = await this.currentSiteId();
+    const quotation = await this.quotationRepo.findOneBy({ id, siteId });
     if (!quotation) throw new NotFoundException('没有找到该报价单');
     return quotation;
   }
@@ -39,7 +49,7 @@ export class QuotationService {
     const quotation = await this.findOne(id);
     if (body.quotationNo) {
       const quotationNo = body.quotationNo.trim();
-      const duplicate = await this.quotationRepo.findOneBy({ quotationNo });
+      const duplicate = await this.quotationRepo.findOneBy({ siteId: quotation.siteId, quotationNo });
       if (duplicate && duplicate.id !== id) throw new BadRequestException(`报价单编号 ${quotationNo} 已存在`);
       body.quotationNo = quotationNo;
     }
@@ -53,6 +63,7 @@ export class QuotationService {
   }
 
   async nextNumber(dateValue = '') {
+    const siteId = await this.currentSiteId();
     const compactDate = /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
       ? dateValue.replace(/-/g, '')
       : new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -60,12 +71,24 @@ export class QuotationService {
     const rows = await this.quotationRepo
       .createQueryBuilder('quotation')
       .select('quotation.quotationNo', 'quotationNo')
-      .where('quotation.quotationNo LIKE :prefix', { prefix: `${prefix}%` })
+      .where('quotation.siteId = :siteId', { siteId })
+      .andWhere('quotation.quotationNo LIKE :prefix', { prefix: `${prefix}%` })
       .getRawMany<{ quotationNo: string }>();
     const largest = rows.reduce((max, row) => {
       const suffix = Number(String(row.quotationNo || '').slice(prefix.length));
       return Number.isInteger(suffix) ? Math.max(max, suffix) : max;
     }, 0);
     return { quotationNo: `${prefix}${String(largest + 1).padStart(2, '0')}` };
+  }
+
+  private async currentSiteId() {
+    const siteId = this.sitesService.getCurrentSiteId();
+    if (siteId) {
+      const scoped = await this.quotationRepo.countBy({ siteId });
+      if (this.sitesService.isDefaultSite(siteId) && !scoped && await this.quotationRepo.countBy({ siteId: 0 })) {
+        await this.quotationRepo.update({ siteId: 0 }, { siteId });
+      }
+    }
+    return siteId;
   }
 }

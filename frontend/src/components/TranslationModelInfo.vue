@@ -4,6 +4,7 @@
       <el-tag type="primary" effect="plain">优先级 #{{ model.priority ?? "-" }}</el-tag>
       <el-tag v-if="model.recommended" type="success" effect="plain">推荐</el-tag>
       <strong>{{ model.label }}</strong>
+      <el-tag :type="healthTagType" effect="light">{{ healthStatusText }}</el-tag>
       <span class="model-purpose">{{ model.purpose || "翻译模型" }}</span>
     </div>
     <div class="quota-summary">
@@ -23,6 +24,10 @@ import { computed } from "vue";
 type TranslationModelInfo = {
   label: string;
   available: boolean;
+  operational?: boolean;
+  healthStatus?: "ok" | "failed" | "untested";
+  healthElapsedMs?: number | null;
+  healthMessage?: string;
   priority?: number;
   recommended?: boolean;
   purpose?: string;
@@ -33,6 +38,21 @@ type TranslationModelInfo = {
 };
 
 const props = defineProps<{ model?: TranslationModelInfo | null }>();
+
+const healthStatusText = computed(() => {
+  if (!props.model?.available) return "未配置";
+  if (props.model.healthStatus === "ok") {
+    return `绿灯可用${props.model.healthElapsedMs ? ` ${props.model.healthElapsedMs}ms` : ""}`;
+  }
+  if (props.model.healthStatus === "failed" || props.model.operational === false) return "红灯不可用";
+  return "未测速";
+});
+
+const healthTagType = computed(() => {
+  if (!props.model?.available || props.model.healthStatus === "failed" || props.model.operational === false) return "danger";
+  if (props.model.healthStatus === "ok") return "success";
+  return "info";
+});
 
 const quotaStatusText = computed(() => {
   if (!props.model?.available || props.model?.quotaStatus === "unconfigured") return "未配置";

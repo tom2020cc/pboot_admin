@@ -8,6 +8,9 @@ export const NEWS_LANGUAGES = [
   { code: 'ru', name: 'Русский' },
   { code: 'ar', name: 'العربية' },
   { code: 'pt', name: 'Português' },
+  { code: 'id', name: 'Bahasa Indonesia' },
+  { code: 'tr', name: 'Türkçe' },
+  { code: 'vi', name: 'Tiếng Việt' },
 ] as const;
 
 export type NewsLanguageCode = (typeof NEWS_LANGUAGES)[number]['code'];

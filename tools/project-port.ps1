@@ -10,7 +10,7 @@ if (!$connections.Count) {
   exit 0
 }
 
-$marker = "pboot-admin-20260729"
+$marker = "pboot-admin-center"
 $identityMatches = $false
 foreach ($hostName in @("localhost", "127.0.0.1")) {
   try {

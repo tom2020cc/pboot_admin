@@ -14,6 +14,10 @@ import { buildLanguageSeoUrlName } from '../common/seo-content-utils';
 import { PageTranslation } from './entities/page-translation.entity';
 import { Page } from './entities/page.entity';
 import { SavePageDto, SyncPageDto } from './dto/page.dto';
+import { SitesService } from '../sites/sites.service';
+import { copyUploadedImageToPboot, rewriteUploadedHtmlImages } from '../common/pboot-uploaded-images';
+import { OptimizeSeoDto } from '../common/dto/optimize-seo.dto';
+import { decodeEscapedHtml } from '../common/translation-html-utils';
 
 const initSqlJs = require('sql.js');
 
@@ -39,6 +43,8 @@ type PbootSingleRow = {
 
 @Injectable()
 export class PageService {
+  private readonly adoptedLegacySites = new Set<number>();
+
   constructor(
     @InjectRepository(Page) private readonly pageRepo: Repository<Page>,
     @InjectRepository(PageTranslation) private readonly translationRepo: Repository<PageTranslation>,
@@ -46,10 +52,12 @@ export class PageService {
     private readonly config: ConfigService,
     private readonly syncGuard: SyncGuardService,
     private readonly newsService: NewsService,
+    private readonly sitesService: SitesService,
   ) {}
 
-  findLanguages() {
-    return NEWS_LANGUAGES;
+  async findLanguages() {
+    const configured = new Set((await this.sitesService.getCurrentSiteLanguages()).map((item) => item.code));
+    return NEWS_LANGUAGES.filter((item) => configured.has(item.code));
   }
 
   findTranslationModels() {
@@ -60,9 +68,16 @@ export class PageService {
     return this.newsService.translateDraft({ ...body, contentType: 'page' });
   }
 
+  optimizeSeoDraft(body: OptimizeSeoDto) {
+    return this.newsService.optimizeSeoDraft({ ...body, contentType: 'page' });
+  }
+
   async findAll(menuId?: number, lang?: string) {
     const targetLang = resolveNewsLang(lang);
-    const pages = await this.pageRepo.find({ order: { orderNum: 'ASC', id: 'ASC' } });
+    const pages = await this.pageRepo.find({
+      where: { siteId: await this.currentSiteId() },
+      order: { orderNum: 'ASC', id: 'ASC' },
+    });
     const filtered = menuId ? await this.filterByEquivalentMenu(pages, menuId) : pages;
     const translations = filtered.length
       ? await this.translationRepo.find({ where: filtered.map((page) => ({ pageId: page.id, lang: targetLang })) })
@@ -86,6 +101,7 @@ export class PageService {
     const seed = this.getDefaultContent(body);
     const saved = await this.pageRepo.save(
       this.pageRepo.create({
+        siteId: await this.currentSiteId(),
         menuId: Number(body.menuId || 0),
         title: seed.title,
         urlName: seed.urlName,
@@ -131,11 +147,11 @@ export class PageService {
 
     try {
       const rows = this.readPbootSingleRows(db);
-      const menus = await this.menusRepo.find();
+      const siteId = await this.currentSiteId();
+      const menus = await this.findSiteMenus();
       const groups = this.groupPbootRows(rows);
 
-      await this.translationRepo.createQueryBuilder().delete().from(PageTranslation).execute();
-      await this.pageRepo.createQueryBuilder().delete().from(Page).execute();
+      await this.deleteSitePages(siteId);
 
       let imported = 0;
       let importedTranslations = 0;
@@ -147,6 +163,7 @@ export class PageService {
 
         const saved = await this.pageRepo.save(
           this.pageRepo.create({
+            siteId,
             menuId: Number(menu.id),
             title: base.title || base.sort_name || '',
             urlName: base.filename || '',
@@ -199,7 +216,7 @@ export class PageService {
     const dbPath = this.getPbootDbPath();
     if (!fs.existsSync(dbPath)) throw new BadRequestException(`PbootCMS database not found: ${dbPath}`);
 
-    const langs = options.all ? NEWS_LANGUAGES.map((item) => item.code) : [resolveNewsLang(options.lang || DEFAULT_NEWS_LANG)];
+    const langs = await this.resolveConfiguredSyncLanguages(options.all, options.lang, DEFAULT_NEWS_LANG);
     const translations = await this.translationRepo.find({ where: { pageId: id }, order: { id: 'ASC' } });
     const translationMap = new Map(translations.map((item) => [item.lang, item]));
     for (const lang of langs) this.assertTranslationSeoReady(translationMap.get(lang), lang);
@@ -228,7 +245,10 @@ export class PageService {
 
   async syncAllToPboot() {
     await this.syncGuard.protectBeforeDangerousSync('page_push_all', 'page');
-    const pages = await this.pageRepo.find({ order: { orderNum: 'ASC', id: 'ASC' } });
+    const pages = await this.pageRepo.find({
+      where: { siteId: await this.currentSiteId() },
+      order: { orderNum: 'ASC', id: 'ASC' },
+    });
     const synced = [];
     let backupPath = '';
 
@@ -281,16 +301,19 @@ export class PageService {
         if (!updateExisting && !input && unchanged) return null;
         return next;
       }
-      const title = input?.title ?? seed.title;
+      const base = code === DEFAULT_NEWS_LANG
+        ? seed
+        : { title: '', urlName: '', subtitle: '', keywords: '', description: '', content: '' };
+      const title = input?.title ?? base.title;
       return this.translationRepo.create({
         pageId: page.id,
         lang: code,
         title,
-        urlName: String(input?.urlName || '').trim() || buildLanguageSeoUrlName(code, seed.urlName, title),
-        subtitle: input?.subtitle ?? seed.subtitle,
-        keywords: String(input?.keywords || seed.keywords || '').trim() || String(title || '').trim(),
-        description: input?.description ?? seed.description,
-        content: this.compactHtmlForStorage(input?.content ?? seed.content),
+        urlName: String(input?.urlName ?? base.urlName).trim(),
+        subtitle: input?.subtitle ?? base.subtitle,
+        keywords: String(input?.keywords ?? base.keywords).trim(),
+        description: input?.description ?? base.description,
+        content: this.compactHtmlForStorage(input?.content ?? base.content),
       });
     }).filter(Boolean) as PageTranslation[];
 
@@ -341,7 +364,8 @@ export class PageService {
       filename,
       date: now,
       ico: this.normalizeIconValue(menu.icon),
-      content: this.compactHtmlForStorage(translation.content || ''),
+      content: rewriteUploadedHtmlImages(this.compactHtmlForStorage(translation.content || ''),
+        src => copyUploadedImageToPboot(src, this.sitesService, this.sitesService.getPbootSiteRoot(), now, 'pages')),
       keywords: translation.keywords || '',
       description: translation.description || '',
       sorting: Number(page.orderNum || menu.orderNum || 0),
@@ -401,7 +425,7 @@ export class PageService {
   }
 
   private async findEquivalentMenu(menuId: number, lang: string) {
-    const menus = await this.menusRepo.find();
+    const menus = await this.findSiteMenus();
     const source = menus.find((item) => Number(item.id) === Number(menuId));
     if (!source) return null;
     const targetLang = lang === DEFAULT_NEWS_LANG ? 'cn' : lang;
@@ -413,7 +437,7 @@ export class PageService {
   }
 
   private async filterByEquivalentMenu(pages: Page[], menuId: number) {
-    const menus = await this.menusRepo.find();
+    const menus = await this.findSiteMenus();
     const selected = menus.find((item) => Number(item.id) === Number(menuId));
     if (!selected) return pages;
     const slug = this.normalizeMenuSlug(selected.urlName || selected.href || selected.name);
@@ -436,9 +460,54 @@ export class PageService {
   }
 
   private async findPageEntity(id: number) {
-    const page = await this.pageRepo.findOneBy({ id });
+    const page = await this.pageRepo.findOneBy({ id, siteId: await this.currentSiteId() });
     if (!page) throw new NotFoundException('没有找到该单页内容');
     return page;
+  }
+
+  private async findSiteMenus() {
+    return this.menusRepo.find({ where: { siteId: await this.currentSiteId() } });
+  }
+
+  private async getConfiguredLanguageCodes() {
+    const supported = new Set<string>(NEWS_LANGUAGES.map((item) => item.code));
+    const configured = (await this.sitesService.getCurrentSiteLanguages())
+      .map((item) => item.code)
+      .filter((code) => supported.has(code));
+    return configured.length ? configured : [DEFAULT_NEWS_LANG];
+  }
+
+  private async resolveConfiguredSyncLanguages(all: boolean | undefined, lang: string | undefined, fallback: string) {
+    const configured = await this.getConfiguredLanguageCodes();
+    if (all) return configured;
+    const target = resolveNewsLang(lang || fallback);
+    if (!configured.includes(target)) throw new BadRequestException(`当前网站未配置 ${target} 语言区域，无法同步`);
+    return [target];
+  }
+
+  private async currentSiteId() {
+    const siteId = this.sitesService.getCurrentSiteId();
+    if (!siteId || this.adoptedLegacySites.has(siteId)) return siteId;
+    const scoped = await this.pageRepo.countBy({ siteId });
+    if (this.sitesService.isDefaultSite(siteId) && !scoped && await this.pageRepo.countBy({ siteId: 0 })) {
+      await this.pageRepo.update({ siteId: 0 }, { siteId });
+    }
+    this.adoptedLegacySites.add(siteId);
+    return siteId;
+  }
+
+  private async deleteSitePages(siteId: number) {
+    const pages = await this.pageRepo.find({ where: { siteId }, select: { id: true } });
+    for (let offset = 0; offset < pages.length; offset += 300) {
+      const ids = pages.slice(offset, offset + 300).map((page) => page.id);
+      await this.translationRepo
+        .createQueryBuilder()
+        .delete()
+        .from(PageTranslation)
+        .where('pageId IN (:...ids)', { ids })
+        .execute();
+    }
+    await this.pageRepo.delete({ siteId });
   }
 
   private normalizeMenuSlug(value: string) {
@@ -465,11 +534,7 @@ export class PageService {
   }
 
   private getPbootDbPath() {
-    const configured = this.config.get<string>('PBOOT_DB_PATH');
-    if (!configured) {
-      throw new BadRequestException('PbootCMS database is not configured. Run 01-config.cmd first.');
-    }
-    return configured;
+    return this.sitesService.getPbootDbPath();
   }
 
   private backupPbootDatabase(dbPath: string) {
@@ -495,7 +560,7 @@ export class PageService {
   }
 
   private decodeHtmlEntities(content: string) {
-    return (content || '').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/g, "'").replace(/&apos;/gi, "'").replace(/&amp;/gi, '&');
+    return decodeEscapedHtml(content);
   }
 
   private formatPbootDate(date: Date) {

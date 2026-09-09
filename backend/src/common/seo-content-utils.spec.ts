@@ -9,6 +9,7 @@ describe('seo-content-utils alt helpers', () => {
     it('replaces an existing language prefix instead of stacking prefixes', () => {
       expect(buildLanguageSeoUrlName('en', 'cn-1691', 'About us')).toBe('en-1691');
       expect(buildLanguageSeoUrlName('pt', 'es-company-profile', 'Company profile')).toBe('pt-company-profile');
+      expect(buildLanguageSeoUrlName('fr', 'cn_company_profile', 'Company profile')).toBe('fr-company-profile');
     });
   });
 

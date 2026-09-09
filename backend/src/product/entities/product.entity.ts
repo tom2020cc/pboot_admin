@@ -1,9 +1,14 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { ProductSharedParameters } from '../product-shared-parameters';
 
 @Entity()
+@Index(['siteId', 'menuId'])
 export class Product {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({ default: 0, comment: 'Managed site id' })
+  siteId: number;
 
   @Column({ comment: 'Menu ID' })
   menuId: number;
@@ -31,6 +36,9 @@ export class Product {
 
   @Column({ default: '', comment: 'Product video URL' })
   videoUrl: string;
+
+  @Column('simple-json', { nullable: true, comment: 'One parameter set per product, shared by every language' })
+  sharedParameters: ProductSharedParameters | null;
 
   @Column('simple-array', { default: '', comment: 'Carousel images' })
   carouselImages: string[];

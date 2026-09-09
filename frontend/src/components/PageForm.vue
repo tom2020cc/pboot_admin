@@ -8,16 +8,33 @@
 
     <el-form-item label="多语言内容" class="language-item">
       <el-tabs v-model="activeLang" class="language-tabs">
-        <el-tab-pane v-for="item in form.translations" :key="item.lang" :label="getLanguageName(item.lang)" :name="item.lang">
+        <el-tab-pane v-for="item in visibleTranslations" :key="item.lang" :label="getLanguageName(item.lang)" :name="item.lang">
           <div class="translation-panel">
-            <div v-if="item.lang !== DEFAULT_NEWS_LANG" class="translate-toolbar">
-              <el-select v-model="translationModel" class="model-select" placeholder="选择翻译模型">
+            <div v-if="item.lang === DEFAULT_NEWS_LANG" class="seo-toolbar">
+              <el-select v-model="seoModel" class="model-select" placeholder="选择 AI SEO 模型">
                 <el-option
-                  v-for="model in translationModels"
+                  v-for="model in availableSeoModels"
                   :key="model.value"
-                  :label="model.available ? (model.displayLabel || model.label) : `${model.displayLabel || model.label}（未配置 Key）`"
+                  :label="model.displayLabel || model.label"
                   :value="model.value"
-                  :disabled="!model.available"
+                />
+              </el-select>
+              <el-button
+                type="success"
+                :loading="optimizingSeo"
+                :disabled="!availableSeoModels.length || Boolean(translatingLang)"
+                @click="optimizeChineseSeo(item)"
+              >
+                AI 优化中文 SEO
+              </el-button>
+            </div>
+            <div v-if="item.lang !== DEFAULT_NEWS_LANG" class="translate-toolbar">
+              <el-select v-model="translationModel" class="model-select" placeholder="选择翻译模型" :disabled="translatingAll || Boolean(translatingLang)">
+                <el-option
+                  v-for="model in selectableTranslationModels"
+                  :key="model.value"
+                  :label="model.displayLabel || model.label"
+                  :value="model.value"
                 />
               </el-select>
               <el-button
@@ -28,7 +45,7 @@
               >
                 生成{{ getLanguageName(item.lang) }}
               </el-button>
-              <span class="translate-tip">从中文标签页生成内容；空白 URL 会自动补成当前语言前缀。</span>
+              <span class="translate-tip">从中文内容生成；URL 自动使用当前语言前缀，已带正确前缀的自定义 URL 保留。</span>
             </div>
 
             <el-form-item label="页面标题" label-width="86px" required>
@@ -77,10 +94,10 @@ import type { MenuItem } from "@/api/menus";
 import {
   DEFAULT_NEWS_LANG,
   NEWS_LANGUAGES,
-  buildPageUrlName,
   ensurePageTranslations,
   findMissingPageSeoFields,
   getPageTranslationModels,
+  optimizePageSeoDraft,
   translatePageDraft,
   type PageForm,
   type PageTranslation,
@@ -88,9 +105,18 @@ import {
 import type { TranslationModel } from "@/api/news";
 import { filterMenusByContentLangAndModel } from "@/utils/menuLanguage";
 import { getErrorMessage } from "@/utils/request";
+import { resolvePreferredTranslationModel, savePreferredTranslationModel } from "@/utils/translationModelPreference";
+import { buildLanguageUrlName, ensureLanguageUrlName } from "@/utils/seoUrlName";
 import SourceCodeEditor from "@/components/SourceCodeEditor.vue";
+import { useAvailableLanguages } from "@/composables/useAvailableLanguages";
+import { ensureTranslationMenusExist } from "@/utils/translationMenuGuard";
 
 const form = defineModel<PageForm>({ required: true });
+const availableLanguages = useAvailableLanguages();
+const visibleTranslations = computed(() => {
+  const codes = new Set(availableLanguages.value.map((item) => item.code));
+  return (form.value.translations || []).filter((item) => codes.has(item.lang as any));
+});
 
 const props = defineProps<{
   menus: MenuItem[];
@@ -110,9 +136,19 @@ const activeLang = ref(DEFAULT_NEWS_LANG);
 const translatingLang = ref("");
 const translatingAll = ref(false);
 const translationProgress = ref("");
+const optimizingSeo = ref(false);
 const translationModel = ref("");
+const seoModel = ref("");
 const translationModels = ref<TranslationModel[]>([]);
-const hasAvailableTranslationModel = computed(() => translationModels.value.some((item) => item.available));
+const selectableTranslationModels = computed(() =>
+  translationModels.value.filter((item) => item.available && item.operational !== false),
+);
+const hasAvailableTranslationModel = computed(() => selectableTranslationModels.value.length > 0);
+const availableSeoModels = computed(() =>
+  translationModels.value.filter(
+    (item) => item.available && item.operational !== false && item.value !== "qwen-mt-lite" && ["zhipu", "deepseek", "qwen", "openai"].includes(item.provider),
+  ),
+);
 
 const menuOptions = computed<MenuOption[]>(() => {
   const currentMenus = filterMenusByContentLangAndModel(props.menus, activeLang.value, "1");
@@ -149,14 +185,69 @@ const loadTranslationModels = async () => {
   try {
     const res = await getPageTranslationModels();
     translationModels.value = [...res.data];
-    const preferredTranslation = translationModels.value.find((item) => item.available);
-    if (preferredTranslation) translationModel.value = preferredTranslation.value;
+    translationModel.value = resolvePreferredTranslationModel(translationModels.value, translationModel.value);
+    seoModel.value = availableSeoModels.value[0]?.value || "";
   } catch (e) {
     ElMessage.warning(getErrorMessage(e, "获取翻译模型失败"));
   }
 };
 
-const generateTranslation = async (target: PageTranslation, showSuccess = true) => {
+const optimizeChineseSeo = async (target: PageTranslation) => {
+  if (target.lang !== DEFAULT_NEWS_LANG) return;
+  if (!target.title?.trim() && !target.description?.trim() && !target.content?.trim()) {
+    ElMessage.warning("请先填写中文单页标题、描述或正文");
+    return;
+  }
+  if (!seoModel.value) {
+    ElMessage.warning("请先配置可用的 AI 模型 Key");
+    return;
+  }
+
+  optimizingSeo.value = true;
+  try {
+    const res = await optimizePageSeoDraft({
+      model: seoModel.value,
+      contentType: "page",
+      title: target.title || "",
+      subtitle: target.subtitle || "",
+      keywords: target.keywords || "",
+      urlName: target.urlName || "",
+      summary: target.description || "",
+      content: target.content || "",
+    });
+    target.title = res.data.title;
+    target.urlName = String(target.urlName || "").trim()
+      || buildLanguageUrlName(DEFAULT_NEWS_LANG, res.data.urlName, res.data.title);
+    target.subtitle = res.data.subtitle;
+    target.keywords = res.data.keywords;
+    target.description = res.data.summary;
+    target.content = res.data.content;
+    syncDefaultFields();
+    ElMessage.success("中文单页 SEO 草稿已优化，请检查后保存");
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, "中文单页 SEO 优化失败"));
+  } finally {
+    optimizingSeo.value = false;
+  }
+};
+
+const checkTranslationMenus = (targets: PageTranslation[]) => ensureTranslationMenusExist({
+  menus: props.menus,
+  sourceMenuId: form.value.menuId,
+  targets: targets.map((item) => ({ lang: String(item.lang) })),
+  model: "1",
+  contentLabel: "单页",
+  getLanguageName,
+});
+
+const generateTranslation = async (
+  target: PageTranslation,
+  showSuccess = true,
+  modelValue = translationModel.value,
+  skipMenuCheck = false,
+) => {
+  if (!skipMenuCheck && !(await checkTranslationMenus([target]))) return false;
+
   const source = form.value.translations?.find((item) => item.lang === DEFAULT_NEWS_LANG);
   if (!source?.title?.trim() && !source?.description?.trim() && !source?.content?.trim()) {
     ElMessage.warning("请先在中文标签页填写标题、描述或正文");
@@ -169,7 +260,7 @@ const generateTranslation = async (target: PageTranslation, showSuccess = true) 
     const res = await translatePageDraft({
       sourceLang: DEFAULT_NEWS_LANG,
       targetLang: String(target.lang),
-      model: translationModel.value,
+      model: modelValue,
       title: source?.title || "",
       subtitle: source?.subtitle || "",
       keywords: source?.keywords || "",
@@ -178,11 +269,20 @@ const generateTranslation = async (target: PageTranslation, showSuccess = true) 
     });
 
     target.title = res.data.title;
-    target.urlName = target.urlName?.trim() || buildPageUrlName(source.urlName, String(target.lang), res.data.title);
+    target.urlName = ensureLanguageUrlName(
+      String(target.lang),
+      target.urlName,
+      res.data.title,
+      source.urlName,
+    );
     target.subtitle = res.data.subtitle;
     target.keywords = res.data.keywords || target.keywords || res.data.title;
     target.description = res.data.summary;
     target.content = res.data.content;
+    if (res.data.fallbackUsed) {
+      const fallbackModel = translationModels.value.find((item) => item.value === res.data.model);
+      ElMessage.info(`原模型暂时不可用，已自动改用 ${fallbackModel?.label || res.data.model} 完成`);
+    }
     if (showSuccess) ElMessage.success(`${getLanguageName(String(target.lang))}翻译已生成，请检查后保存`);
     return true;
   } catch (e) {
@@ -195,8 +295,18 @@ const generateTranslation = async (target: PageTranslation, showSuccess = true) 
 
 const generateAllTranslations = async () => {
   if (translatingAll.value || translatingLang.value) return false;
-  const targets = (form.value.translations || []).filter((item) => item.lang !== DEFAULT_NEWS_LANG);
-  if (!targets.length) return false;
+  const allTargets = visibleTranslations.value.filter((item) => item.lang !== DEFAULT_NEWS_LANG);
+  if (!allTargets.length) return false;
+  const activeIndex = allTargets.findIndex((item) => String(item.lang) === String(activeLang.value));
+  const targets = activeLang.value === DEFAULT_NEWS_LANG || activeIndex < 0
+    ? allTargets
+    : allTargets.slice(activeIndex);
+  if (!(await checkTranslationMenus(targets))) return false;
+  const modelValue = translationModel.value;
+  if (!modelValue) {
+    ElMessage.warning("请先选择可用的翻译模型");
+    return false;
+  }
 
   translatingAll.value = true;
   translationProgress.value = `0/${targets.length}`;
@@ -205,11 +315,14 @@ const generateAllTranslations = async () => {
       const target = targets[index];
       translationProgress.value = `${index + 1}/${targets.length}`;
       activeLang.value = String(target.lang);
-      const success = await generateTranslation(target, false);
-      if (!success) return false;
+      const success = await generateTranslation(target, false, modelValue, true);
+      if (!success) {
+        ElMessage.warning(`翻译在 ${getLanguageName(String(target.lang))} 停止；当前标签已保留在这里，再点一键翻译即可从这里继续`);
+        return false;
+      }
     }
     activeLang.value = DEFAULT_NEWS_LANG;
-    ElMessage.success("全部语言已按顺序生成，请检查后保存或同步");
+    ElMessage.success(`已从 ${getLanguageName(String(targets[0].lang))} 开始完成 ${targets.length} 种语言，请检查后保存或同步`);
     return true;
   } finally {
     translatingAll.value = false;
@@ -217,9 +330,28 @@ const generateAllTranslations = async () => {
   }
 };
 
+const generateCurrentTranslation = async () => {
+  if (translatingAll.value || translatingLang.value) return false;
+  if (activeLang.value === DEFAULT_NEWS_LANG) {
+    ElMessage.warning("请先切换到需要翻译的语言标签");
+    return false;
+  }
+
+  const target = visibleTranslations.value.find((item) => String(item.lang) === String(activeLang.value));
+  if (!target) {
+    ElMessage.warning("没有找到当前语言");
+    return false;
+  }
+  if (!translationModel.value) {
+    ElMessage.warning("请先选择可用的翻译模型");
+    return false;
+  }
+  return generateTranslation(target, true, translationModel.value);
+};
+
 const validateSeoCompleteness = () => {
   syncTranslations();
-  for (const translation of form.value.translations || []) {
+  for (const translation of visibleTranslations.value) {
     const missing = findMissingPageSeoFields(translation);
     if (!missing.length) continue;
     activeLang.value = String(translation.lang);
@@ -234,6 +366,8 @@ watch(
   () => syncTranslations(),
   { immediate: true },
 );
+
+watch(translationModel, (value) => savePreferredTranslationModel(value));
 
 onMounted(loadTranslationModels);
 
@@ -254,9 +388,11 @@ const submitForm = async () => {
 
 defineExpose({
   generateAllTranslations,
+  generateCurrentTranslation,
   syncTranslations,
   syncDefaultFields,
   translatingAll,
+  translatingLang,
   translationProgress,
   validateSeoCompleteness,
 });
@@ -296,7 +432,8 @@ defineExpose({
   width: 100%;
 }
 
-.translate-toolbar {
+.translate-toolbar,
+.seo-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -305,6 +442,11 @@ defineExpose({
   background: #f7f9fc;
   border: 1px solid var(--el-border-color-light);
   border-radius: 8px;
+}
+
+.seo-toolbar {
+  background: #f1f8f4;
+  border-color: #cfe8d7;
 }
 
 .model-select {
@@ -317,7 +459,8 @@ defineExpose({
 }
 
 @media (max-width: 760px) {
-  .translate-toolbar {
+  .translate-toolbar,
+  .seo-toolbar {
     align-items: stretch;
     flex-direction: column;
   }

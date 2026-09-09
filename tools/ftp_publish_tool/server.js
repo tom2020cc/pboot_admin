@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const ftp = require("basic-ftp");
+const siteRuntime = require("../site-runtime");
 const { readConfig, writeConfig, collectFiles, formatBytes, uploadFiles } = require("./upload-to-ftp");
 const {
   appendHistory,
@@ -24,6 +25,19 @@ const PORT = Number(process.env.FTP_TOOL_PORT || 5189);
 const BACKEND_ENV_PATH = path.join(PACKAGE_ROOT, "backend", ".env");
 const SEO_CONFIG_PATH = path.join(PACKAGE_ROOT, "tools", "seo_publish_tool", "seo.config.json");
 const BASELINE_CANDIDATE_PATH = path.join(TOOL_ROOT, "security-baseline-candidate.json");
+const SECURITY_CHECKPOINT_PATH = path.join(TOOL_ROOT, "security-scan-checkpoint.json");
+
+function currentBaselineCandidatePath() {
+  return siteRuntime.siteFile("ftp", "security-baseline-candidate.json", BASELINE_CANDIDATE_PATH);
+}
+
+function currentSecurityCheckpointPath() {
+  return siteRuntime.siteFile("ftp", "security-scan-checkpoint.json", SECURITY_CHECKPOINT_PATH);
+}
+
+function currentSeoConfigPath() {
+  return siteRuntime.siteFile("seo", "seo.config.json", SEO_CONFIG_PATH);
+}
 
 const uploadState = {
   running: false,
@@ -52,6 +66,9 @@ const securityState = {
   total: 0,
   currentPath: "",
   contentScanned: 0,
+  mediaMetadataOnly: 0,
+  resumedFiles: 0,
+  checkpointedFiles: 0,
   startedAt: "",
   finishedAt: "",
   error: "",
@@ -61,25 +78,85 @@ const securityState = {
   logs: [],
 };
 
-let monitorTimer = null;
+const monitorTimers = new Map();
+
+function readSecurityCheckpoint() {
+  try {
+    return JSON.parse(fs.readFileSync(currentSecurityCheckpointPath(), "utf8"));
+  } catch (_error) {
+    return null;
+  }
+}
+
+function saveSecurityCheckpoint(checkpoint) {
+  const checkpointPath = currentSecurityCheckpointPath();
+  const tempPath = `${checkpointPath}.tmp`;
+  fs.writeFileSync(tempPath, `${JSON.stringify(checkpoint)}\n`, "utf8");
+  try {
+    fs.renameSync(tempPath, checkpointPath);
+  } catch (_error) {
+    fs.rmSync(checkpointPath, { force: true });
+    fs.renameSync(tempPath, checkpointPath);
+  }
+}
+
+function clearSecurityCheckpoint() {
+  const checkpointPath = currentSecurityCheckpointPath();
+  fs.rmSync(checkpointPath, { force: true });
+  fs.rmSync(`${checkpointPath}.tmp`, { force: true });
+}
+
+function securityCheckpointInfo(config = readConfig(), baseline = readBaseline()) {
+  const checkpoint = readSecurityCheckpoint();
+  if (!checkpoint) return { exists: false, valid: false, processedFiles: 0 };
+  const fingerprint = siteFingerprint(config);
+  const baselineIdentity = baseline && baseline.fingerprint === fingerprint
+    ? `${baseline.fingerprint}|${baseline.createdAt || ""}`
+    : "";
+  const processedFiles = Object.keys(checkpoint.processed || {}).length;
+  const valid = Boolean(
+    Number(checkpoint.version || 0) === 1
+    && checkpoint.fingerprint === fingerprint
+    && String(checkpoint.baselineIdentity || "") === baselineIdentity,
+  );
+  return {
+    exists: true,
+    valid,
+    processedFiles,
+    scanType: checkpoint.scanType || "full",
+    mode: checkpoint.mode || "scan",
+    startedAt: checkpoint.startedAt || "",
+    updatedAt: checkpoint.updatedAt || "",
+  };
+}
 
 function readBaselineCandidate() {
   try {
-    return JSON.parse(fs.readFileSync(BASELINE_CANDIDATE_PATH, "utf8"));
+    return JSON.parse(fs.readFileSync(currentBaselineCandidatePath(), "utf8"));
   } catch (_error) {
     return null;
   }
 }
 
 function saveBaselineCandidate(result) {
-  fs.writeFileSync(BASELINE_CANDIDATE_PATH, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  fs.writeFileSync(currentBaselineCandidatePath(), `${JSON.stringify(result, null, 2)}\n`, "utf8");
 }
 
 function clearBaselineCandidate() {
-  fs.rmSync(BASELINE_CANDIDATE_PATH, { force: true });
+  fs.rmSync(currentBaselineCandidatePath(), { force: true });
 }
 
-let latestCompletedScan = readBaselineCandidate();
+const latestCompletedScans = new Map();
+
+function latestCompletedScan() {
+  const key = siteRuntime.currentSite()?.code || "default";
+  if (!latestCompletedScans.has(key)) latestCompletedScans.set(key, readBaselineCandidate());
+  return latestCompletedScans.get(key);
+}
+
+function setLatestCompletedScan(value) {
+  latestCompletedScans.set(siteRuntime.currentSite()?.code || "default", value);
+}
 
 function pushLog(message) {
   const line = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -136,7 +213,7 @@ function buildNavigation() {
   const env = parseEnvFile(BACKEND_ENV_PATH);
   let seo = {};
   try {
-    seo = JSON.parse(fs.readFileSync(SEO_CONFIG_PATH, "utf8"));
+    seo = JSON.parse(fs.readFileSync(currentSeoConfigPath(), "utf8"));
   } catch (_error) {
     seo = {};
   }
@@ -146,14 +223,14 @@ function buildNavigation() {
   return [
     { id: "admin", label: "管理后台", url: `http://localhost:${frontendPort}/#/` },
     { id: "backend", label: "后端接口", url: `http://localhost:${backendPort}/api-docs` },
-    { id: "config", label: "项目配置", url: `http://localhost:${Number(env.CONFIG_WIZARD_PORT || 5190)}` },
+    { id: "sites", label: "站点管理", url: `http://localhost:${frontendPort}/#/sites` },
     { id: "quotation", label: "报价单生成", url: `http://localhost:${frontendPort}/#/quotations` },
     { id: "seo", label: "SEO 检查", url: `http://localhost:${seoPort}` },
     { id: "models", label: "模型总览", url: `http://localhost:${seoPort}/models.html` },
     { id: "models-config", label: "模型配置", url: `http://localhost:${seoPort}/models-config.html` },
     { id: "ftp", label: "FTP 发布", url: `http://localhost:${PORT}/` },
     { id: "ftp-security", label: "FTP 安全巡检", url: `http://localhost:${PORT}/security.html` },
-  ];
+  ].map((item) => ({ ...item, url: siteRuntime.withSiteQuery(item.url) }));
 }
 
 function normalizeConfigInput(body, current) {
@@ -336,11 +413,12 @@ function securityStatus() {
   return {
     ...securityState,
     baseline: baselineInfo(baseline),
+    checkpoint: securityCheckpointInfo(config, baseline),
     canAdoptBaseline: Boolean(
-      latestCompletedScan
-      && latestCompletedScan.scanType === "full"
-      && latestCompletedScan.summary?.high === 0
-      && latestCompletedScan.fingerprint === currentFingerprint
+      latestCompletedScan()
+      && latestCompletedScan().scanType === "full"
+      && latestCompletedScan().summary?.high === 0
+      && latestCompletedScan().fingerprint === currentFingerprint
     ),
     history: readHistory().slice(0, 12),
     monitor: {
@@ -353,15 +431,27 @@ function securityStatus() {
   };
 }
 
-function startSecurityScan({ mode = "scan", scanType = "incremental", allowFindings = false, reason = "manual" } = {}) {
+function startSecurityScan({ mode = "scan", scanType = "incremental", allowFindings = false, reason = "manual", resume = false } = {}) {
   if (securityState.running) throw new Error("安全巡检已经在运行。");
   if (uploadState.running) throw new Error("FTP 发布正在运行，请等待发布完成后再扫描。");
   const config = readConfig();
   const baseline = readBaseline();
+  const savedCheckpoint = resume ? readSecurityCheckpoint() : null;
+  const savedCheckpointInfo = resume ? securityCheckpointInfo(config, baseline) : null;
+  if (resume && (!savedCheckpoint || !savedCheckpointInfo.valid)) {
+    throw new Error("上次巡检断点不存在或已失效，请清除断点后重新巡检。");
+  }
+  if (resume) {
+    mode = savedCheckpoint.mode === "baseline" ? "baseline" : "scan";
+    scanType = savedCheckpoint.scanType === "incremental" ? "incremental" : "full";
+    allowFindings = savedCheckpoint.allowFindings === true;
+    reason = "resume";
+  }
   const actualScanType = mode === "baseline" || scanType === "full" || !baseline ? "full" : "incremental";
   if (!config.host || !config.user || !config.password) {
     throw new Error("请先完整配置 FTP 地址、用户名和密码。");
   }
+  if (!resume) clearSecurityCheckpoint();
 
   Object.assign(securityState, {
     running: true,
@@ -373,7 +463,10 @@ function startSecurityScan({ mode = "scan", scanType = "incremental", allowFindi
     total: 0,
     currentPath: "",
     contentScanned: 0,
-    startedAt: new Date().toISOString(),
+    mediaMetadataOnly: 0,
+    resumedFiles: 0,
+    checkpointedFiles: resume ? savedCheckpointInfo.processedFiles : 0,
+    startedAt: resume ? savedCheckpoint.startedAt : new Date().toISOString(),
     finishedAt: "",
     error: "",
     cancelRequested: false,
@@ -383,7 +476,9 @@ function startSecurityScan({ mode = "scan", scanType = "incremental", allowFindi
     logs: [],
   });
   pushSecurityLog(
-    mode === "baseline"
+    resume
+      ? `继续上次${actualScanType === "full" ? "完整巡检" : "增量快检"}，已有 ${savedCheckpointInfo.processedFiles} 个文件断点。`
+      : mode === "baseline"
       ? "可信基线完整扫描开始。"
       : reason === "scheduled"
         ? `${actualScanType === "full" ? "定时完整复核" : "定时增量快检"}开始。`
@@ -393,11 +488,13 @@ function startSecurityScan({ mode = "scan", scanType = "incremental", allowFindi
   scanRemoteSite(config, {
     baseline,
     scanType: actualScanType,
+    resumeState: savedCheckpoint,
     shouldCancel: () => securityState.cancelRequested,
     onConnection: (event) => {
       if (event.reason === "retry") pushSecurityLog("FTP 已重新连接，继续当前巡检。");
       else if (event.reason === "scheduled") pushSecurityLog("FTP 已主动刷新连接，继续巡检。");
-      else pushSecurityLog("FTP 已连接，开始读取远端目录。");
+      else if (securityState.stage === "listing") pushSecurityLog("FTP 已连接，继续读取远端目录。");
+      else pushSecurityLog("FTP 已连接，继续当前巡检。");
     },
     onRetry: (event) => {
       const target = event.path ? `：${event.path}` : "";
@@ -409,16 +506,24 @@ function startSecurityScan({ mode = "scan", scanType = "incremental", allowFindi
       securityState.total = Number(event.total || securityState.total || 0);
       securityState.currentPath = event.path || securityState.currentPath;
       securityState.contentScanned = Number(event.contentScanned || securityState.contentScanned || 0);
+      securityState.mediaMetadataOnly = Number(event.mediaMetadataOnly || securityState.mediaMetadataOnly || 0);
+      securityState.resumedFiles = Number(event.resumedFiles || securityState.resumedFiles || 0);
+    },
+    onCheckpoint: (checkpoint) => {
+      const saved = { ...checkpoint, mode, allowFindings, reason };
+      saveSecurityCheckpoint(saved);
+      securityState.checkpointedFiles = Object.keys(saved.processed || {}).length;
     },
   })
     .then((result) => {
+      clearSecurityCheckpoint();
       appendHistory(result);
       if (result.scanType === "full") {
-        latestCompletedScan = result;
+        setLatestCompletedScan(result);
         if (result.summary.high === 0) saveBaselineCandidate(result);
         else clearBaselineCandidate();
       } else {
-        latestCompletedScan = null;
+        setLatestCompletedScan(null);
         clearBaselineCandidate();
       }
       let baselineBlocked = false;
@@ -429,7 +534,7 @@ function startSecurityScan({ mode = "scan", scanType = "incremental", allowFindi
           pushSecurityLog(`发现 ${result.summary.high} 项高风险问题，可信基线未更新。`);
         } else {
           writeBaseline(buildBaseline(result));
-          latestCompletedScan = null;
+          setLatestCompletedScan(null);
           clearBaselineCandidate();
           baselineUpdated = true;
           pushSecurityLog(`可信基线已更新，共记录 ${result.summary.files} 个远端文件。`);
@@ -445,26 +550,31 @@ function startSecurityScan({ mode = "scan", scanType = "incremental", allowFindi
       securityState.baselineBlocked = baselineBlocked;
       securityState.baselineUpdated = baselineUpdated;
       securityState.result = { ...publicScanResult(result), baselineBlocked, baselineUpdated };
-      pushSecurityLog(`巡检完成：深查 ${result.summary.contentScanned}，跳过未变化 ${result.summary.skippedUnchanged}，高风险 ${result.summary.high}，需关注 ${result.summary.medium}。`);
+      pushSecurityLog(`巡检完成：深查 ${result.summary.contentScanned}，普通图片元数据核对 ${result.summary.mediaMetadataOnly}，断点复用 ${result.summary.resumedFiles}，高风险 ${result.summary.high}，需关注 ${result.summary.medium}。`);
     })
     .catch((error) => {
       securityState.running = false;
       securityState.stage = error.code === "SCAN_CANCELLED" ? "cancelled" : "error";
       securityState.error = error.code === "SCAN_CANCELLED" ? "" : error.message || String(error);
       securityState.finishedAt = new Date().toISOString();
-      pushSecurityLog(error.code === "SCAN_CANCELLED" ? "巡检已取消，远端文件未做任何修改。" : `巡检失败：${securityState.error}`);
+      const checkpoint = securityCheckpointInfo();
+      pushSecurityLog(error.code === "SCAN_CANCELLED"
+        ? `巡检已暂停，远端文件未做任何修改。已保存 ${checkpoint.processedFiles || 0} 个文件断点。`
+        : `巡检失败：${securityState.error}。${checkpoint.valid ? `已保存 ${checkpoint.processedFiles} 个文件断点，可继续巡检。` : ""}`);
     });
 
   return securityStatus();
 }
 
 function scheduleSecurityMonitor() {
-  if (monitorTimer) clearInterval(monitorTimer);
-  monitorTimer = null;
+  const siteKey = siteRuntime.currentSite()?.code || "default";
+  const existingTimer = monitorTimers.get(siteKey);
+  if (existingTimer) clearInterval(existingTimer);
+  monitorTimers.delete(siteKey);
   const config = readConfig();
   if (!config.securityMonitorEnabled) return;
   const intervalMs = Math.max(5, Number(config.securityIntervalMinutes || 360)) * 60 * 1000;
-  monitorTimer = setInterval(() => {
+  const monitorTimer = setInterval(() => {
     const baseline = readBaseline();
     if (securityState.running || uploadState.running || !baseline) return;
     try {
@@ -478,6 +588,7 @@ function scheduleSecurityMonitor() {
     }
   }, intervalMs);
   monitorTimer.unref?.();
+  monitorTimers.set(siteKey, monitorTimer);
 }
 
 function sendJson(res, data, status = 200) {
@@ -500,7 +611,11 @@ function sendFile(res, filePath) {
 async function handleApi(req, res, pathname) {
   try {
     if (req.method === "GET" && pathname === "/api/config") {
-      sendJson(res, { config: publicConfig(readConfig()), navigation: buildNavigation() });
+      sendJson(res, {
+        config: publicConfig(readConfig()),
+        navigation: buildNavigation(),
+        site: siteRuntime.publicSiteContext(),
+      });
       return;
     }
     if (req.method === "POST" && pathname === "/api/config") {
@@ -541,6 +656,11 @@ async function handleApi(req, res, pathname) {
       sendJson(res, { started: true, state: securityStatus() }, 202);
       return;
     }
+    if (req.method === "POST" && pathname === "/api/security/resume") {
+      startSecurityScan({ resume: true });
+      sendJson(res, { started: true, state: securityStatus() }, 202);
+      return;
+    }
     if (req.method === "POST" && pathname === "/api/security/cancel") {
       if (!securityState.running) {
         sendJson(res, { ok: true, running: false });
@@ -551,6 +671,13 @@ async function handleApi(req, res, pathname) {
       sendJson(res, { ok: true, running: true, cancelRequested: true }, 202);
       return;
     }
+    if (req.method === "POST" && pathname === "/api/security/checkpoint/clear") {
+      if (securityState.running) throw new Error("请先暂停当前巡检，再清除断点。");
+      clearSecurityCheckpoint();
+      securityState.checkpointedFiles = 0;
+      sendJson(res, { ok: true, checkpoint: securityCheckpointInfo() });
+      return;
+    }
     if (req.method === "POST" && pathname === "/api/security/baseline") {
       const body = await readBody(req);
       startSecurityScan({ mode: "baseline", allowFindings: body.allowFindings === true, reason: "manual" });
@@ -559,18 +686,18 @@ async function handleApi(req, res, pathname) {
     }
     if (req.method === "POST" && pathname === "/api/security/baseline/adopt") {
       if (securityState.running || uploadState.running) throw new Error("请等待当前 FTP 操作完成后再建立基线。");
-      if (!latestCompletedScan || latestCompletedScan.scanType !== "full") {
+      if (!latestCompletedScan() || latestCompletedScan().scanType !== "full") {
         throw new Error("没有可采用的完整巡检结果，请先执行一次完整复核。");
       }
-      if (latestCompletedScan.fingerprint !== siteFingerprint(readConfig())) {
+      if (latestCompletedScan().fingerprint !== siteFingerprint(readConfig())) {
         throw new Error("最近巡检结果不属于当前 FTP 站点，请重新完整复核。");
       }
       const body = await readBody(req);
-      if (latestCompletedScan.summary.high > 0 && body.allowFindings !== true) {
+      if (latestCompletedScan().summary.high > 0 && body.allowFindings !== true) {
         throw new Error("完整巡检仍有高风险项，不能设为可信基线。");
       }
-      writeBaseline(buildBaseline(latestCompletedScan));
-      latestCompletedScan = null;
+      writeBaseline(buildBaseline(latestCompletedScan()));
+      setLatestCompletedScan(null);
       clearBaselineCandidate();
       securityState.baselineUpdated = true;
       if (securityState.result) securityState.result.baselineUpdated = true;
@@ -616,22 +743,33 @@ async function handleApi(req, res, pathname) {
 }
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  if (url.pathname.startsWith("/api/")) {
-    handleApi(req, res, url.pathname);
-    return;
-  }
-  const filePath = url.pathname === "/" ? path.join(PUBLIC_ROOT, "index.html") : path.join(PUBLIC_ROOT, url.pathname.replace(/^\/+/, ""));
-  const resolvedFilePath = path.resolve(filePath);
-  if (resolvedFilePath !== PUBLIC_ROOT && !resolvedFilePath.startsWith(`${PUBLIC_ROOT}${path.sep}`)) {
-    res.writeHead(403);
-    res.end("Forbidden");
-    return;
-  }
-  sendFile(res, filePath);
+  siteRuntime.runForRequest(req, res, () => {
+    const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    if (url.pathname.startsWith("/api/")) {
+      handleApi(req, res, url.pathname);
+      return;
+    }
+    if (url.pathname === "/site-context.js") {
+      sendFile(res, path.join(PACKAGE_ROOT, "tools", "site-context-client.js"));
+      return;
+    }
+    const filePath = url.pathname === "/" ? path.join(PUBLIC_ROOT, "index.html") : path.join(PUBLIC_ROOT, url.pathname.replace(/^\/+/, ""));
+    const resolvedFilePath = path.resolve(filePath);
+    if (resolvedFilePath !== PUBLIC_ROOT && !resolvedFilePath.startsWith(`${PUBLIC_ROOT}${path.sep}`)) {
+      res.writeHead(403);
+      res.end("Forbidden");
+      return;
+    }
+    sendFile(res, filePath);
+  });
 });
 
 server.listen(PORT, "127.0.0.1", () => {
-  scheduleSecurityMonitor();
+  const sites = siteRuntime.readManagedSites();
+  if (sites.length) {
+    for (const site of sites) siteRuntime.runForSite(site, scheduleSecurityMonitor);
+  } else {
+    scheduleSecurityMonitor();
+  }
   console.log(`FTP publish tool is running: http://localhost:${PORT}`);
 });

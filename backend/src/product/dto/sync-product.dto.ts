@@ -7,7 +7,7 @@ export class SyncProductDto {
   @IsOptional()
   lang?: string;
 
-  @ApiProperty({ description: 'Sync all saved language versions', required: false, default: false })
+  @ApiProperty({ description: 'Sync all saved language versions by default; false explicitly selects one language', required: false, default: true })
   @IsBoolean()
   @IsOptional()
   all?: boolean;

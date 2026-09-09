@@ -6,12 +6,15 @@
         <p>修改产品栏目、标题、缩略图、轮播多图和详情内容。</p>
       </div>
       <div class="page-actions">
-        <el-button type="primary" plain :loading="translatingAll" :disabled="loading || syncing" @click="translateAllLanguages">
-          {{ translatingAll ? "正在顺序翻译..." : "一键翻译" }}
+        <el-button plain :loading="translatingCurrent" :disabled="loading || syncing || translatingAll" @click="translateCurrentLanguage">
+          只翻译当前语言
+        </el-button>
+        <el-button type="primary" plain :loading="translatingAll" :disabled="loading || syncing || translatingCurrent" @click="translateAllLanguages">
+          {{ translatingAll ? (translationProgress || "正在顺序翻译...") : "一键翻译" }}
         </el-button>
         <el-tooltip :disabled="canSyncAll" :content="syncDisabledTip" placement="bottom">
           <span>
-            <el-button type="success" :loading="syncing" :disabled="!canSyncAll || loading || translatingAll" @click="syncAllLanguages">
+            <el-button type="success" :loading="syncing" :disabled="!canSyncAll || loading || translatingAll || translatingCurrent" @click="syncAllLanguages">
               一键同步
             </el-button>
           </span>
@@ -23,6 +26,8 @@
       ref="productFormRef"
       v-model="form"
       :menus="menus"
+      :product-id="Number(route.params.id)"
+      :save-after-each-translation="saveAfterEachTranslation"
       submit-text="保存修改"
       :loading="loading"
       @submit="submit"
@@ -38,7 +43,6 @@ import { ElMessage } from "element-plus";
 import ProductForm from "@/components/ProductForm.vue";
 import { getAll, type MenuItem } from "@/api/menus";
 import {
-  PRODUCT_LANGUAGES,
   createEmptyProductForm,
   ensureProductTranslations,
   getProductById,
@@ -47,19 +51,24 @@ import {
   type ProductForm as ProductFormType,
 } from "@/api/products";
 import { getErrorMessage } from "@/utils/request";
+import { showProductSyncResult } from '@/utils/productSyncFeedback';
+import { useAvailableLanguages } from "@/composables/useAvailableLanguages";
 
 const route = useRoute();
 const router = useRouter();
+const availableLanguages = useAvailableLanguages();
 const loading = ref(false);
 const syncing = ref(false);
 const translatingAll = ref(false);
+const translatingCurrent = ref(false);
 const menus = ref<MenuItem[]>([]);
 const productFormRef = ref<InstanceType<typeof ProductForm> | null>(null);
+const translationProgress = computed(() => productFormRef.value?.translationStatus || "");
 
 const form = ref<ProductFormType>(createEmptyProductForm());
 
 const missingLanguages = computed(() =>
-  PRODUCT_LANGUAGES.filter((lang) => {
+  availableLanguages.value.filter((lang) => {
     const item = form.value.translations?.find((translation) => translation.lang === lang.code);
     const carouselTitles = Array.isArray(item?.carouselTitles) ? item.carouselTitles : [];
     const missingCarouselTitle = form.value.carouselImages.some((_, index) => !carouselTitles[index]?.trim());
@@ -89,6 +98,7 @@ const loadProduct = async () => {
       thumbnail: res.data.thumbnail || "",
       largeImage: res.data.largeImage || "",
       videoUrl: res.data.videoUrl || "",
+      sharedParameters: res.data.sharedParameters || null,
       carouselImages: Array.isArray(res.data.carouselImages) ? res.data.carouselImages : [],
       carouselTitles: Array.isArray(res.data.carouselTitles) ? res.data.carouselTitles : [],
       summary: res.data.summary || "",
@@ -129,6 +139,27 @@ const submit = async () => {
   }
 };
 
+const saveAfterEachTranslation = async () => {
+  productFormRef.value?.syncTranslations();
+  productFormRef.value?.syncDefaultFields();
+  await updateProduct(route.params.id as string, {
+    ...form.value,
+    author: "",
+    source: "",
+    menuId: Number(form.value.menuId),
+    orderNum: Number(form.value.orderNum || 0),
+  });
+};
+
+const translateCurrentLanguage = async () => {
+  translatingCurrent.value = true;
+  try {
+    await productFormRef.value?.generateCurrentTranslation();
+  } finally {
+    translatingCurrent.value = false;
+  }
+};
+
 const translateAllLanguages = async () => {
   translatingAll.value = true;
   try {
@@ -156,7 +187,7 @@ const syncAllLanguages = async () => {
       orderNum: Number(form.value.orderNum || 0),
     });
     const res = await syncProductToPboot(route.params.id as string, { all: true });
-    ElMessage.success(`已同步 ${res.data.synced.length} 个语言到网站`);
+    await showProductSyncResult(res.data, async () => (await syncProductToPboot(route.params.id as string, { all: true })).data);
     await loadProduct();
   } catch (e) {
     ElMessage.error(getErrorMessage(e, "同步产品到网站失败"));

@@ -4,6 +4,7 @@ import { MenuService } from './menu.service';
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { TranslateMenuDto } from './dto/translate-menu.dto';
+import { OptimizeMenuSeoDto } from './dto/optimize-menu-seo.dto';
 
 @Controller('menus')
 @ApiTags('菜单管理')
@@ -28,9 +29,36 @@ export class MenuController {
     return this.menusService.findTranslationModels();
   }
 
+  @Get('pboot-models')
+  findPbootModels() {
+    return this.menusService.findPbootModels();
+  }
+
+  @Get(':id/delete-preview')
+  previewDelete(@Param('id') id: string) {
+    return this.menusService.previewDelete(id);
+  }
+
+  @Post(':id/restore')
+  restore(@Param('id') id: string) {
+    return this.menusService.restore(id);
+  }
+
   @Post('translate-all')
   translateAll(@Body() body: TranslateMenuDto) {
     return this.menusService.translateAllFromChinese(body);
+  }
+
+  @ApiOperation({ summary: '从中文翻译单个栏目，不包含子栏目，不同步 PB' })
+  @Post(':id/translate')
+  translateOne(@Param('id') id: string, @Body() body: TranslateMenuDto) {
+    return this.menusService.translateOneFromChinese(id, body);
+  }
+
+  @ApiOperation({ summary: 'AI 优化中文栏目 SEO 草稿，不自动保存或同步' })
+  @Post('optimize-seo')
+  optimizeSeo(@Body() body: OptimizeMenuSeoDto) {
+    return this.menusService.optimizeSeoDraft(body);
   }
 
   @ApiOperation({

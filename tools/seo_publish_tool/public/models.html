@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="/site-context.js"></script>
     <title>AI 模型总览</title>
     <style>
       :root {
@@ -105,6 +106,7 @@
       }
     </style>
     <link rel="stylesheet" href="/seo-shell.css" />
+    <script defer src="/navigation-icons.js"></script>
     <script defer src="/seo-model-shell.js"></script>
   </head>
   <body>
@@ -131,22 +133,23 @@
         <div class="metric"><span class="ico">ALL</span><div><span class="lbl">模型总数</span><strong id="mTotal">-</strong></div></div>
         <div class="metric"><span class="ico ok">KEY</span><div><span class="lbl">已配置 Key</span><strong class="ok" id="mReady">-</strong></div></div>
         <div class="metric"><span class="ico warn">OFF</span><div><span class="lbl">未配置 Key</span><strong class="warn" id="mNoKey">-</strong></div></div>
-        <div class="metric"><span class="ico test">TEST</span><div><span class="lbl">可测试模型</span><strong id="mOut">-</strong></div></div>
+        <div class="metric"><span class="ico test">TEST</span><div><span class="lbl">绿灯可用</span><strong id="mOut">-</strong></div></div>
       </div>
 
       <div class="legend">
         <span><span class="tag rec">推荐</span>首选</span>
         <span><span class="tag free">免费额度</span>有免费额度、有上限</span>
         <span><span class="tag paid">付费</span>按量计费</span>
-        <span><span class="tag ready">Key 已配置</span>下拉可选</span>
+        <span><span class="tag ready">绿灯可用</span>已测速，下拉可选</span>
         <span><span class="tag nokey">未配置 Key</span>下拉置灰</span>
-        <span><span class="tag out">测试失败</span>按测试结果检查额度或配置</span>
+        <span><span class="tag out">红灯不可用</span>检查额度、Key 或网络后重新测速</span>
       </div>
 
       <div class="model-filters" aria-label="模型筛选">
         <label><span>搜索模型</span><input id="modelSearch" type="search" placeholder="名称、模型 ID 或用途" /></label>
         <label><span>模型厂商</span><select id="providerFilter"><option value="">全部厂商</option><option value="qwen">千问</option><option value="zhipu">智谱 GLM</option><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="google">Google</option><option value="mymemory">MyMemory</option></select></label>
-        <label><span>可用状态</span><select id="availabilityFilter"><option value="">全部状态</option><option value="ready">已配置</option><option value="off">未配置</option></select></label>
+        <label><span>可用状态</span><select id="availabilityFilter"><option value="">全部状态</option><option value="ok">绿灯可用</option><option value="failed">红灯不可用</option><option value="untested">尚未测速</option><option value="off">未配置</option></select></label>
+        <button id="testAllModelsBtn" type="button">一键测速全部</button>
         <button id="reloadModelsBtn" type="button">刷新状态</button>
         <span class="filter-meta" id="filterMeta"></span>
       </div>
@@ -227,9 +230,9 @@
         $("mTotal").textContent = list.length;
         $("mReady").textContent = list.filter((m) => m.available).length;
         $("mNoKey").textContent = list.filter((m) => !m.available && keyUrlOf(m)).length;
-        $("mOut").textContent = list.filter((m) => m.available).length;
+        $("mOut").textContent = list.filter((m) => m.healthStatus === "ok").length;
 
-        const order = ["qwen", "zhipu", "deepseek", "openai"];
+        const order = ["deepseek", "qwen", "zhipu", "openai"];
         const groups = {};
         for (const m of list) (groups[m.provider] = groups[m.provider] || []).push(m);
 
@@ -256,8 +259,9 @@
 
       function statusTag(m) {
         if (!m.available) return `<span class="tag nokey">未配置 Key</span>`;
-        if (isQwenExhausted(m)) return `<span class="tag out">额度耗尽</span>`;
-        return `<span class="tag ready">Key 已配置</span>`;
+        if (m.healthStatus === "failed") return `<span class="tag out">红灯不可用</span>`;
+        if (m.healthStatus === "ok") return `<span class="tag ready">绿灯可用${m.healthElapsedMs ? ` ${esc(m.healthElapsedMs)}ms` : ""}</span>`;
+        return `<span class="tag">尚未测速</span>`;
       }
 
       function card(m) {
@@ -271,7 +275,7 @@
         const keyLink = keyUrl ? `<a href="${esc(keyUrl)}" target="_blank" rel="noopener">获取 Key →</a>` : "";
         const quotaLink = m.quotaUrl ? `<a href="${esc(m.quotaUrl)}" target="_blank" rel="noopener">查看额度 →</a>` : "";
         return `
-          <div class="card${m.available ? "" : " off"}" data-model-card data-provider="${esc(m.provider)}" data-available="${m.available ? "ready" : "off"}" data-search="${esc(`${m.label} ${m.value} ${m.purpose || ""}`.toLowerCase())}">
+          <div class="card${m.available ? "" : " off"}" data-model-card data-provider="${esc(m.provider)}" data-available="${!m.available ? "off" : m.healthStatus || "untested"}" data-search="${esc(`${m.label} ${m.value} ${m.purpose || ""}`.toLowerCase())}">
             <div class="card-head">
               <span class="name">${esc(m.label)}</span>
               <span class="id">${esc(m.value)}</span>
@@ -288,7 +292,7 @@
           </div>`;
       }
 
-      async function testModel(btn) {
+      async function testModel(btn, reloadAfter = true) {
         const model = btn.dataset.model, label = btn.dataset.label;
         const box = $("tr-" + model), orig = btn.textContent;
         btn.disabled = true; btn.textContent = "测试中…";
@@ -308,6 +312,26 @@
           box.textContent = `${label}：请求失败 ${esc(e.message || e)}`;
         } finally {
           btn.disabled = false; btn.textContent = orig;
+          if (reloadAfter) await load();
+        }
+      }
+
+      async function testAllModels() {
+        const button = $("testAllModelsBtn");
+        const testButtons = [...document.querySelectorAll("[data-model-card] button[data-model]")];
+        if (!testButtons.length) return;
+        if (!window.confirm(`将顺序测试 ${testButtons.length} 个已配置模型，每个模型会发起一次极小请求。是否继续？`)) return;
+        const original = button.textContent;
+        button.disabled = true;
+        try {
+          for (let index = 0; index < testButtons.length; index += 1) {
+            button.textContent = `测速中 ${index + 1}/${testButtons.length}`;
+            await testModel(testButtons[index], false);
+          }
+        } finally {
+          button.disabled = false;
+          button.textContent = original;
+          await load();
         }
       }
 
@@ -333,6 +357,7 @@
       $("modelSearch").addEventListener("input", filterModels);
       $("providerFilter").addEventListener("change", filterModels);
       $("availabilityFilter").addEventListener("change", filterModels);
+      $("testAllModelsBtn").addEventListener("click", testAllModels);
       $("reloadModelsBtn").addEventListener("click", load);
 
       load();

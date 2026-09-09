@@ -5,9 +5,14 @@
         <h2>添加单页</h2>
         <p>维护单页栏目、SEO 信息和多语言正文。</p>
       </div>
-      <el-button type="primary" plain :loading="translatingAll" :disabled="loading" @click="translateAllLanguages">
-        {{ translatingAll ? `正在翻译 ${translationProgress}` : "一键翻译" }}
-      </el-button>
+      <div class="page-actions">
+        <el-button plain :loading="translatingCurrent" :disabled="loading || translatingAll" @click="translateCurrentLanguage">
+          只翻译当前语言
+        </el-button>
+        <el-button type="primary" plain :loading="translatingAll" :disabled="loading || translatingCurrent" @click="translateAllLanguages">
+          {{ translatingAll ? `正在翻译 ${translationProgress}` : "一键翻译" }}
+        </el-button>
+      </div>
     </div>
     <PageForm ref="pageFormRef" v-model="form" :menus="menus" submit-text="新建单页" :loading="loading" @submit="submit" @reset="reset" />
   </section>
@@ -16,7 +21,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import PageForm from "@/components/PageForm.vue";
 import { getAll, type MenuItem } from "@/api/menus";
 import { createEmptyPageForm, createPage, type PageForm as PageFormType } from "@/api/pages";
@@ -25,6 +30,7 @@ import { getErrorMessage } from "@/utils/request";
 const router = useRouter();
 const loading = ref(false);
 const translatingAll = ref(false);
+const translatingCurrent = ref(false);
 const menus = ref<MenuItem[]>([]);
 const pageFormRef = ref<InstanceType<typeof PageForm> | null>(null);
 const form = ref<PageFormType>(createEmptyPageForm());
@@ -36,17 +42,20 @@ const reset = () => {
 
 const translateAllLanguages = async () => {
   if (translatingAll.value) return;
-  const confirmed = await ElMessageBox.confirm(
-    "将按顺序调用当前模型生成其余 6 种语言，可能产生 API 费用。确认开始吗？",
-    "一键翻译单页",
-    { confirmButtonText: "开始翻译", cancelButtonText: "取消", type: "warning" },
-  ).catch(() => false);
-  if (!confirmed) return;
   translatingAll.value = true;
   try {
     await pageFormRef.value?.generateAllTranslations();
   } finally {
     translatingAll.value = false;
+  }
+};
+
+const translateCurrentLanguage = async () => {
+  translatingCurrent.value = true;
+  try {
+    await pageFormRef.value?.generateCurrentTranslation();
+  } finally {
+    translatingCurrent.value = false;
   }
 };
 

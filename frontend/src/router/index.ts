@@ -8,6 +8,12 @@ const router = createRouter({
   routes: [
     { path: "/login", name: "login", component: () => import("@/views/LoginView.vue") },
     {
+      path: "/brochures",
+      name: "brochures",
+      component: () => import("@/views/brochures/BrochureTool.vue"),
+      meta: { title: "产品介绍", requiresAuth: true },
+    },
+    {
       path: "/quotations",
       name: "quotations",
       component: () => import("@/views/quotations/QuotationTool.vue"),
@@ -19,6 +25,10 @@ const router = createRouter({
       meta: { requiresAuth: true },
       children: [
         { path: "", name: "dashboard", component: IndexView, meta: { title: "后台概览" } },
+        { path: "sites", name: "sites", component: () => import("@/views/sites/SitesView.vue"), meta: { title: "站点管理" } },
+        { path: "site-resources", name: "siteResources", component: () => import("@/views/sites/SiteResourcesView.vue"), meta: { title: "网站资源检测" } },
+        { path: "template-bindings", name: "templateBindings", component: () => import("@/views/sites/TemplateBindingsView.vue"), meta: { title: "模板栏目绑定" } },
+        { path: "product-fields", name: "productFields", component: () => import("@/views/products/ProductFieldsView.vue"), meta: { title: "产品字段管理" } },
         { path: "menus", name: "menus", component: () => import("@/views/MenusView.vue"), meta: { title: "菜单管理" } },
         { path: "menus/create", name: "createMenus", component: () => import("@/views/menu/Create.vue"), meta: { title: "新增菜单" } },
         { path: "menus/edit/:id", name: "editMenus", component: () => import("@/views/menu/Edit.vue"), meta: { title: "编辑菜单" } },

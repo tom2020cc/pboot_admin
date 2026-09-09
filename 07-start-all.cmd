@@ -1,19 +1,21 @@
 @echo off
 setlocal
 set "ROOT=%~dp0"
-set "FRONTEND_PORT=5178"
-set "SEO_PORT=5288"
-set "FTP_PORT=5189"
+set "BACKEND_PORT=5108"
+set "FRONTEND_PORT=5278"
+set "SEO_PORT=5388"
+set "FTP_PORT=5389"
 
 echo.
 echo ============================================
 echo   Pboot Admin - Start all daily services
 echo ============================================
-echo Backend stays in a visible terminal.
-echo Frontend, SEO and FTP run in the background.
+echo Backend API stays in one visible terminal.
+echo Frontend, SEO and FTP run quietly in the background.
 
 if exist "%ROOT%backend\.env" (
   for /f "usebackq tokens=1,* delims==" %%A in ("%ROOT%backend\.env") do (
+    if /I "%%A"=="BACKEND_PORT" set "BACKEND_PORT=%%B"
     if /I "%%A"=="FRONTEND_PORT" set "FRONTEND_PORT=%%B"
   )
 )
@@ -46,12 +48,13 @@ echo.
 echo --------------------------------------------
 echo  Daily services are ready.
 echo  Frontend:    http://localhost:%FRONTEND_PORT%
+echo  Backend API: http://localhost:%BACKEND_PORT%/api-docs
 echo  SEO tool:    http://localhost:%SEO_PORT%
 echo  FTP tool:    http://localhost:%FTP_PORT%
 echo.
-echo  Config wizard is not started every day.
-echo  Run 01-config.cmd only when settings change.
-echo  Keep the Pboot Admin Backend window open.
+echo  Website settings: open Site Management in the admin panel.
+echo  Shortcut: run 01-sites.cmd.
+echo  Keep the Pboot Admin Backend API window open.
 echo --------------------------------------------
 if /I "%~1"=="--no-browser" exit /b 0
 powershell -NoProfile -Command "Start-Sleep -Seconds 4"

@@ -9,7 +9,7 @@ export class TranslateProductDto {
 
   @ApiProperty({ description: 'Target language', example: 'en' })
   @IsString()
-  @IsIn(['en', 'es', 'fr', 'ru', 'ar', 'pt'])
+  @IsIn(['en', 'es', 'fr', 'ru', 'ar', 'pt', 'id', 'tr', 'vi'])
   targetLang: string;
 
   @ApiProperty({ description: 'Translation model', example: 'glm-4.7-flash' })

@@ -20,7 +20,7 @@
         <el-option v-for="item in menuOptions" :key="item.id" :label="item.optionLabel" :value="Number(item.id)" />
       </el-select>
       <el-select v-model="currentLang" placeholder="显示语言" class="lang-select" @change="handleLangChange">
-        <el-option v-for="item in NEWS_LANGUAGES" :key="item.code" :label="item.name" :value="item.code" />
+        <el-option v-for="item in availableLanguages" :key="item.code" :label="item.name" :value="item.code" />
       </el-select>
       <el-button @click="loadPages">刷新</el-button>
     </div>
@@ -63,8 +63,10 @@ import { getAll, type MenuItem } from "@/api/menus";
 import { DEFAULT_NEWS_LANG, NEWS_LANGUAGES, getPageList, importPagesFromPboot, removePage, syncAllPagesToPboot, syncPageToPboot, type PageItem } from "@/api/pages";
 import { getErrorMessage } from "@/utils/request";
 import { filterMenusByContentLangAndModel, findEquivalentMenuForLang, formatMenuPathForLang } from "@/utils/menuLanguage";
+import { useAvailableLanguages } from "@/composables/useAvailableLanguages";
 
 const router = useRouter();
+const availableLanguages = useAvailableLanguages();
 const loading = ref(false);
 const importing = ref(false);
 const syncingAll = ref(false);

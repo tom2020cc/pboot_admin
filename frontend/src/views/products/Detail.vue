@@ -7,10 +7,9 @@
       </div>
       <div class="actions">
         <el-select v-model="currentLang" class="lang-select" @change="handleLangChange">
-          <el-option v-for="item in PRODUCT_LANGUAGES" :key="item.code" :label="item.name" :value="item.code" />
+          <el-option v-for="item in availableLanguages" :key="item.code" :label="item.name" :value="item.code" />
         </el-select>
-        <el-button type="success" :loading="syncingCurrent" @click="handleSync(false)">同步当前语言</el-button>
-        <el-button type="warning" :loading="syncingAll" @click="handleSync(true)">同步全部语言</el-button>
+        <el-button type="success" :loading="syncingAll" @click="handleSync">同步全部语言</el-button>
         <el-button @click="router.push('/products')">返回列表</el-button>
         <el-button type="primary" @click="router.push({ name: 'editProduct', params: { id: route.params.id } })">编辑产品</el-button>
       </div>
@@ -42,6 +41,10 @@
           <p v-if="product.subtitle" class="subtitle">{{ product.subtitle }}</p>
 
           <p v-if="product.summary" class="summary">{{ product.summary }}</p>
+
+          <dl v-if="product.parameterRows?.length" class="shared-specs">
+            <div v-for="(item, index) in product.parameterRows" :key="index"><dt>{{ item.name }}{{ item.unit ? ` (${item.unit})` : '' }}</dt><dd>{{ item.value }}</dd></div>
+          </dl>
 
           <div class="info-grid">
             <div>
@@ -144,13 +147,15 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { getAll, type MenuItem } from "@/api/menus";
 import { DEFAULT_PRODUCT_LANG, PRODUCT_LANGUAGES, getProductById, syncProductToPboot, type ProductItem } from "@/api/products";
+import { showProductSyncResult } from '@/utils/productSyncFeedback';
 import { getUploadUrl, normalizeHtmlImageUrls } from "@/api/uploads";
 import { getErrorMessage } from "@/utils/request";
+import { useAvailableLanguages } from "@/composables/useAvailableLanguages";
 
 const route = useRoute();
 const router = useRouter();
+const availableLanguages = useAvailableLanguages();
 const loading = ref(false);
-const syncingCurrent = ref(false);
 const syncingAll = ref(false);
 const product = ref<ProductItem>();
 const menus = ref<MenuItem[]>([]);
@@ -197,18 +202,15 @@ const handleLangChange = async () => {
   await loadDetail();
 };
 
-const handleSync = async (all: boolean) => {
-  if (all) syncingAll.value = true;
-  else syncingCurrent.value = true;
+const handleSync = async () => {
+  syncingAll.value = true;
   try {
-    const res = await syncProductToPboot(route.params.id as string, all ? { all: true } : { lang: currentLang.value });
-    const urls = res.data.synced.map((item) => item.url).join("，");
-    ElMessage.success(`同步成功：${urls}`);
+    const res = await syncProductToPboot(route.params.id as string, { all: true });
+    await showProductSyncResult(res.data, async () => (await syncProductToPboot(route.params.id as string, { all: true })).data);
   } catch (e) {
     ElMessage.error(getErrorMessage(e, "同步产品到网站失败"));
   } finally {
     syncingAll.value = false;
-    syncingCurrent.value = false;
   }
 };
 
@@ -221,6 +223,10 @@ onMounted(loadDetail);
 </script>
 
 <style scoped>
+.shared-specs { margin: 18px 0; display: grid; gap: 10px; }
+.shared-specs > div { display: grid; grid-template-columns: minmax(130px, .7fr) minmax(0, 1fr); gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--el-border-color-lighter); }
+.shared-specs dt { color: var(--el-text-color-regular); overflow-wrap: anywhere; }
+.shared-specs dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .page {
   display: flex;
   width: 100%;

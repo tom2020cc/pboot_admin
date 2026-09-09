@@ -4,6 +4,7 @@
   "private": true,
   "description": "Local SEO helper for PbootCMS sitemap, robots, IndexNow and SEO checks.",
   "scripts": {
+    "test": "node --test inspection.test.js",
     "start": "node server.js",
     "submit:google": "node auto-submit-google.js"
   },

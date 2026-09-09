@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -17,6 +17,9 @@ import { SyncGuardModule } from './common/sync-guard.module';
 import { DatabaseBackupModule } from './database-backup/database-backup.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { QuotationModule } from './quotation/quotation.module';
+import { BrochureModule } from './brochure/brochure.module';
+import { SiteRequestContextMiddleware } from './sites/site-request-context.service';
+import { SitesModule } from './sites/sites.module';
 
 const entities = [__dirname + '/**/*.entity{.ts,.js}'];
 
@@ -47,6 +50,7 @@ const createDatabaseConfig = (config: ConfigService): TypeOrmModuleOptions =>
       inject: [ConfigService],
       useFactory: createDatabaseConfig,
     }),
+    SitesModule,
     SyncGuardModule,
     UserModule,
     AuthModule,
@@ -58,6 +62,7 @@ const createDatabaseConfig = (config: ConfigService): TypeOrmModuleOptions =>
     VideoModule,
     DatabaseBackupModule,
     QuotationModule,
+    BrochureModule,
     
   ],
   controllers: [AppController],
@@ -67,4 +72,8 @@ const createDatabaseConfig = (config: ConfigService): TypeOrmModuleOptions =>
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(SiteRequestContextMiddleware).forRoutes('*');
+  }
+}

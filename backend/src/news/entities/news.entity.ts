@@ -1,9 +1,13 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity()
+@Index(['siteId', 'menuId'])
 export class News {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({ default: 0, comment: 'Managed site id' })
+  siteId: number;
 
   @Column({ comment: 'Menu ID' })
   menuId: number;

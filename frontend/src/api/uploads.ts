@@ -1,5 +1,7 @@
 ﻿import request, { API_BASE_URL } from "@/utils/request";
 
+import { getActiveSiteId } from "@/utils/siteSelection";
+
 export const MAX_IMAGE_UPLOAD_SIZE = 5 * 1024 * 1024;
 export const MAX_IMAGE_UPLOAD_SIZE_TEXT = "5MB";
 
@@ -31,25 +33,37 @@ export const uploadImage = async (formData: FormData) => {
   });
 };
 
+const decodePath = (value: string) => {
+  try { return decodeURIComponent(value); } catch { return value; }
+};
+
 export const getUploadUrl = (filename: string) => {
   if (!filename) return "";
   const value = filename.trim();
   if (/^https?:\/\//i.test(value)) return value;
   if (value.startsWith("//")) return `${window.location.protocol}${value}`;
   if (/^\/?uploads?\//i.test(value)) {
-    return value.startsWith("/") ? `${API_BASE_URL}${value}` : `${API_BASE_URL}/${value}`;
+    const filename = decodePath(value.replace(/^\/?uploads?\//i, ""));
+    const siteId = getActiveSiteId();
+    return `${API_BASE_URL}/img-upload/file/${encodeURIComponent(filename)}${siteId ? `?siteId=${siteId}` : ""}`;
   }
   if (/^\/?static\//i.test(value)) {
-    return `${API_BASE_URL}/pboot-static/${value.replace(/^\/?static\//i, "")}`;
+    const relativePath = decodePath(value.replace(/^\/?static\//i, ""));
+    const siteId = getActiveSiteId();
+    if (siteId) return `${API_BASE_URL}/sites/static-file?siteId=${siteId}&path=${encodeURIComponent(relativePath)}`;
+    return `${API_BASE_URL}/pboot-static/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
   }
   if (value.startsWith("/")) {
     return `${API_BASE_URL}${value}`;
   }
-  return `${API_BASE_URL}/uploads/${value}`;
+  const siteId = getActiveSiteId();
+  return `${API_BASE_URL}/img-upload/file/${encodeURIComponent(value)}${siteId ? `?siteId=${siteId}` : ""}`;
 };
 
 export const decodeHtmlEntities = (html: string) => {
   if (!html) return "";
+  // Decode an escaped document only; entities inside real HTML must stay escaped.
+  if (/<\s*\/?\s*[a-z][^>]*>/i.test(html)) return html;
   return html
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
@@ -101,9 +115,20 @@ const escapeHtmlAttribute = (value: string) => {
 
 export const normalizeHtmlImageUrls = (html: string) => {
   if (!html) return "";
-  return repairTranslatedHtml(html).replace(/(<img\b[^>]*\bsrc=)(["']?)([^"'\s>]+)\2([^>]*>)/gi, (match, prefix, quote, src, suffix) => {
-    if (!src || /^https?:\/\//i.test(src) || /^data:/i.test(src)) return match;
-    const nextQuote = quote || '"';
-    return `${prefix}${nextQuote}${getUploadUrl(src)}${nextQuote}${suffix}`;
+  const repaired = repairTranslatedHtml(html);
+  if (typeof DOMParser === "undefined") {
+    return repaired.replace(/(<img\b[^>]*\bsrc\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi, (match, prefix, doubleQuoted, singleQuoted, bare) => {
+      const src = String(doubleQuoted ?? singleQuoted ?? bare ?? "").trim();
+      if (!src || /^https?:\/\//i.test(src) || /^data:/i.test(src)) return match;
+      return `${prefix}"${getUploadUrl(src)}"`;
+    });
+  }
+
+  const document = new DOMParser().parseFromString(`<body>${repaired}</body>`, "text/html");
+  document.body.querySelectorAll("img[src]").forEach((image) => {
+    const src = String(image.getAttribute("src") || "").trim();
+    if (!src || /^https?:\/\//i.test(src) || /^data:/i.test(src)) return;
+    image.setAttribute("src", getUploadUrl(src));
   });
+  return document.body.innerHTML;
 };

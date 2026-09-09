@@ -125,6 +125,25 @@
   min-width: max-content;
 }
 
+.tool-nav a,
+.section-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+}
+
+.section-nav .nav-icon {
+  width: 14px;
+  height: 14px;
+  flex-basis: 14px;
+}
+
 .nav-caption {
   flex: 0 0 auto;
   margin-right: 3px;
@@ -163,7 +182,8 @@ html[data-seo-page="settings"] [data-seo-pages~="settings"] {
   display: block !important;
 }
 
-html[data-seo-page="overview"] .toolbar[data-seo-pages~="overview"] {
+html[data-seo-page="overview"] .toolbar[data-seo-pages~="overview"],
+html[data-seo-page="audit"] .toolbar[data-seo-pages~="audit"] {
   display: flex !important;
 }
 

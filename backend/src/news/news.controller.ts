@@ -1,5 +1,9 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseFilters, UseInterceptors } from '@nestjs/common';
+import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { UploadI18nFilter } from '../img-upload/img-upload.controller';
+import { UploadNewsThumbnailDto } from './dto/upload-news-thumbnail.dto';
 import { NewsService } from './news.service';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { SyncNewsDto } from './dto/sync-news.dto';
@@ -8,17 +12,43 @@ import { UpdateNewsDto } from './dto/update-news.dto';
 import { OptimizeSeoDto } from '../common/dto/optimize-seo.dto';
 import { TranslateMenuContentDto } from '../common/dto/translate-menu-content.dto';
 import { PbootScopeDto } from '../common/dto/pboot-scope.dto';
+import { ImportNewsFolderDto } from './dto/import-news-folder.dto';
+import { SyncNewsScopeDto } from './dto/sync-news-scope.dto';
 
 @Controller('news')
 @ApiTags('新闻管理')
 export class NewsController {
   constructor(private readonly newsService: NewsService) {}
 
+  @Post('thumbnail')
+  @ApiOperation({ summary: '生成 500x400 新闻缩略图，保存到当前新闻目录' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', properties: { image: { type: 'string', format: 'binary' }, newsId: { type: 'integer' }, menuId: { type: 'integer' }, title: { type: 'string' }, referenceImage: { type: 'string' } }, required: ['image'] } })
+  @UseFilters(UploadI18nFilter)
+  @UseInterceptors(FileInterceptor('image', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 4 } }))
+  uploadThumbnail(@Body() postObj: UploadNewsThumbnailDto, @UploadedFile() file?: Express.Multer.File) {
+    return this.newsService.uploadThumbnail(postObj, file);
+  }
+
   @ApiOperation({ summary: '新增新闻', description: '添加一篇新闻内容，可同时提交多语言内容' })
   @ApiBody({ type: CreateNewsDto, description: '输入新闻内容' })
   @Post()
   create(@Body() postObj: CreateNewsDto) {
     return this.newsService.create(postObj);
+  }
+
+  @ApiOperation({ summary: '扫描新闻资料文件夹', description: '按新闻子文件夹识别标题、缩略图、正文 HTML 和正文图片' })
+  @ApiBody({ type: ImportNewsFolderDto })
+  @Post('folder-import/scan')
+  scanNewsFolders(@Body() postObj: ImportNewsFolderDto) {
+    return this.newsService.scanNewsFolderImport(postObj);
+  }
+
+  @ApiOperation({ summary: '从文件夹批量新增中文新闻', description: '复制图片到当前网站并在指定中文新闻栏目创建新闻' })
+  @ApiBody({ type: ImportNewsFolderDto })
+  @Post('folder-import')
+  importNewsFolders(@Body() postObj: ImportNewsFolderDto) {
+    return this.newsService.importNewsFolders(postObj);
   }
 
   @ApiOperation({ summary: '获取新闻语言列表' })
@@ -128,6 +158,20 @@ export class NewsController {
   @Post('pboot-scope/pull')
   pullPbootScope(@Body() postObj: PbootScopeDto) {
     return this.newsService.pullPbootScope(postObj.menuId, postObj.lang);
+  }
+
+  @ApiOperation({ summary: '检查中文新闻栏目范围的全部语言同步' })
+  @ApiBody({ type: SyncNewsScopeDto })
+  @Post('pboot-scope/preview-all')
+  previewChineseScope(@Body() postObj: SyncNewsScopeDto) {
+    return this.newsService.syncChineseNewsScope(postObj.menuId);
+  }
+
+  @ApiOperation({ summary: '同步中文新闻栏目及子栏目的全部语言，只新增或更新' })
+  @ApiBody({ type: SyncNewsScopeDto })
+  @Post('pboot-scope/sync-all')
+  syncChineseScope(@Body() postObj: SyncNewsScopeDto) {
+    return this.newsService.syncChineseNewsScope(postObj.menuId, true);
   }
 
   @ApiOperation({ summary: 'Overwrite the selected news menu and language in PbootCMS' })

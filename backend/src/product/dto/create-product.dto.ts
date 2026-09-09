@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
+import { ProductSharedParameters } from '../product-shared-parameters';
 
 export class ProductTranslationDto {
   @ApiProperty({ description: 'Language code', example: 'en' })
@@ -43,6 +44,11 @@ export class ProductTranslationDto {
 }
 
 export class CreateProductDto {
+  @ApiProperty({ description: 'Shared technical parameters and internal reference price', required: false, nullable: true })
+  @IsObject()
+  @IsOptional()
+  sharedParameters?: ProductSharedParameters | null;
+
   @ApiProperty({ description: 'Menu ID', example: 1 })
   @IsNumber()
   menuId: number;

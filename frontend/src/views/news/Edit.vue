@@ -6,12 +6,15 @@
         <p>维护新闻栏目、缩略图，以及每个语言版本的标题、描述和正文。</p>
       </div>
       <div class="page-actions">
-        <el-button type="primary" plain :loading="translatingAll" :disabled="loading || syncing" @click="translateAllLanguages">
+        <el-button plain :loading="translatingCurrent" :disabled="loading || syncing || translatingAll" @click="translateCurrentLanguage">
+          只翻译当前语言
+        </el-button>
+        <el-button type="primary" plain :loading="translatingAll" :disabled="loading || syncing || translatingCurrent" @click="translateAllLanguages">
           {{ translatingAll ? "正在顺序翻译..." : "一键翻译" }}
         </el-button>
         <el-tooltip :disabled="canSyncAll" :content="syncDisabledTip" placement="bottom">
           <span>
-            <el-button type="success" :loading="syncing" :disabled="!canSyncAll || loading || translatingAll" @click="syncAllLanguages">
+            <el-button type="success" :loading="syncing" :disabled="!canSyncAll || loading || translatingAll || translatingCurrent" @click="syncAllLanguages">
               一键同步
             </el-button>
           </span>
@@ -39,7 +42,6 @@ import { ElMessage } from "element-plus";
 import NewsForm from "@/components/NewsForm.vue";
 import { getAll, type MenuItem } from "@/api/menus";
 import {
-  NEWS_LANGUAGES,
   createEmptyNewsForm,
   ensureNewsTranslations,
   getNewsById,
@@ -48,19 +50,22 @@ import {
   type NewsForm as NewsFormType,
 } from "@/api/news";
 import { getErrorMessage } from "@/utils/request";
+import { useAvailableLanguages } from "@/composables/useAvailableLanguages";
 
 const route = useRoute();
 const router = useRouter();
+const availableLanguages = useAvailableLanguages();
 const loading = ref(false);
 const syncing = ref(false);
 const translatingAll = ref(false);
+const translatingCurrent = ref(false);
 const menus = ref<MenuItem[]>([]);
 const newsFormRef = ref<InstanceType<typeof NewsForm> | null>(null);
 const form = ref<NewsFormType>(createEmptyNewsForm());
 const newsId = computed(() => route.params.id as string);
 
 const missingLanguages = computed(() =>
-  NEWS_LANGUAGES.filter((lang) => {
+  availableLanguages.value.filter((lang) => {
     const item = form.value.translations?.find((translation) => translation.lang === lang.code);
     return !item?.title?.trim() || !item?.summary?.trim() || !item?.content?.trim();
   }).map((lang) => lang.name),
@@ -130,6 +135,15 @@ const translateAllLanguages = async () => {
     await newsFormRef.value?.generateAllTranslations();
   } finally {
     translatingAll.value = false;
+  }
+};
+
+const translateCurrentLanguage = async () => {
+  translatingCurrent.value = true;
+  try {
+    await newsFormRef.value?.generateCurrentTranslation();
+  } finally {
+    translatingCurrent.value = false;
   }
 };
 

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="500" viewBox="0 0 1320 500" role="img" aria-labelledby="title desc">
+  <title id="title">宝塔 Linux 权限边界</title>
+  <desc id="desc">展示 www 用户对集中管理目录和 PbootCMS 业务站点目录的读写要求。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#667085"/>
+    </marker>
+  </defs>
+  <rect width="1320" height="500" fill="#f7f9fc"/>
+  <text x="48" y="54" font-family="Microsoft YaHei, Arial, sans-serif" font-size="28" font-weight="700" fill="#172033">宝塔 Linux 权限边界</text>
+  <text x="48" y="86" font-family="Microsoft YaHei, Arial, sans-serif" font-size="16" fill="#667085">三个 Node 服务统一由 www 用户运行；只给需要修改的目录写权限。</text>
+
+  <rect x="48" y="132" width="250" height="244" rx="8" fill="#172033"/>
+  <circle cx="173" cy="198" r="42" fill="#2d70c9"/>
+  <path d="M151 199 h44 M173 177 v44" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+  <text x="173" y="270" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif" font-size="22" font-weight="700" fill="#ffffff">www 用户</text>
+  <text x="173" y="306" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#cbd5e1">PM2 运行身份</text>
+  <text x="173" y="336" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#cbd5e1">API / SEO / FTP</text>
+
+  <rect x="398" y="118" width="390" height="286" rx="8" fill="#ffffff" stroke="#64b585" stroke-width="2"/>
+  <text x="422" y="154" font-family="Microsoft YaHei, Arial, sans-serif" font-size="20" font-weight="700" fill="#168047">集中管理项目</text>
+  <text x="422" y="186" font-family="Consolas, monospace" font-size="14" fill="#475467">/www/wwwroot/pboot_admin_center</text>
+  <line x1="422" y1="205" x2="764" y2="205" stroke="#e2e8f0"/>
+  <rect x="422" y="226" width="74" height="26" rx="4" fill="#e9f8ef"/>
+  <text x="459" y="244" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif" font-size="13" font-weight="700" fill="#168047">读写</text>
+  <text x="510" y="244" font-family="Consolas, monospace" font-size="14" fill="#172033">data/</text>
+  <rect x="422" y="270" width="74" height="26" rx="4" fill="#e9f8ef"/>
+  <text x="459" y="288" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif" font-size="13" font-weight="700" fill="#168047">读写</text>
+  <text x="510" y="288" font-family="Consolas, monospace" font-size="14" fill="#172033">backups/</text>
+  <rect x="422" y="314" width="74" height="26" rx="4" fill="#e9f8ef"/>
+  <text x="459" y="332" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif" font-size="13" font-weight="700" fill="#168047">读写</text>
+  <text x="510" y="332" font-family="Consolas, monospace" font-size="14" fill="#172033">backend/uploads/</text>
+  <text x="422" y="374" font-family="Microsoft YaHei, Arial, sans-serif" font-size="14" fill="#667085">源代码通常只需读取</text>
+
+  <rect x="880" y="118" width="392" height="286" rx="8" fill="#ffffff" stroke="#f0a24d" stroke-width="2"/>
+  <text x="904" y="154" font-family="Microsoft YaHei, Arial, sans-serif" font-size="20" font-weight="700" fill="#b75b00">每个 PbootCMS 网站</text>
+  <text x="904" y="186" font-family="Consolas, monospace" font-size="14" fill="#475467">/www/wwwroot/shanbo.cc</text>
+  <line x1="904" y1="205" x2="1248" y2="205" stroke="#e2e8f0"/>
+  <rect x="904" y="226" width="74" height="26" rx="4" fill="#fff4e6"/>
+  <text x="941" y="244" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif" font-size="13" font-weight="700" fill="#b75b00">读写</text>
+  <text x="992" y="244" font-family="Consolas, monospace" font-size="14" fill="#172033">data/</text>
+  <rect x="904" y="270" width="74" height="26" rx="4" fill="#fff4e6"/>
+  <text x="941" y="288" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif" font-size="13" font-weight="700" fill="#b75b00">读写</text>
+  <text x="992" y="288" font-family="Consolas, monospace" font-size="14" fill="#172033">static/</text>
+  <rect x="904" y="314" width="74" height="26" rx="4" fill="#fff4e6"/>
+  <text x="941" y="332" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif" font-size="13" font-weight="700" fill="#b75b00">读写</text>
+  <text x="992" y="332" font-family="Consolas, monospace" font-size="14" fill="#172033">runtime/</text>
+  <text x="904" y="374" font-family="Microsoft YaHei, Arial, sans-serif" font-size="14" fill="#667085">增加站点时逐站检查权限</text>
+
+  <path d="M298 222 H388" stroke="#667085" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M298 302 C340 302 338 430 830 430 C858 430 866 370 870 326" fill="none" stroke="#667085" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="659" y="462" text-anchor="middle" font-family="Microsoft YaHei, Arial, sans-serif" font-size="15" fill="#b42318">不要对整个 /www/wwwroot 使用 777</text>
+</svg>

@@ -48,6 +48,30 @@ describe('translation image markup guard', () => {
     ).toThrow(BadRequestException);
   });
 
+  it('rejects an otherwise valid model response before fallback when a protected image token is missing', () => {
+    const service = Object.create(ProductService.prototype) as ProductService;
+    const source = {
+      targetLang: 'fr',
+      model: 'deepseek-chat',
+      title: '钻机',
+      subtitle: '',
+      keywords: '',
+      summary: '',
+      content: '<p>说明</p>@@PBOOTCMS_IMAGE_0000@@',
+      carouselTitles: [],
+    };
+    const response = JSON.stringify({
+      title: 'Foreuse',
+      subtitle: '',
+      keywords: '',
+      summary: '',
+      content: '<p>Description</p>',
+      carouselTitles: [],
+    });
+
+    expect(() => (service as any).toTranslationResult(source, response)).toThrow(BadRequestException);
+  });
+
   it('restores news image tags byte-for-byte before alt-only repair', () => {
     const service = Object.create(NewsService.prototype) as NewsService;
     const tag = `<img src='/static/news.jpg' class="article" data-id='9' alt = '新闻图片' loading="lazy">`;

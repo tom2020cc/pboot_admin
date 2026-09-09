@@ -1,25 +1,28 @@
-Pboot Admin 新电脑快速启动
-===========================
+Pboot Admin 集中多站点版：新电脑快速启动
+==========================================
 
-准备：把整个 pboot_admin 文件夹放在目标 PbootCMS 网站根目录。
+准备：把本项目作为独立目录放到 phpStudy 的 WWW 下，例如：
+E:\phpstudy_pro\WWW\pboot_admin_center
 
-第 1 步：安装 Node.js LTS，安装时勾选 Add to PATH。
-第 2 步：双击 00-install.cmd，等到显示安装完成。
-第 3 步：双击 01-config.cmd。
-第 4 步：确认网站根目录和 data 目录中的数据库，点击“一键自检”。
-第 5 步：自检全部正常后保存配置。
-第 6 步：双击 07-start-all.cmd，保持“Pboot Admin Backend”后端窗口打开。
+第 1 步：安装 Node.js LTS 和 pnpm。
+第 2 步：双击 00-install.cmd，等待依赖安装完成。
+第 3 步：双击 07-start-all.cmd，保持“Pboot Admin Backend API”窗口打开。
+第 4 步：没有管理员时双击 03-create-admin.cmd。
+第 5 步：打开 http://localhost:5278/#/sites，扫描 phpStudy 的 WWW 目录。
+第 6 步：选择需要管理的 PbootCMS 网站，核对根目录、数据库、线上网址和 YouTube 频道 ID 后导入。
 
-首次没有账号：双击 03-create-admin.cmd。
-停止本项目端口：双击 04-stop-ports.cmd。
-只启动管理后台：双击 02-start.cmd。
-只启动 SEO 工具：双击 05-start-seo-tool.cmd。
-只启动 FTP 工具：双击 06-start-ftp-tool.cmd。
+常用脚本：
+01-sites.cmd           打开集中站点管理
+02-start.cmd           启动后台接口和管理前端
+04-stop-ports.cmd      停止本项目服务
+05-start-seo-tool.cmd  只启动 SEO 工具
+06-start-ftp-tool.cmd  只启动 FTP 工具
+07-start-all.cmd       启动日常四项服务
 
 重要：
-1. 每个网站复制一套独立的 pboot_admin，不要跨网站共用。
-2. 一台电脑运行多个网站时，每套项目使用不同端口。
-3. 同步前核对页面显示的网站根目录和数据库路径。
-4. API Key、FTP 密码输入框留空表示保留原值。
-5. 完整教程请打开 docs\NEW_PC_SETUP_ZH.md。
-6. 配置向导只在修改配置时运行，日常总启动不会再启动它。
+1. 所有网站共用一套管理项目和一组端口，不要为每个网站复制一套后台。
+2. 顶部站点切换器决定当前操作的网站；同步、SEO、FTP 前先核对站点名称。
+3. 模型 API Key 和 YouTube Data API Key 全站共用，只配置一次。
+4. 每站的 YouTube 频道、Google、SEO、FTP、断点和备份保存在 managed-sites\站点标识\。
+5. managed-sites 可能包含密码和私钥，不要提交到 Git 或发送未加密压缩包。
+6. 完整教程请阅读 docs\NEW_PC_SETUP_ZH.md 和 docs\BAOTA_MULTI_SITE_DEPLOY_ZH.md。

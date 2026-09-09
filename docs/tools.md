@@ -17,7 +17,7 @@ start.cmd
 URL:
 
 ```text
-http://localhost:5189
+http://localhost:5389
 ```
 
 Use it to upload the local PbootCMS database, images, sitemap, robots file, and IndexNow key file to hosting by FTP.
@@ -39,7 +39,7 @@ start.cmd
 URL:
 
 ```text
-http://localhost:5188
+http://localhost:5388
 ```
 
 Use it to generate sitemap and robots files, check SEO fields, and submit IndexNow URLs.

@@ -20,17 +20,18 @@ describe('translation model catalog', () => {
       available: true,
       batch: false,
     });
-    expect(models.find((item) => item.available)?.value).toBe('qwen3.6-flash-2026-04-16');
+    expect(models.find((item) => item.available)?.value).toBe('deepseek-chat');
+    expect(models[0]).toMatchObject({ value: 'deepseek-chat', priority: 1 });
   });
 
   it('falls back across providers instead of retrying every model from one provider', () => {
-    const models = buildTranslationModelCatalog(availability);
+    const models = buildTranslationModelCatalog(availability).map((model) => ({ ...model, operational: true }));
     const chain = buildTranslationModelFallbackChain(models, 'qwen3.6-flash-2026-04-16');
 
     expect(chain.map((item) => item.provider)).toEqual([
       'qwen',
-      'zhipu',
       'deepseek',
+      'zhipu',
       'openai',
       'google',
       'mymemory',
@@ -43,7 +44,7 @@ describe('translation model catalog', () => {
       zhipu: true,
       deepseek: false,
       openai: true,
-    });
+    }).map((model) => ({ ...model, operational: true }));
     const chain = buildTranslationModelFallbackChain(models, 'glm-4-flash-250414');
 
     expect(chain.map((item) => item.provider)).toEqual(['zhipu', 'openai', 'google', 'mymemory']);

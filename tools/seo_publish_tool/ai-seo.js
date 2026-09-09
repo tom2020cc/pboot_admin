@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const initSqlJs = require("sql.js");
+const siteRuntime = require("../site-runtime");
 
 const LANGUAGE_NAMES = {
   cn: "Simplified Chinese",
@@ -22,12 +23,15 @@ const AI_REQUIRED_PROBLEMS = new Set([
   "keywords",
   "description",
   "content-too-short",
-  "image-alt",
 ]);
 const AI_TIMEOUT_MS = 300000;
 const AI_MAX_ATTEMPTS = 3;
 const AI_RETRY_DELAYS_MS = [15000, 45000];
 const AI_JOB_STATE_PATH = path.join(__dirname, "ai-repair-state.json");
+
+function currentAiJobStatePath() {
+  return siteRuntime.siteFile("state", "ai-repair-state.json", siteRuntime.currentSite()?.isDefault ? AI_JOB_STATE_PATH : "");
+}
 
 const QWEN_QUOTA_URL =
   "https://bailian.console.aliyun.com/cn-beijing/?tab=costing-balance#/costing-balance/free-quota";
@@ -40,7 +44,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen3.6-flash-2026-04-16",
     label: "Qwen 3.6 Flash",
     provider: "qwen",
-    priority: 1,
+    priority: 2,
     recommended: true,
     purpose: "Best default for batch translation, speed, quality, and stable HTML output.",
     quotaText: "Independent free quota; open Bailian to view the live balance.",
@@ -50,7 +54,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen-mt-lite",
     label: "Qwen MT Lite",
     provider: "qwen",
-    priority: 2,
+    priority: 3,
     recommended: true,
     purpose: "Translation model for titles, descriptions, and shorter content.",
     quotaText: "Independent free quota; open Bailian to view the live balance.",
@@ -60,7 +64,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen3.6-27b",
     label: "Qwen 3.6 27B",
     provider: "qwen",
-    priority: 3,
+    priority: 4,
     recommended: true,
     purpose: "High-quality fallback when the preferred model is busy or exhausted.",
     quotaText: "Independent free quota; open Bailian to view the live balance.",
@@ -70,7 +74,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen3-30b-a3b",
     label: "Qwen3 30B A3B",
     provider: "qwen",
-    priority: 4,
+    priority: 5,
     recommended: true,
     purpose: "Fallback for long articles and technical machinery content.",
     quotaText: "Independent free quota; open Bailian to view the live balance.",
@@ -80,7 +84,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen-plus-2025-01-25",
     label: "Qwen Plus 2025-01-25",
     provider: "qwen",
-    priority: 5,
+    priority: 6,
     recommended: false,
     purpose: "Stable-version fallback for article content and SEO fields.",
     quotaText: "Independent free quota; open Bailian to view the live balance.",
@@ -90,7 +94,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen3.7-max-2026-05-17",
     label: "Qwen 3.7 Max",
     provider: "qwen",
-    priority: 6,
+    priority: 7,
     recommended: false,
     purpose: "Quality-first fallback; usually slower and more expensive.",
     quotaText: "Independent free quota; open Bailian to view the live balance.",
@@ -100,7 +104,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen3-235b-a22b",
     label: "Qwen3 235B A22B",
     provider: "qwen",
-    priority: 7,
+    priority: 8,
     recommended: false,
     purpose: "Large-model fallback; not recommended as the daily batch default.",
     quotaText: "Independent free quota; open Bailian to view the live balance.",
@@ -110,7 +114,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen-turbo",
     label: "Qwen Turbo",
     provider: "qwen",
-    priority: 8,
+    priority: 9,
     recommended: false,
     purpose: "General fast fallback model.",
     quotaText: "Open Bailian to view quota and billing status.",
@@ -120,7 +124,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen-plus",
     label: "Qwen Plus",
     provider: "qwen",
-    priority: 9,
+    priority: 10,
     recommended: false,
     purpose: "General quality fallback model.",
     quotaText: "Open Bailian to view quota and billing status.",
@@ -130,7 +134,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen-coder-plus",
     label: "Qwen Coder Plus",
     provider: "qwen",
-    priority: 10,
+    priority: 11,
     recommended: false,
     purpose: "Code-oriented fallback only when other Qwen models are unavailable.",
     quotaText: "Independent free quota; open Bailian to view the live balance.",
@@ -140,7 +144,7 @@ const MODEL_DEFINITIONS = [
     value: "qwen3-vl-plus",
     label: "Qwen3 VL Plus",
     provider: "qwen",
-    priority: 11,
+    priority: 12,
     recommended: false,
     purpose: "Vision model; not recommended for normal batch text translation.",
     quotaText: "Independent free quota; open Bailian to view the live balance.",
@@ -159,9 +163,9 @@ const MODEL_DEFINITIONS = [
     value: "deepseek-chat",
     label: "DeepSeek Chat",
     provider: "deepseek",
-    priority: 30,
+    priority: 1,
     recommended: true,
-    purpose: "Fallback for Chinese understanding and SEO work; requires its own key.",
+    purpose: "Preferred model for Chinese understanding, multilingual content translation, and SEO work.",
     quotaText: "Billed against the DeepSeek account balance.",
   },
   {
@@ -216,10 +220,37 @@ const BATCH_SUITABLE = new Set([
 ]);
 
 let SQL_PROMISE;
-let currentJob = loadPersistedJob();
-let stopRequested = false;
-let skippedBatches = 0;
-let pendingUpdates = null;
+const runtimeStates = new Map();
+
+function currentRuntime() {
+  const key = siteRuntime.currentSite()?.code || "default";
+  if (!runtimeStates.has(key)) {
+    runtimeStates.set(key, {
+      job: loadPersistedJob(),
+      stopRequested: false,
+      skippedBatches: 0,
+      pendingUpdates: null,
+    });
+  }
+  return runtimeStates.get(key);
+}
+
+const currentJob = new Proxy({}, {
+  get: (_target, property) => currentRuntime().job[property],
+  set: (_target, property, value) => {
+    currentRuntime().job[property] = value;
+    return true;
+  },
+  deleteProperty: (_target, property) => delete currentRuntime().job[property],
+  ownKeys: () => Reflect.ownKeys(currentRuntime().job),
+  getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+});
+
+function replaceCurrentJob(next) {
+  const job = currentRuntime().job;
+  for (const key of Object.keys(job)) delete job[key];
+  Object.assign(job, next);
+}
 
 function createIdleJob() {
   return {
@@ -241,7 +272,7 @@ function createIdleJob() {
 
 function loadPersistedJob() {
   try {
-    const saved = JSON.parse(fs.readFileSync(AI_JOB_STATE_PATH, "utf8"));
+    const saved = JSON.parse(fs.readFileSync(currentAiJobStatePath(), "utf8"));
     if (!saved || typeof saved !== "object") return createIdleJob();
     if (saved.state === "running") {
       return {
@@ -260,10 +291,11 @@ function loadPersistedJob() {
 }
 
 function persistJobState() {
-  const tempPath = `${AI_JOB_STATE_PATH}.${process.pid}.tmp`;
+  const statePath = currentAiJobStatePath();
+  const tempPath = `${statePath}.${process.pid}.tmp`;
   try {
     fs.writeFileSync(tempPath, `${JSON.stringify(currentJob, null, 2)}\n`, "utf8");
-    fs.copyFileSync(tempPath, AI_JOB_STATE_PATH);
+    fs.copyFileSync(tempPath, statePath);
     fs.unlinkSync(tempPath);
   } catch (_error) {
     try {
@@ -275,14 +307,14 @@ function persistJobState() {
 }
 
 function throwIfStopped() {
-  if (stopRequested) {
+  if (currentRuntime().stopRequested) {
     throw new Error("任务已被用户停止");
   }
 }
 
 function requestStop() {
   if (currentJob.state === "running") {
-    stopRequested = true;
+    currentRuntime().stopRequested = true;
     currentJob.message = "已请求停止；当前批次结束后保留已成功写入的修复。";
     persistJobState();
   }
@@ -319,6 +351,61 @@ function parseEnv(filePath) {
   return result;
 }
 
+function getModelHealthPath(toolRoot) {
+  return path.join(toolRoot, "ai.model-health.json");
+}
+
+function readModelHealth(toolRoot) {
+  try {
+    const filePath = getModelHealthPath(toolRoot);
+    if (!fs.existsSync(filePath)) return { version: 1, models: {} };
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return { version: 1, ...parsed, models: parsed?.models || {} };
+  } catch (_error) {
+    return { version: 1, models: {} };
+  }
+}
+
+function writeModelHealth(toolRoot, state) {
+  const filePath = getModelHealthPath(toolRoot);
+  const tempPath = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(tempPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  try {
+    fs.copyFileSync(tempPath, filePath);
+  } finally {
+    try {
+      fs.unlinkSync(tempPath);
+    } catch (_error) {
+      // The temporary file may already have been removed.
+    }
+  }
+}
+
+function saveModelHealth(toolRoot, modelName, result) {
+  const state = readModelHealth(toolRoot);
+  state.updatedAt = new Date().toISOString();
+  state.models[modelName] = {
+    status: result.status,
+    elapsedMs: Number(result.elapsedMs || 0) || null,
+    message: String(result.message || "").slice(0, 500),
+    testedAt: state.updatedAt,
+  };
+  writeModelHealth(toolRoot, state);
+}
+
+function clearProviderModelHealth(toolRoot, provider) {
+  const state = readModelHealth(toolRoot);
+  let changed = false;
+  for (const model of MODEL_DEFINITIONS) {
+    if (model.provider !== provider || !state.models[model.value]) continue;
+    delete state.models[model.value];
+    changed = true;
+  }
+  if (!changed) return;
+  state.updatedAt = new Date().toISOString();
+  writeModelHealth(toolRoot, state);
+}
+
 function getAiSettings(toolRoot) {
   const envPath = path.resolve(toolRoot, "..", "..", "backend", ".env");
   const localConfigPath = path.join(toolRoot, "ai.config.json");
@@ -341,8 +428,12 @@ function getAiSettings(toolRoot) {
     deepseek: "DEEPSEEK_API_KEY",
     openai: "OPENAI_API_KEY",
   };
+  const health = readModelHealth(toolRoot).models;
   const models = MODEL_DEFINITIONS.map((definition) => {
     const available = Boolean(env[providerEnvKey[definition.provider]]);
+    const healthEntry = health[definition.value];
+    const healthStatus = healthEntry?.status || "untested";
+    const operational = available && healthStatus !== "failed";
     const quotaStatus = available ? "check-console" : "unconfigured";
     const quotaText = available ? definition.quotaText : "API Key 未配置。";
     const quotaLabel = available ? "实时查看" : "未配置";
@@ -350,10 +441,15 @@ function getAiSettings(toolRoot) {
       ...definition,
       batch: BATCH_SUITABLE.has(definition.value),
       available,
+      operational,
+      healthStatus,
+      healthElapsedMs: Number(healthEntry?.elapsedMs || 0) || null,
+      healthMessage: String(healthEntry?.message || ""),
+      healthTestedAt: String(healthEntry?.testedAt || ""),
       quotaStatus,
       quotaText,
       remainingQuota: null,
-      displayLabel: `#${definition.priority}${BATCH_SUITABLE.has(definition.value) ? " 适合批量" : ""}${definition.recommended ? " 推荐" : ""} | ${definition.label} | 额度: ${quotaLabel}`,
+      displayLabel: `${!available ? "未配置" : healthStatus === "ok" ? `绿灯可用${healthEntry?.elapsedMs ? ` ${healthEntry.elapsedMs}ms` : ""}` : healthStatus === "failed" ? "红灯不可用" : "未测速"} | #${definition.priority}${BATCH_SUITABLE.has(definition.value) ? " 适合批量" : ""}${definition.recommended ? " 推荐" : ""} | ${definition.label} | 额度: ${quotaLabel}`,
     };
   }).sort((left, right) => (left.batch === right.batch ? left.priority - right.priority : left.batch ? -1 : 1));
   return { envPath, localConfigPath, env, models };
@@ -416,6 +512,7 @@ function saveAiKey(toolRoot, modelName, apiKey) {
   // 同步写入 backend/.env，让管理后台的翻译功能也能用到同一个 Key。
   const envKey = ENV_KEY_BY_PROVIDER[model.provider];
   if (envKey) updateEnvKey(settings.envPath, envKey, key);
+  clearProviderModelHealth(toolRoot, model.provider);
   return {
     provider: model.provider,
     models: getAiSettings(toolRoot).models,
@@ -555,7 +652,6 @@ function contentProblems(row) {
   if (!description) problems.push("description");
   else if (description.length > 180) problems.push("description-too-long");
   if (bodyText.length < 120) problems.push("content-too-short");
-  if (findMissingImageAlt(row.content)) problems.push("image-alt");
   return problems;
 }
 
@@ -887,10 +983,14 @@ async function fetchWithTimeout(url, options, timeoutMs = AI_TIMEOUT_MS) {
   }
 }
 
-async function callAiOnce(toolRoot, modelName, systemPrompt, userPrompt) {
+async function callAiOnce(toolRoot, modelName, systemPrompt, userPrompt, options = {}) {
   const settings = getAiSettings(toolRoot);
-  const model = settings.models.find((item) => item.value === modelName && item.available);
+  const model = settings.models.find(
+    (item) => item.value === modelName && item.available && (options.allowFailed || item.operational),
+  );
   if (!model) throw new Error("所选 AI 模型没有可用的 API Key，请先在 backend/.env 中配置。");
+  const timeoutMs = Number(options.timeoutMs || AI_TIMEOUT_MS);
+  const maxTokens = Number(options.maxTokens || 8192);
 
   let response;
   if (model.provider === "zhipu") {
@@ -907,9 +1007,9 @@ async function callAiOnce(toolRoot, modelName, systemPrompt, userPrompt) {
           { role: "user", content: userPrompt },
         ],
         temperature: 0.2,
-        max_tokens: 8192,
+        max_tokens: maxTokens,
       }),
-    });
+    }, timeoutMs);
   } else if (model.provider === "deepseek") {
     response = await fetchWithTimeout("https://api.deepseek.com/chat/completions", {
       method: "POST",
@@ -924,9 +1024,9 @@ async function callAiOnce(toolRoot, modelName, systemPrompt, userPrompt) {
           { role: "user", content: userPrompt },
         ],
         temperature: 0.2,
-        max_tokens: 8192,
+        max_tokens: maxTokens,
       }),
-    });
+    }, timeoutMs);
   } else if (model.provider === "qwen") {
     response = await fetchWithTimeout("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", {
       method: "POST",
@@ -941,9 +1041,9 @@ async function callAiOnce(toolRoot, modelName, systemPrompt, userPrompt) {
           { role: "user", content: userPrompt },
         ],
         temperature: 0.2,
-        max_tokens: 8192,
+        max_tokens: maxTokens,
       }),
-    });
+    }, timeoutMs);
   } else {
     response = await fetchWithTimeout("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -955,9 +1055,9 @@ async function callAiOnce(toolRoot, modelName, systemPrompt, userPrompt) {
         model: model.value,
         instructions: systemPrompt,
         input: userPrompt,
-        max_output_tokens: 8192,
+        max_output_tokens: maxTokens,
       }),
-    });
+    }, timeoutMs);
   }
 
   const responseText = await response.text();
@@ -1038,21 +1138,33 @@ async function callAi(toolRoot, modelName, systemPrompt, userPrompt) {
 
 async function testAiConnection(toolRoot, modelName) {
   const startedAt = Date.now();
-  const result = await callAi(
-    toolRoot,
-    modelName,
-    "Return strict JSON only.",
-    'Return exactly this JSON object: {"ok":true,"message":"connection-ready"}',
-  );
-  if (!result || result.ok !== true) {
-    throw new Error("模型已经响应，但返回格式不符合要求，请切换模型后重试。");
+  try {
+    const result = await callAiOnce(
+      toolRoot,
+      modelName,
+      "Return strict JSON only.",
+      'Return exactly this JSON object: {"ok":true,"message":"connection-ready"}',
+      { timeoutMs: 30000, maxTokens: 64, allowFailed: true },
+    );
+    if (!result || result.ok !== true) {
+      throw new Error("模型已经响应，但返回格式不符合要求，请切换模型后重试。");
+    }
+    const response = {
+      ok: true,
+      model: modelName,
+      elapsedMs: Date.now() - startedAt,
+      message: "模型连接和 JSON 返回格式正常。",
+    };
+    saveModelHealth(toolRoot, modelName, { ...response, status: "ok" });
+    return response;
+  } catch (error) {
+    saveModelHealth(toolRoot, modelName, {
+      status: "failed",
+      elapsedMs: Date.now() - startedAt,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
-  return {
-    ok: true,
-    model: modelName,
-    elapsedMs: Date.now() - startedAt,
-    message: "模型连接和 JSON 返回格式正常。",
-  };
 }
 
 function chunks(items, size) {
@@ -1113,7 +1225,6 @@ function makeAiInput(item) {
     keywords: String(row.keywords || ""),
     description: stripHtml(row.description),
     bodyText: trimText(row.content, 1200),
-    missingImages: missingImagesWithContext(row.content),
   };
 }
 
@@ -1147,8 +1258,8 @@ async function generateContentRepairs(
       "Descriptions must be natural search snippets between 80 and 160 characters when practical, never over 180; if the given description is already longer than 180 characters, rewrite it shorter while preserving meaning.",
       "If content-too-short is requested, return contentAppendHtml containing useful new HTML paragraphs/headings only; do not repeat existing text and keep it under 500 words.",
       "If slug is requested, return a concise lowercase ASCII slug without a language prefix.",
-      "If image-alt is requested, return imageAlts as [{src,alt}] for every missing image. Use the record keywords, title and nearby context. Keep ALT concise and factual; do not keyword-stuff or invent visible details.",
-      "Return a strict JSON array. Each object must contain: id, title, subtitle, keywords, description, slug, contentAppendHtml, imageAlts.",
+      "Do not generate or fill image ALT attributes.",
+      "Return a strict JSON array. Each object must contain: id, title, subtitle, keywords, description, slug, contentAppendHtml.",
       JSON.stringify(batch.map(makeAiInput)),
     ].join("\n");
     try {
@@ -1176,11 +1287,11 @@ async function generateContentRepairs(
       }
       output.push(...result);
     } catch (error) {
-      if (stopRequested) throw error;
+      if (currentRuntime().stopRequested) throw error;
       if (onBatchSuccess) {
         throw new Error(`第 ${index + 1}/${batches.length} 批未完成：${error.message || error}`);
       }
-      skippedBatches += 1;
+      currentRuntime().skippedBatches += 1;
       logAiRetry(`第 ${index + 1}/${batches.length} 批失败已跳过（${batch.length} 条）：${error.message || error}`);
     }
   }
@@ -1252,11 +1363,11 @@ async function generateMenuRepairs(
       output.push(...result);
       processed += batch.length;
     } catch (error) {
-      if (stopRequested) throw error;
+      if (currentRuntime().stopRequested) throw error;
       if (onBatchSuccess) {
         throw new Error(`栏目第 ${index + 1}/${batches.length} 批未完成：${error.message || error}`);
       }
-      skippedBatches += 1;
+      currentRuntime().skippedBatches += 1;
       logAiRetry(`一批栏目处理失败已跳过（${batch.length} 条）：${error.message || error}`);
     }
   }
@@ -1294,8 +1405,8 @@ async function generateContentTranslations(
       "Translate title, subtitle, keywords and description. Keywords must contain 3-8 concise comma-separated phrases. Description should be a natural search snippet and never exceed 180 characters.",
       "Only when translateContent is true, also return contentHtml. Preserve HTML structure and all src/href/style/class attributes; translate visible text and image alt/title text only.",
       "Only when needSlug is true, return a concise lowercase ASCII slug without a language prefix. Existing URL names are preserved by the application.",
-      "Return imageAlts as [{src,alt}] for each listed missing image, using translated keywords, title and nearby context. Keep ALT factual and concise.",
-      "Return a strict JSON array with exactly one object per input row and keys: targetId,title,subtitle,keywords,description,slug,contentHtml,imageAlts.",
+      "Do not add missing image ALT attributes. Preserve absent and empty ALT attributes as they are.",
+      "Return a strict JSON array with exactly one object per input row and keys: targetId,title,subtitle,keywords,description,slug,contentHtml.",
       JSON.stringify(
         batch.map((pair) => ({
           targetId: Number(pair.target.id),
@@ -1309,9 +1420,6 @@ async function generateContentTranslations(
           keywords: String(pair.source.keywords || ""),
            description: stripHtml(pair.source.description),
            contentHtml: pair.translateContent ? String(pair.source.content || "") : "",
-           missingImages: missingImagesWithContext(
-             pair.translateContent ? pair.source.content : pair.target.content,
-           ),
         })),
       ),
     ].join("\n");
@@ -1392,7 +1500,6 @@ function prepareTranslationUpdates(contentPairs, menuPairs, aiContents, aiMenus)
     }
     let content = String(pair.target.content || "");
     if (pair.translateContent && ai.contentHtml) content = String(ai.contentHtml).trim();
-    content = fillMissingImageAlt(content, ai.imageAlts, ai.title);
     return {
       id: Number(pair.target.id),
       title: String(ai.title || "").trim(),
@@ -1462,9 +1569,6 @@ function prepareUpdates(contents, menus, aiContents, aiMenus, languageCode) {
     }
     if (item.problems.includes("content-too-short") && ai.contentAppendHtml) {
       next.content = `${next.content}\n${String(ai.contentAppendHtml).trim()}`;
-    }
-    if (item.problems.includes("image-alt")) {
-      next.content = fillMissingImageAlt(next.content, ai.imageAlts, next.title);
     }
     contentUpdates.push(next);
   }
@@ -1956,9 +2060,9 @@ async function runJob(toolRoot, dbPath, mode, model, targetAcode = "", problems 
       currentJob.result = {
         changed: 0,
         backupPath: "",
-        skippedBatches,
-        message: skippedBatches
-          ? `全部 ${skippedBatches} 批 AI 调用失败，未写入任何数据。`
+        skippedBatches: currentRuntime().skippedBatches,
+        message: currentRuntime().skippedBatches
+          ? `全部 ${currentRuntime().skippedBatches} 批 AI 调用失败，未写入任何数据。`
           : "没有需要修改的问题。",
       };
       return;
@@ -1966,7 +2070,7 @@ async function runJob(toolRoot, dbPath, mode, model, targetAcode = "", problems 
 
     if (dryRun) {
       const preview = buildPreviewDiff(work, allContentUpdates, allMenuUpdates);
-      pendingUpdates = {
+      currentRuntime().pendingUpdates = {
         contentUpdates: allContentUpdates,
         menuUpdates: allMenuUpdates,
         slugChanged,
@@ -1976,7 +2080,7 @@ async function runJob(toolRoot, dbPath, mode, model, targetAcode = "", problems 
         contentChanged: allContentUpdates.length,
         menuChanged: allMenuUpdates.length,
         slugChanged,
-        skippedBatches,
+        skippedBatches: currentRuntime().skippedBatches,
         preview,
         dryRun: true,
         message: "预览完成，尚未写入数据库。",
@@ -2001,10 +2105,10 @@ async function runJob(toolRoot, dbPath, mode, model, targetAcode = "", problems 
       contentChanged: allContentUpdates.length,
       menuChanged: allMenuUpdates.length,
       slugChanged,
-      skippedBatches,
+      skippedBatches: currentRuntime().skippedBatches,
       backupPath,
     };
-    const skippedNote = skippedBatches ? `；跳过 ${skippedBatches} 批（AI 调用失败，对应记录本次未修改）` : "";
+    const skippedNote = currentRuntime().skippedBatches ? `；跳过 ${currentRuntime().skippedBatches} 批（AI 调用失败，对应记录本次未修改）` : "";
     updateJob(totalRecords, totalRecords, `写入完成，共修改 ${currentJob.result.changed} 条${skippedNote}`);
   } finally {
     db.close();
@@ -2030,10 +2134,10 @@ function startJob(toolRoot, dbPath, body) {
   if (!settings.models.some((item) => item.value === model && item.available)) {
     throw new Error("请选择一个已配置 API Key 的 AI 模型。");
   }
-  stopRequested = false;
-  skippedBatches = 0;
-  pendingUpdates = null;
-  currentJob = {
+  currentRuntime().stopRequested = false;
+  currentRuntime().skippedBatches = 0;
+  currentRuntime().pendingUpdates = null;
+  replaceCurrentJob({
     ...createIdleJob(),
     state: "running",
     mode,
@@ -2042,7 +2146,7 @@ function startJob(toolRoot, dbPath, body) {
     startedAt: new Date().toISOString(),
     logs: [`[${new Date().toLocaleTimeString("zh-CN")}] 任务已启动`],
     resumable: !dryRun && !["generate-languages", "translate-language"].includes(mode),
-  };
+  });
   persistJobState();
   setImmediate(async () => {
     try {
@@ -2052,7 +2156,7 @@ function startJob(toolRoot, dbPath, body) {
       currentJob.finishedAt = new Date().toISOString();
     } catch (error) {
       const committed = Number(currentJob.committed || currentJob.result?.changed || 0);
-      if (stopRequested) {
+      if (currentRuntime().stopRequested) {
         currentJob.state = "stopped";
         currentJob.error = "";
         currentJob.message = committed
@@ -2077,17 +2181,17 @@ function startJob(toolRoot, dbPath, body) {
 }
 
 async function applyPendingUpdates(toolRoot, dbPath) {
-  if (!pendingUpdates) {
+  if (!currentRuntime().pendingUpdates) {
     throw new Error("没有待写入的预览结果，请先点「预览修复」。");
   }
-  const { contentUpdates, menuUpdates, slugChanged = false } = pendingUpdates;
+  const { contentUpdates, menuUpdates, slugChanged = false } = currentRuntime().pendingUpdates;
   const SQL = await loadSql(toolRoot);
   const db = new SQL.Database(fs.readFileSync(dbPath));
   try {
     const backupPath = backupDatabase(toolRoot, dbPath, "seo_preview_apply");
     applyUpdates(db, { contentUpdates, menuUpdates });
     persistDatabase(db, dbPath);
-    pendingUpdates = null;
+    currentRuntime().pendingUpdates = null;
     return {
       changed: contentUpdates.length + menuUpdates.length,
       contentChanged: contentUpdates.length,
@@ -2131,6 +2235,8 @@ module.exports = {
   startJob,
   testAiConnection,
   _test: {
+    prepareUpdates,
+    prepareTranslationUpdates,
     applyUpdates,
     backupDatabase,
     contentProblems,

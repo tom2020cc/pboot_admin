@@ -85,10 +85,10 @@
             <input id="backendDb" value="dev.sqlite" placeholder="一般保持 dev.sqlite" />
           </label>
           <label>后端端口
-            <input id="backendPort" type="number" min="1024" max="65535" value="5000" />
+            <input id="backendPort" type="number" min="1024" max="65535" value="5108" />
           </label>
           <label>前端端口
-            <input id="frontendPort" type="number" min="1024" max="65535" value="5178" />
+            <input id="frontendPort" type="number" min="1024" max="65535" value="5278" />
           </label>
           <label>接口请求大小上限
             <input id="requestBodyLimit" value="10mb" placeholder="例如 10mb 或 20mb" />
@@ -127,7 +127,7 @@
             <input id="seoLocalTestBaseUrl" placeholder="例如 http://your-site.local" />
           </label>
           <label>SEO 工具本地端口
-            <input id="seoLocalPort" type="number" min="1024" max="65535" value="5188" />
+            <input id="seoLocalPort" type="number" min="1024" max="65535" value="5388" />
           </label>
           <label class="check"><input id="indexNowEnabled" type="checkbox" /> 启用 IndexNow</label>
           <label>IndexNow Key
@@ -139,7 +139,7 @@
       <section class="card">
         <h2>4. FTP 上传工具配置</h2>
         <div class="grid three">
-          <label>FTP 网页工具本地端口<input id="ftpLocalPort" type="number" min="1024" max="65535" value="5189" /></label>
+          <label>FTP 网页工具本地端口<input id="ftpLocalPort" type="number" min="1024" max="65535" value="5389" /></label>
           <label>FTP 地址<input id="ftpHost" placeholder="ftp.example.com" /></label>
           <label>远程 FTP 端口<input id="ftpPort" type="number" value="21" /></label>
           <label>用户名<input id="ftpUser" /></label>
@@ -219,8 +219,8 @@
         $("localTestBaseUrl").value = seo.localTestBaseUrl || "";
         $("backupDir").value = backend.backupDir || "";
         $("backendDb").value = backend.backendDb || "dev.sqlite";
-        $("backendPort").value = backend.backendPort || 5000;
-        $("frontendPort").value = backend.frontendPort || 5178;
+        $("backendPort").value = backend.backendPort || 5108;
+        $("frontendPort").value = backend.frontendPort || 5278;
         $("requestBodyLimit").value = backend.requestBodyLimit || "10mb";
         $("youtubeKey").value = "";
         $("youtubeKey").placeholder = backend.youtubeApiKeySet ? "已配置，留空不修改" : "没有就留空";
@@ -228,12 +228,12 @@
         $("seoSiteName").value = seo.siteName || "Your Site";
         $("seoSiteBaseUrl").value = seo.siteBaseUrl || backend.publicBaseUrl || "";
         $("seoLocalTestBaseUrl").value = seo.localTestBaseUrl || "";
-        $("seoLocalPort").value = seo.localPort || 5188;
+        $("seoLocalPort").value = seo.localPort || 5388;
         $("indexNowEnabled").checked = Boolean(seo.indexNowEnabled);
         $("indexNowKey").value = "";
         $("indexNowKey").placeholder = seo.indexNowKeySet ? "已配置，留空不修改" : "没有就留空，SEO 工具里也可以生成";
         $("ftpHost").value = ftp.host || "";
-        $("ftpLocalPort").value = ftp.localPort || 5189;
+        $("ftpLocalPort").value = ftp.localPort || 5389;
         $("ftpPort").value = ftp.port || 21;
         $("ftpUser").value = ftp.user || "";
         $("ftpPassword").placeholder = ftp.passwordSet ? "已保存，留空不修改" : "请输入 FTP 密码";
@@ -268,14 +268,14 @@
             publicBaseUrl: $("publicBaseUrl").value,
             backupDir: $("backupDir").value,
             backendDb: $("backendDb").value || "dev.sqlite",
-            backendPort: Number($("backendPort").value || 5000),
-            frontendPort: Number($("frontendPort").value || 5178),
+            backendPort: Number($("backendPort").value || 5108),
+            frontendPort: Number($("frontendPort").value || 5278),
             requestBodyLimit: $("requestBodyLimit").value || "10mb",
             youtubeKey: $("youtubeKey").value,
             youtubeChannelId: $("youtubeChannelId").value,
           },
           seo: {
-            localPort: Number($("seoLocalPort").value || 5188),
+            localPort: Number($("seoLocalPort").value || 5388),
             siteName: $("seoSiteName").value,
             siteBaseUrl: $("seoSiteBaseUrl").value || $("publicBaseUrl").value,
             localTestBaseUrl: $("seoLocalTestBaseUrl").value || $("localTestBaseUrl").value,
@@ -283,7 +283,7 @@
             indexNowKey: $("indexNowKey").value,
           },
           ftp: {
-            localPort: Number($("ftpLocalPort").value || 5189),
+            localPort: Number($("ftpLocalPort").value || 5389),
             host: $("ftpHost").value,
             port: Number($("ftpPort").value || 21),
             user: $("ftpUser").value,

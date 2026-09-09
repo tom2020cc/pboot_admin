@@ -153,19 +153,70 @@ test("incremental scan skips unchanged files while full review detects timestamp
   assert.ok(fullReview.findings.some((item) => item.category === "modified-file" && item.path === "index.php"));
 });
 
-test("detects PHP code embedded in a static image file", async (t) => {
+test("uses metadata for existing images and scans newly added images", async (t) => {
   const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ftp-security-local-"));
   t.after(() => fs.rmSync(localRoot, { recursive: true, force: true }));
-  const remoteFiles = {
-    "static/gallery/photo.jpg": Buffer.from("JFIF....<?php echo $_GET['x']; ?>"),
+  const config = makeConfig(localRoot);
+  const originalFiles = {
+    "static/gallery/known.jpg": Buffer.from("JFIF....clean image"),
   };
+  let initialDownloads = 0;
 
-  const result = await scanRemoteSite(makeConfig(localRoot), {
+  const original = await scanRemoteSite(config, {
     baseline: null,
-    clientFactory: () => createFakeClient(remoteFiles),
+    clientFactory: () => createFakeClient(originalFiles, { onDownload: () => { initialDownloads += 1; } }),
+  });
+  const baseline = buildBaseline(original);
+  const changedFiles = {
+    ...originalFiles,
+    "static/gallery/new.jpg": Buffer.from("JFIF....<?php echo $_GET['x']; ?>"),
+  };
+  const downloaded = [];
+  const changed = await scanRemoteSite(config, {
+    baseline,
+    scanType: "incremental",
+    clientFactory: () => createFakeClient(changedFiles, { onDownload: (remotePath) => downloaded.push(remotePath) }),
   });
 
-  assert.ok(result.findings.some((item) => item.category === "content-signature" && item.path.endsWith("photo.jpg")));
+  assert.equal(initialDownloads, 0);
+  assert.equal(original.summary.mediaMetadataOnly, 1);
+  assert.deepEqual(downloaded, ["static/gallery/new.jpg"]);
+  assert.ok(changed.findings.some((item) => item.category === "content-signature" && item.path.endsWith("new.jpg")));
+});
+
+test("resumes from a persisted checkpoint without downloading completed files again", async (t) => {
+  const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ftp-security-local-"));
+  t.after(() => fs.rmSync(localRoot, { recursive: true, force: true }));
+  const config = { ...makeConfig(localRoot), securityCheckpointEvery: 1 };
+  const remoteFiles = {
+    "a.php": "<?php echo 'a';",
+    "b.php": "<?php echo 'b';",
+  };
+  let downloads = 0;
+  let checkpoint = null;
+
+  await assert.rejects(
+    scanRemoteSite(config, {
+      baseline: null,
+      clientFactory: () => createFakeClient(remoteFiles, { onDownload: () => { downloads += 1; } }),
+      shouldCancel: () => downloads >= 1,
+      onCheckpoint: (value) => { checkpoint = value; },
+    }),
+    (error) => error.code === "SCAN_CANCELLED",
+  );
+
+  const resumedDownloads = [];
+  const resumed = await scanRemoteSite(config, {
+    baseline: null,
+    scanType: "full",
+    resumeState: checkpoint,
+    clientFactory: () => createFakeClient(remoteFiles, { onDownload: (remotePath) => resumedDownloads.push(remotePath) }),
+  });
+
+  assert.equal(Object.keys(checkpoint.processed).length, 1);
+  assert.deepEqual(resumedDownloads, ["b.php"]);
+  assert.equal(resumed.summary.resumedFiles, 1);
+  assert.equal(resumed.summary.contentScanned, 2);
 });
 
 test("does not treat normal application cache and runtime PHP as upload-directory scripts", async (t) => {
@@ -187,6 +238,22 @@ test("does not treat normal application cache and runtime PHP as upload-director
   });
 
   assert.equal(result.findings.filter((item) => item.category === "executable-in-upload").length, 0);
+});
+
+test("does not flag legitimate PHP snippets outside upload directories", async (t) => {
+  const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ftp-security-local-"));
+  t.after(() => fs.rmSync(localRoot, { recursive: true, force: true }));
+  const remoteFiles = {
+    "template/cn/html/comm/message.html": "<input value=\"<?php echo($_SERVER['REMOTE_ADDR'])?>\">",
+    "core/extend/SyntaxHighlighter/shCore.js": "/** <?= ?> tags. */",
+  };
+
+  const result = await scanRemoteSite(makeConfig(localRoot), {
+    baseline: null,
+    clientFactory: () => createFakeClient(remoteFiles),
+  });
+
+  assert.equal(result.findings.filter((item) => item.rules?.includes("php-in-static-file")).length, 0);
 });
 
 test("creates upload-directory guards without overwriting existing rules", (t) => {

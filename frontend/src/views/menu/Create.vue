@@ -2,12 +2,12 @@
   <section class="page">
     <div class="page-title">
       <h2>新增菜单</h2>
-      <p>创建后会通过后端 /menus 接口写入数据库。</p>
     </div>
     <MenuForm
       v-model="form"
       :top-menus="topMenus"
       :all-menus="allMenus"
+      :loading="saving"
       submit-text="新建菜单"
       @submit="onSubmit"
       @reset="reset"
@@ -19,7 +19,7 @@
 import MenuForm from "@/components/MenuForm.vue";
 import useMenus from "@/hooks/useMenus";
 
-const { allMenus, topMenus, form, onSubmit, reset } = useMenus();
+const { allMenus, topMenus, form, saving, onSubmit, reset } = useMenus();
 </script>
 
 <style scoped>

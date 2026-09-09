@@ -1,13 +1,17 @@
 const HTML_TAG_PATTERN = /(<[^>]+>)/g;
 
+export function decodeEscapedHtml(content: string) {
+  const html = String(content || '');
+  // Already-parsed markup may contain escaped quotes in image attributes.
+  if (/<\s*\/?\s*[a-z][^>]*>/i.test(html)) return html;
+  return html.replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"').replace(/&#39;/g, "'").replace(/&apos;/gi, "'").replace(/&amp;/gi, '&');
+}
+
 export function repairTranslatedHtml(content: string) {
   if (!content) return '';
 
-  return String(content)
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+  return decodeEscapedHtml(content)
     .replace(/<\s*(\/?)\s*([a-z][a-z0-9:-]*)([^<>]*?)\s*>/gi, (match, slash, tagName, rawAttrs) => {
       const name = String(tagName || '').toLowerCase();
       const attrs = repairTagAttributes(name, rawAttrs);

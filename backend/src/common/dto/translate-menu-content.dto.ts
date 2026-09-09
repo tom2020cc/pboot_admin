@@ -9,7 +9,7 @@ export class TranslateMenuContentDto {
 
   @ApiProperty({ description: '目标语言', example: 'en' })
   @IsString()
-  @IsIn(['en', 'es', 'fr', 'ru', 'ar', 'pt'])
+  @IsIn(['en', 'es', 'fr', 'ru', 'ar', 'pt', 'id', 'tr', 'vi'])
   targetLang: string;
 
   @ApiProperty({ description: '翻译模型', example: 'glm-4.7-flash' })

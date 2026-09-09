@@ -2,8 +2,8 @@
 setlocal
 set "ROOT=%~dp0"
 set "PROJECT_ROOT=%ROOT:~0,-1%"
-set "BACKEND_PORT=5000"
-set "FRONTEND_PORT=5178"
+set "BACKEND_PORT=5108"
+set "FRONTEND_PORT=5278"
 
 echo.
 echo ============================================
@@ -18,9 +18,13 @@ if errorlevel 1 (
 )
 
 if not exist "%ROOT%backend\.env" (
-  echo ERROR: backend\.env was not found. Run 01-config.cmd first.
-  pause
-  exit /b 1
+  if not exist "%ROOT%backend\.env.example" (
+    echo ERROR: backend\.env.example was not found.
+    pause
+    exit /b 1
+  )
+  echo Creating backend\.env from the system defaults...
+  copy /Y "%ROOT%backend\.env.example" "%ROOT%backend\.env" >nul
 )
 
 for /f "usebackq tokens=1,* delims==" %%A in ("%ROOT%backend\.env") do (
@@ -59,8 +63,8 @@ echo.
 if "%BACKEND_STATUS%"=="PROJECT" (
   echo Backend is already running on port %BACKEND_PORT% - skip.
 ) else (
-  echo Opening the persistent backend terminal on port %BACKEND_PORT%...
-  start "Pboot Admin Backend - %BACKEND_PORT%" /D "%ROOT%backend" cmd /k "title Pboot Admin Backend - %BACKEND_PORT% ^&^& echo Keep this window open while using Pboot Admin. ^&^& pnpm run build ^&^& pnpm run start:prod"
+  echo Opening the persistent backend API terminal on port %BACKEND_PORT%...
+  start "Pboot Admin Backend API - %BACKEND_PORT%" /D "%ROOT%" "%COMSPEC%" /k ""%ROOT%tools\run-backend.cmd""
 )
 
 if "%FRONTEND_STATUS%"=="PROJECT" (

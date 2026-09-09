@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+  <title id="title">在集中后台添加宝塔 PbootCMS 站点</title>
+  <desc id="desc">站点管理表单填写 Linux 网站根目录、PbootCMS 数据库文件和线上网址，并检查配置。</desc>
+  <style>.title{font:700 28px "Microsoft YaHei",Arial;fill:#172033}.head{font:700 18px "Microsoft YaHei",Arial;fill:#172033}.label{font:14px "Microsoft YaHei",Arial;fill:#667085}.value{font:15px Consolas,"Microsoft YaHei";fill:#172033}.box{fill:#fff;stroke:#cfd8e6;stroke-width:2}.field{fill:#fff;stroke:#b8c4d6;stroke-width:1.5}</style>
+  <rect width="1200" height="650" fill="#f5f7fa"/><text x="50" y="52" class="title">后台 → 系统管理 → 站点管理 → 新增站点</text>
+  <rect x="50" y="84" width="780" height="520" rx="8" class="box"/>
+  <rect x="50" y="84" width="780" height="58" rx="8" fill="#fff" stroke="#cfd8e6"/><text x="78" y="120" class="head">新增站点</text>
+  <text x="82" y="180" class="label">站点名称</text><rect x="82" y="194" width="330" height="42" rx="6" class="field"/><text x="98" y="221" class="value">山博主站</text>
+  <text x="450" y="180" class="label">站点标识</text><rect x="450" y="194" width="330" height="42" rx="6" class="field"/><text x="466" y="221" class="value">shanbo-main</text>
+  <text x="82" y="274" class="label">运行环境</text><rect x="82" y="288" width="330" height="42" rx="6" class="field"/><text x="98" y="315" class="value">宝塔服务器</text><path d="M382 304l8 8 8-8" fill="none" stroke="#64748b" stroke-width="2"/>
+  <text x="450" y="274" class="label">线上网址</text><rect x="450" y="288" width="330" height="42" rx="6" class="field"/><text x="466" y="315" class="value">https://shanbo.cc</text>
+  <text x="82" y="368" class="label">PbootCMS 网站根目录</text><rect x="82" y="382" width="698" height="42" rx="6" class="field"/><text x="98" y="409" class="value">/www/wwwroot/shanbo.cc</text>
+  <text x="82" y="462" class="label">PbootCMS 数据库文件</text><rect x="82" y="476" width="698" height="42" rx="6" class="field"/><text x="98" y="503" class="value">/www/wwwroot/shanbo.cc/data/1412def...d22.db</text>
+  <rect x="82" y="548" width="120" height="38" rx="6" fill="#1677ff"/><text x="142" y="573" text-anchor="middle" style="font:700 14px 'Microsoft YaHei',Arial;fill:#fff">保存站点</text>
+  <rect x="218" y="548" width="120" height="38" rx="6" fill="#fff" stroke="#1677ff"/><text x="278" y="573" text-anchor="middle" style="font:700 14px 'Microsoft YaHei',Arial;fill:#1677ff">检查连接</text>
+
+  <rect x="870" y="84" width="280" height="250" rx="8" fill="#edf9f1" stroke="#8fd4aa" stroke-width="2"/>
+  <text x="898" y="126" class="head">检查通过的条件</text>
+  <text x="898" y="170" class="label">✓ 网站根目录存在</text><text x="898" y="204" class="label">✓ 数据库文件存在</text><text x="898" y="238" class="label">✓ 数据库位于 data/ 内</text><text x="898" y="272" class="label">✓ PM2 用户具有读写权限</text><text x="898" y="306" class="label">✓ 线上网址以 https:// 开头</text>
+  <rect x="870" y="364" width="280" height="240" rx="8" fill="#fff7e8" stroke="#f6c26b" stroke-width="2"/>
+  <text x="898" y="406" class="head">切换站点后</text>
+  <text x="898" y="450" class="label">顶部会显示当前站点</text><text x="898" y="484" class="label">同步操作使用当前数据库</text><text x="898" y="518" class="label">图片预览使用当前 static/</text><text x="898" y="552" class="label">操作前仍会自动备份数据库</text>
+</svg>

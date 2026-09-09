@@ -1,3 +1,5 @@
+import { applyTranslationModelHealth } from './translation-model-health';
+
 export type TranslationModelProvider =
   | 'google'
   | 'mymemory'
@@ -32,7 +34,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen3.6-flash-2026-04-16',
     label: 'Qwen 3.6 Flash',
     provider: 'qwen',
-    priority: 1,
+    priority: 2,
     recommended: true,
     purpose: 'Best default for batch translation, speed, quality, and stable HTML output.',
     quotaText: 'Independent free quota; open Bailian to view the live balance.',
@@ -42,7 +44,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen-mt-lite',
     label: 'Qwen MT Lite',
     provider: 'qwen',
-    priority: 2,
+    priority: 3,
     recommended: true,
     purpose: 'Translation model for titles, descriptions, and shorter content.',
     quotaText: 'Independent free quota; open Bailian to view the live balance.',
@@ -52,7 +54,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen3.6-27b',
     label: 'Qwen 3.6 27B',
     provider: 'qwen',
-    priority: 3,
+    priority: 4,
     recommended: true,
     purpose: 'High-quality fallback when the preferred model is busy or exhausted.',
     quotaText: 'Independent free quota; open Bailian to view the live balance.',
@@ -62,7 +64,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen3-30b-a3b',
     label: 'Qwen3 30B A3B',
     provider: 'qwen',
-    priority: 4,
+    priority: 5,
     recommended: true,
     purpose: 'Fallback for long articles and technical machinery content.',
     quotaText: 'Independent free quota; open Bailian to view the live balance.',
@@ -72,7 +74,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen-plus-2025-01-25',
     label: 'Qwen Plus 2025-01-25',
     provider: 'qwen',
-    priority: 5,
+    priority: 6,
     recommended: false,
     purpose: 'Stable-version fallback for article content and SEO fields.',
     quotaText: 'Independent free quota; open Bailian to view the live balance.',
@@ -82,7 +84,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen3.7-max-2026-05-17',
     label: 'Qwen 3.7 Max',
     provider: 'qwen',
-    priority: 6,
+    priority: 7,
     recommended: false,
     purpose: 'Quality-first fallback; usually slower and more expensive.',
     quotaText: 'Independent free quota; open Bailian to view the live balance.',
@@ -92,7 +94,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen3-235b-a22b',
     label: 'Qwen3 235B A22B',
     provider: 'qwen',
-    priority: 7,
+    priority: 8,
     recommended: false,
     purpose: 'Large-model fallback; not recommended as the daily batch default.',
     quotaText: 'Independent free quota; open Bailian to view the live balance.',
@@ -102,7 +104,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen-turbo',
     label: 'Qwen Turbo',
     provider: 'qwen',
-    priority: 8,
+    priority: 9,
     recommended: false,
     purpose: 'General fast fallback model.',
     quotaText: 'Open Bailian to view quota and billing status.',
@@ -112,7 +114,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen-plus',
     label: 'Qwen Plus',
     provider: 'qwen',
-    priority: 9,
+    priority: 10,
     recommended: false,
     purpose: 'General quality fallback model.',
     quotaText: 'Open Bailian to view quota and billing status.',
@@ -122,7 +124,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen-coder-plus',
     label: 'Qwen Coder Plus',
     provider: 'qwen',
-    priority: 10,
+    priority: 11,
     recommended: false,
     purpose: 'Code-oriented fallback only when other Qwen models are unavailable.',
     quotaText: 'Independent free quota; open Bailian to view the live balance.',
@@ -132,7 +134,7 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'qwen3-vl-plus',
     label: 'Qwen3 VL Plus',
     provider: 'qwen',
-    priority: 11,
+    priority: 12,
     recommended: false,
     purpose: 'Vision model; not recommended for normal batch text translation.',
     quotaText: 'Independent free quota; open Bailian to view the live balance.',
@@ -151,9 +153,9 @@ const MODEL_DEFINITIONS: TranslationModelDefinition[] = [
     value: 'deepseek-chat',
     label: 'DeepSeek Chat',
     provider: 'deepseek',
-    priority: 30,
+    priority: 1,
     recommended: true,
-    purpose: 'Fallback for Chinese understanding and SEO work; requires its own key.',
+    purpose: 'Preferred model for Chinese understanding, multilingual content translation, and SEO work.',
     quotaText: 'Billed against the DeepSeek account balance.',
   },
   {
@@ -226,7 +228,7 @@ const BATCH_SUITABLE = new Set([
 ]);
 
 export function buildTranslationModelCatalog(availability: ProviderAvailability) {
-  return MODEL_DEFINITIONS.map((definition) => {
+  const models = MODEL_DEFINITIONS.map((definition) => {
     const requiresKey = ['qwen', 'zhipu', 'deepseek', 'openai'].includes(definition.provider);
     const available = requiresKey
       ? availability[definition.provider as keyof ProviderAvailability]
@@ -251,11 +253,13 @@ export function buildTranslationModelCatalog(availability: ProviderAvailability)
       remainingQuota: null,
       displayLabel: `#${definition.priority}${BATCH_SUITABLE.has(definition.value) ? ' \u9002\u5408\u6279\u91cf' : ''}${definition.recommended ? ' \u63a8\u8350' : ''} | ${definition.label} | \u989d\u5ea6: ${quotaLabel}`,
     };
-  }).sort((left, right) => (left.batch === right.batch ? left.priority - right.priority : left.batch ? -1 : 1));
+  });
+  return applyTranslationModelHealth(models)
+    .sort((left, right) => (left.batch === right.batch ? left.priority - right.priority : left.batch ? -1 : 1));
 }
 
 export function buildTranslationModelFallbackChain<
-  T extends { value: string; provider: TranslationModelProvider; available: boolean },
+  T extends { value: string; provider: TranslationModelProvider; available: boolean; operational?: boolean },
 >(models: T[], requestedValue: string) {
   const selected = models.find((item) => item.value === requestedValue);
   if (!selected) return [];
@@ -263,7 +267,7 @@ export function buildTranslationModelFallbackChain<
   const chain: T[] = [];
   const seenProviders = new Set<TranslationModelProvider>();
   for (const model of [selected, ...models]) {
-    if (!model.available || seenProviders.has(model.provider)) continue;
+    if (!model.available || model.operational === false || seenProviders.has(model.provider)) continue;
     chain.push(model);
     seenProviders.add(model.provider);
   }

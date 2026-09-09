@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">Pboot Admin 宝塔集中部署架构</title>
+  <desc id="desc">浏览器通过三个 HTTPS 域名访问 Nginx，Nginx 分别连接管理后端、SEO 工具和 FTP 工具，管理后端直接操作多个 PbootCMS 站点。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="#64748b"/></marker>
+    <style>
+      .title{font:700 28px "Microsoft YaHei",Arial;fill:#172033}.label{font:700 18px "Microsoft YaHei",Arial;fill:#172033}.text{font:14px "Microsoft YaHei",Arial;fill:#526079}.small{font:13px "Microsoft YaHei",Arial;fill:#667085}.box{fill:#fff;stroke:#cfd8e6;stroke-width:2}.line{stroke:#64748b;stroke-width:2;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1200" height="680" fill="#f5f7fa"/>
+  <text x="50" y="52" class="title">一套管理系统，集中控制多个 PbootCMS 网站</text>
+
+  <rect x="50" y="92" width="190" height="118" rx="8" class="box"/>
+  <rect x="50" y="92" width="190" height="10" rx="5" fill="#1677ff"/>
+  <text x="145" y="138" text-anchor="middle" class="label">管理员浏览器</text>
+  <text x="145" y="168" text-anchor="middle" class="text">电脑 / 手机</text>
+  <text x="145" y="192" text-anchor="middle" class="small">只访问 HTTPS 域名</text>
+
+  <rect x="330" y="76" width="300" height="300" rx="8" class="box"/>
+  <rect x="330" y="76" width="300" height="46" rx="8" fill="#172033"/>
+  <text x="480" y="106" text-anchor="middle" style="font:700 18px 'Microsoft YaHei',Arial;fill:#fff">宝塔 Nginx</text>
+  <rect x="358" y="146" width="244" height="56" rx="6" fill="#eaf3ff" stroke="#91caff"/>
+  <text x="480" y="170" text-anchor="middle" class="label">admin.example.com</text><text x="480" y="190" text-anchor="middle" class="small">前端静态文件 + /api</text>
+  <rect x="358" y="220" width="244" height="56" rx="6" fill="#edf9f1" stroke="#8fd4aa"/>
+  <text x="480" y="244" text-anchor="middle" class="label">seo-admin.example.com</text><text x="480" y="264" text-anchor="middle" class="small">SEO 与搜索引擎提交</text>
+  <rect x="358" y="294" width="244" height="56" rx="6" fill="#fff7e8" stroke="#f6c26b"/>
+  <text x="480" y="318" text-anchor="middle" class="label">ftp-admin.example.com</text><text x="480" y="338" text-anchor="middle" class="small">FTP 发布与安全巡检</text>
+
+  <rect x="720" y="76" width="240" height="300" rx="8" class="box"/>
+  <rect x="720" y="76" width="240" height="46" rx="8" fill="#2f9e5b"/>
+  <text x="840" y="106" text-anchor="middle" style="font:700 18px 'Microsoft YaHei',Arial;fill:#fff">PM2 常驻服务</text>
+  <rect x="748" y="146" width="184" height="56" rx="6" fill="#f7f9fc" stroke="#cfd8e6"/>
+  <text x="840" y="170" text-anchor="middle" class="label">NestJS API</text><text x="840" y="190" text-anchor="middle" class="small">127.0.0.1:5108</text>
+  <rect x="748" y="220" width="184" height="56" rx="6" fill="#f7f9fc" stroke="#cfd8e6"/>
+  <text x="840" y="244" text-anchor="middle" class="label">SEO Tool</text><text x="840" y="264" text-anchor="middle" class="small">127.0.0.1:5388</text>
+  <rect x="748" y="294" width="184" height="56" rx="6" fill="#f7f9fc" stroke="#cfd8e6"/>
+  <text x="840" y="318" text-anchor="middle" class="label">FTP Tool</text><text x="840" y="338" text-anchor="middle" class="small">127.0.0.1:5389</text>
+
+  <rect x="720" y="448" width="430" height="180" rx="8" class="box"/>
+  <text x="748" y="486" class="label">宝塔中的 PbootCMS 网站</text>
+  <rect x="748" y="510" width="116" height="86" rx="6" fill="#eaf3ff" stroke="#91caff"/>
+  <text x="806" y="540" text-anchor="middle" class="label">站点 A</text><text x="806" y="566" text-anchor="middle" class="small">data/*.db</text><text x="806" y="586" text-anchor="middle" class="small">static/</text>
+  <rect x="878" y="510" width="116" height="86" rx="6" fill="#edf9f1" stroke="#8fd4aa"/>
+  <text x="936" y="540" text-anchor="middle" class="label">站点 B</text><text x="936" y="566" text-anchor="middle" class="small">data/*.db</text><text x="936" y="586" text-anchor="middle" class="small">static/</text>
+  <rect x="1008" y="510" width="116" height="86" rx="6" fill="#fff7e8" stroke="#f6c26b"/>
+  <text x="1066" y="540" text-anchor="middle" class="label">站点 C</text><text x="1066" y="566" text-anchor="middle" class="small">data/*.db</text><text x="1066" y="586" text-anchor="middle" class="small">static/</text>
+
+  <path d="M240 151 H318" class="line"/>
+  <path d="M630 174 H706" class="line"/>
+  <path d="M630 248 H706" class="line"/>
+  <path d="M630 322 H706" class="line"/>
+  <path d="M840 376 V430 H935 V438" class="line"/>
+  <text x="556" y="416" class="small">端口不对公网开放</text>
+</svg>

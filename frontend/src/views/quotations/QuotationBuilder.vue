@@ -214,9 +214,10 @@
                 </el-image>
               </div>
               <el-form-item label="公司 Logo 地址">
-                <el-input v-model="quote.logoUrl" placeholder="https://shanbo.cc/static/logo.jpg" />
+                <el-input v-model="quote.logoUrl" placeholder="读取当前网站的 Logo 地址，也可以手动修改" />
               </el-form-item>
-              <el-button @click="quote.logoUrl = defaultLogoUrl">使用网站 Logo</el-button>
+              <el-button :disabled="!defaultLogoUrl" @click="quote.logoUrl = defaultLogoUrl">使用网站 Logo</el-button>
+              <el-button type="primary" plain :loading="loadingSiteProfile" @click="reloadCurrentSiteProfile">重新读取当前网站</el-button>
             </div>
             <div class="form-grid two">
               <el-form-item label="公司名称"><el-input v-model="quote.companyName" /></el-form-item>
@@ -249,17 +250,16 @@
       <el-form label-position="top">
         <el-form-item label="网页语言">
           <el-select v-model="targetLanguage" :disabled="translating">
-            <el-option v-for="language in PRODUCT_LANGUAGES" :key="language.code" :label="language.name" :value="language.code" />
+            <el-option v-for="language in availableLanguages" :key="language.code" :label="language.name" :value="language.code" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="targetLanguage !== 'zh-CN'" label="翻译模型">
           <el-select v-model="selectedTranslationModel" filterable :loading="loadingTranslationModels" :disabled="translating">
             <el-option
-              v-for="model in translationModels"
+              v-for="model in selectableTranslationModels"
               :key="model.value"
               :label="model.displayLabel || model.label"
               :value="model.value"
-              :disabled="!model.available"
             />
           </el-select>
         </el-form-item>
@@ -293,6 +293,7 @@ import {
 } from "@/api/products";
 import type { TranslationModel } from "@/api/news";
 import { getAll as getAllMenus, type MenuItem } from "@/api/menus";
+import { getCurrentSiteProfile, type SiteBusinessProfile } from "@/api/sites";
 import {
   createQuotation,
   getNextQuotationNumber,
@@ -320,11 +321,21 @@ import {
   type QuotationLanguageCode,
   type QuotationLine,
 } from "@/utils/quotation";
+import { useAvailableLanguages } from "@/composables/useAvailableLanguages";
+import { getActiveSiteId } from "@/utils/siteSelection";
+import { resolvePreferredTranslationModel, savePreferredTranslationModel } from "@/utils/translationModelPreference";
 
-const DRAFT_KEY = "pboot-quotation-draft-v1";
-const CURRENT_ID_KEY = "pboot-quotation-current-id-v1";
-const defaultLogoUrl = "https://shanbo.cc/static/logo.jpg";
+const LEGACY_DRAFT_KEY = "pboot-quotation-draft-v1";
+const availableLanguages = useAvailableLanguages();
+const LEGACY_CURRENT_ID_KEY = "pboot-quotation-current-id-v1";
+const siteStorageKey = (key: string) => `${key}:site:${getActiveSiteId() || 0}`;
+const draftStorageKey = () => siteStorageKey(LEGACY_DRAFT_KEY);
+const currentIdStorageKey = () => siteStorageKey(LEGACY_CURRENT_ID_KEY);
 const quote = reactive<QuotationDraft>(createDefaultQuotation());
+const currentSiteProfile = ref<SiteBusinessProfile | null>(null);
+const loadingSiteProfile = ref(false);
+const restoredFromLegacyDraft = ref(false);
+const defaultLogoUrl = computed(() => currentSiteProfile.value?.logoUrl || "");
 const products = ref<ProductItem[]>([]);
 const menus = ref<MenuItem[]>([]);
 const selectedProductIds = ref<number[]>([]);
@@ -339,6 +350,9 @@ const savedPreviewVisible = ref(false);
 const savedPreviewRecord = ref<QuotationRecord | null>(null);
 const webDialogVisible = ref(false);
 const translationModels = ref<TranslationModel[]>([]);
+const selectableTranslationModels = computed(() =>
+  translationModels.value.filter((model) => model.available && model.operational !== false),
+);
 const loadingTranslationModels = ref(false);
 const translating = ref(false);
 const webOutputAction = ref<"" | "open" | "download" | "pdf">("");
@@ -348,10 +362,41 @@ const currencies = ["USD", "CNY", "EUR"];
 const incoterms = ["EXW", "FOB", "CIF", "CFR"];
 const transportModes = ["海运", "陆运", "空运", "客户自提"];
 
+const currentSiteAssetReference = (value: string) => {
+  const source = String(value || "").trim();
+  if (!/^https?:\/\//i.test(source)) return source;
+  try {
+    const path = decodeURIComponent(new URL(source).pathname);
+    return /^\/(?:static|uploads?)\//i.test(path) ? path : source;
+  } catch {
+    return source;
+  }
+};
+
+const localPreviewAssetUrl = (value: string) => {
+  const source = String(value || "").trim();
+  if (!source || /^data:|^blob:/i.test(source)) return source;
+  const siteReference = currentSiteAssetReference(source);
+  return siteReference === source && /^https?:\/\//i.test(source) ? source : getUploadUrl(siteReference);
+};
+
+const createLocalPreviewDraft = (source: QuotationDraft) => {
+  const draft = JSON.parse(JSON.stringify(source)) as QuotationDraft;
+  draft.logoUrl = localPreviewAssetUrl(draft.logoUrl);
+  draft.assetBaseUrl = "";
+  draft.items.forEach((item) => {
+    item.image = localPreviewAssetUrl(item.image);
+    item.images = (item.images || []).map(localPreviewAssetUrl);
+  });
+  return draft;
+};
+
 const subtotal = computed(() => quotationSubtotal(quote));
 const grandTotal = computed(() => quotationTotal(quote));
-const previewHtml = computed(() => buildQuotationPreviewHtml(quote));
-const savedPreviewHtml = computed(() => savedPreviewRecord.value ? buildQuotationPreviewHtml(savedPreviewRecord.value.data) : "");
+const previewHtml = computed(() => buildQuotationPreviewHtml(createLocalPreviewDraft(quote)));
+const savedPreviewHtml = computed(() => savedPreviewRecord.value
+  ? buildQuotationPreviewHtml(createLocalPreviewDraft(savedPreviewRecord.value.data))
+  : "");
 const latestQuotationTime = computed(() => quotationRecords.value[0]?.updateTime
   ? formatDateTime(quotationRecords.value[0].updateTime)
   : "-");
@@ -417,7 +462,7 @@ const applyProductSelection = (ids: number[]) => {
     const savedLine = existing.get(id);
     if (savedLine) return [savedLine];
     const product = productMap.value.get(id);
-    return product ? [createQuotationLine(product, productCategoryName(product))] : [];
+    return product ? [createQuotationLine(product, productCategoryName(product), quote.currency)] : [];
   });
   normalizeQuotationImages(quote);
   normalizeQuotationCategories(quote);
@@ -451,22 +496,60 @@ const removeLine = (index: number) => {
 
 const cloneDraft = (value: QuotationDraft): QuotationDraft => JSON.parse(JSON.stringify(value));
 
+const applyCurrentSiteProfile = (draft: QuotationDraft, overwrite = false) => {
+  const profile = currentSiteProfile.value;
+  if (!profile) return;
+  const use = (current: string, next: string) => overwrite ? next : current || next;
+  draft.companyName = use(draft.companyName, profile.companyName);
+  draft.companySubtitle = use(draft.companySubtitle, profile.companySubtitle);
+  draft.logoUrl = use(draft.logoUrl, profile.logoUrl);
+  draft.website = use(draft.website, profile.website);
+  draft.assetBaseUrl = use(draft.assetBaseUrl, profile.assetBaseUrl);
+  draft.salesName = use(draft.salesName, profile.contactName);
+  draft.phone = use(draft.phone, profile.phone);
+  draft.whatsapp = use(draft.whatsapp, profile.whatsapp);
+  draft.wechat = use(draft.wechat, profile.wechat);
+  draft.email = use(draft.email, profile.email);
+  if (overwrite) {
+    draft.items.forEach((item) => {
+      item.image = currentSiteAssetReference(item.image);
+      item.images = (item.images || []).map(currentSiteAssetReference);
+    });
+  }
+};
+
+const loadCurrentSiteProfile = async () => {
+  loadingSiteProfile.value = true;
+  try {
+    currentSiteProfile.value = (await getCurrentSiteProfile()).data;
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, "当前网站资料读取失败"));
+  } finally {
+    loadingSiteProfile.value = false;
+  }
+};
+
+const reloadCurrentSiteProfile = async () => {
+  await loadCurrentSiteProfile();
+  if (!currentSiteProfile.value) return;
+  applyCurrentSiteProfile(quote, true);
+  ElMessage.success(`已读取当前网站：${currentSiteProfile.value.siteName}`);
+};
+
 const loadTranslationModels = async () => {
   loadingTranslationModels.value = true;
   try {
     const result = await getProductTranslationModels();
     translationModels.value = result.data;
-    if (!translationModels.value.some((model) => model.value === selectedTranslationModel.value && model.available)) {
-      selectedTranslationModel.value = translationModels.value.find((model) => model.available && model.recommended)?.value
-        || translationModels.value.find((model) => model.available)?.value
-        || "";
-    }
+    selectedTranslationModel.value = resolvePreferredTranslationModel(translationModels.value, selectedTranslationModel.value);
   } catch (error) {
     ElMessage.error(getErrorMessage(error, "翻译模型加载失败"));
   } finally {
     loadingTranslationModels.value = false;
   }
 };
+
+watch(selectedTranslationModel, (value) => savePreferredTranslationModel(value));
 
 const buildTranslatedQuotation = async () => {
   const translated = cloneDraft(quote);
@@ -528,24 +611,31 @@ const buildTranslatedQuotation = async () => {
 };
 
 const persistDraft = () => {
-  localStorage.setItem(DRAFT_KEY, JSON.stringify(quote));
-  if (currentQuotationId.value) localStorage.setItem(CURRENT_ID_KEY, String(currentQuotationId.value));
-  else localStorage.removeItem(CURRENT_ID_KEY);
+  localStorage.setItem(draftStorageKey(), JSON.stringify(quote));
+  if (currentQuotationId.value) localStorage.setItem(currentIdStorageKey(), String(currentQuotationId.value));
+  else localStorage.removeItem(currentIdStorageKey());
 };
 
 const restoreDraft = () => {
   try {
-    const saved = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") as QuotationDraft | null;
+    const scopedValue = localStorage.getItem(draftStorageKey());
+    const legacyValue = scopedValue ? null : localStorage.getItem(LEGACY_DRAFT_KEY);
+    const saved = JSON.parse(scopedValue || legacyValue || "null") as QuotationDraft | null;
     if (saved?.version !== 1) return false;
+    restoredFromLegacyDraft.value = Boolean(legacyValue);
     Object.assign(quote, createDefaultQuotation(), saved);
     quote.language = "zh-CN";
     normalizeQuotationImages(quote);
-    const savedId = Number(localStorage.getItem(CURRENT_ID_KEY) || 0);
+    const savedId = Number(scopedValue ? localStorage.getItem(currentIdStorageKey()) || 0 : 0);
     currentQuotationId.value = Number.isInteger(savedId) && savedId > 0 ? savedId : null;
+    if (legacyValue) {
+      localStorage.removeItem(LEGACY_DRAFT_KEY);
+      localStorage.removeItem(LEGACY_CURRENT_ID_KEY);
+    }
     return true;
   } catch (_error) {
-    localStorage.removeItem(DRAFT_KEY);
-    localStorage.removeItem(CURRENT_ID_KEY);
+    localStorage.removeItem(draftStorageKey());
+    localStorage.removeItem(currentIdStorageKey());
     return false;
   }
 };
@@ -557,10 +647,11 @@ const resetDraft = async () => {
     return false;
   }
   Object.assign(quote, createDefaultQuotation());
+  applyCurrentSiteProfile(quote, true);
   currentQuotationId.value = null;
   selectedProductIds.value = [];
-  localStorage.removeItem(DRAFT_KEY);
-  localStorage.removeItem(CURRENT_ID_KEY);
+  localStorage.removeItem(draftStorageKey());
+  localStorage.removeItem(currentIdStorageKey());
   await applyNextQuotationNumber();
   workspaceView.value = "editor";
   return true;
@@ -728,7 +819,7 @@ const loadProducts = async () => {
     selectedProductIds.value = quote.items.map((item) => item.productId).filter((id) => productMap.value.has(id));
     if (!quote.items.length && products.value.length) {
       const firstProduct = products.value[0];
-      quote.items = [createQuotationLine(firstProduct, productCategoryName(firstProduct))];
+      quote.items = [createQuotationLine(firstProduct, productCategoryName(firstProduct), quote.currency)];
       selectedProductIds.value = [firstProduct.id];
     }
   } catch (error) {
@@ -862,7 +953,8 @@ watch(quote, persistDraft, { deep: true });
 
 onMounted(async () => {
   const restored = restoreDraft();
-  await Promise.all([loadProducts(), loadQuotationList(), loadTranslationModels()]);
+  await Promise.all([loadCurrentSiteProfile(), loadProducts(), loadQuotationList(), loadTranslationModels()]);
+  applyCurrentSiteProfile(quote, !restored || restoredFromLegacyDraft.value);
   if (!restored) await applyNextQuotationNumber();
 });
 </script>

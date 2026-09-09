@@ -65,4 +65,5 @@
     link.classList.toggle("active", active);
     if (active) link.setAttribute("aria-current", "page");
   });
+  window.NavigationIcons?.decorateWorkspace();
 })();

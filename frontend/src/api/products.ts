@@ -9,6 +9,7 @@ import {
   type PbootScopePayload,
 } from "@/api/news";
 import { compactHtmlForStorage } from "@/utils/htmlContent";
+import type { ProductSharedParameters } from '@/utils/productParameters';
 
 const LONG_REQUEST_TIMEOUT = 180000;
 const MAX_PRODUCT_PAYLOAD_BYTES = 8 * 1024 * 1024;
@@ -33,6 +34,9 @@ export type ProductTranslation = {
 };
 
 export type ProductItem = {
+  translationProgress?: ProductTranslationProgress;
+  sharedParameters?: ProductSharedParameters | null;
+  parameterRows?: { name: string; value: string; unit: string }[];
   id: number;
   menuId: number;
   title: string;
@@ -57,7 +61,40 @@ export type ProductItem = {
   updateTime?: string;
 };
 
-export type ProductForm = Omit<ProductItem, "id" | "createTime" | "updateTime">;
+export type ProductForm = Omit<ProductItem, "id" | "createTime" | "updateTime" | "translationProgress">;
+
+export type ProductTranslationProgress = {
+  status: 'complete' | 'partial' | 'untranslated' | 'not-required';
+  total: number;
+  completed: number;
+  completedLanguages: string[];
+  missing: { lang: string; fields: string[] }[];
+};
+
+export type ProductScopeSyncResult = {
+  siteId: number;
+  siteName: string;
+  menuId: number;
+  menuName: string;
+  totalProducts: number;
+  totalLanguages: number;
+  readyCount: number;
+  skipped: { productId: number; title: string; lang: string; reason: string }[];
+  blocked: { productId: number; title: string; lang: string; reason: string }[];
+  syncedCount: number;
+  created: number;
+  updated: number;
+  deleted: number;
+  backupPath: string;
+};
+
+export const previewProductScopeSync = (menuId: number) => request<ProductScopeSyncResult>({
+  method: 'POST', url: '/products/pboot-scope/preview-all', data: { menuId }, timeout: LONG_REQUEST_TIMEOUT,
+});
+
+export const syncAllProductScopeLanguages = (menuId: number) => request<ProductScopeSyncResult>({
+  method: 'POST', url: '/products/pboot-scope/sync-all', data: { menuId }, timeout: 10 * 60 * 1000,
+});
 
 export type TranslateProductPayload = {
   sourceLang: string;
@@ -74,6 +111,8 @@ export type TranslateProductPayload = {
 export type TranslateProductResult = {
   targetLang: string;
   model: string;
+  requestedModel?: string;
+  fallbackUsed?: boolean;
   title: string;
   subtitle: string;
   keywords: string;
@@ -92,7 +131,6 @@ export type OptimizeProductSeoPayload = {
   summary?: string;
   content?: string;
   carouselTitles?: string[];
-  onlyAlts?: boolean;
 };
 
 export type OptimizeProductSeoResult = {
@@ -128,6 +166,9 @@ export type PbootProductSyncResult = {
   msg: string;
   backupPath: string;
   synced: PbootProductSyncItem[];
+  skipped?: { lang: string; reason: string; reasonCode?: string }[];
+  siteId?: number;
+  siteName?: string;
 };
 
 export type PbootProductImportResult = {
@@ -159,6 +200,47 @@ export type PbootProductStats = {
   pbootCount: number;
   syncCount: number;
   diff: number;
+};
+
+export type ProductFolderScanItem = {
+  modelName: string;
+  relativePath: string;
+  thumbnailImage: string;
+  thumbnailWillGenerate: boolean;
+  largeImage: string;
+  carouselImages: string[];
+  detailHtml: string;
+  detailImages: string[];
+  duplicate: boolean;
+  warnings: string[];
+  parameterType: 'core' | 'water-well' | 'unknown';
+  parameterFiles: string[];
+  parameters: { key: string; label: string; unit: string; value: string; fieldName?: string; fieldLabel?: string; create?: boolean }[];
+  errors: string[];
+};
+
+export type ProductFolderScanResult = {
+  sourceDirectory: string;
+  menuId: number;
+  menuName: string;
+  total: number;
+  importable: number;
+  blocked: number;
+  duplicates: number;
+  items: ProductFolderScanItem[];
+};
+
+export type ProductFolderImportResult = {
+  menuId: number;
+  menuName: string;
+  localBackupPath: string;
+  total: number;
+  createdCount: number;
+  skippedCount: number;
+  failedCount: number;
+  created: Array<{ id: number; modelName: string; relativePath: string }>;
+  skipped: Array<{ modelName: string; reason: string }>;
+  failed: Array<{ modelName: string; reason: string }>;
 };
 
 export const createEmptyProductTranslations = (): ProductTranslation[] =>
@@ -199,6 +281,7 @@ export const createEmptyProductForm = (): ProductForm => ({
   thumbnail: "",
   largeImage: "",
   videoUrl: "",
+  sharedParameters: null,
   carouselImages: [],
   carouselTitles: [],
   summary: "",
@@ -273,6 +356,36 @@ export const getProductPbootStats = (menuId?: number | string, lang: string = DE
 
 export const createProduct = (postObj: ProductForm) => {
   return request<ProductItem>({ method: "POST", url: "/products", data: prepareProductPayload(postObj) });
+};
+
+export const uploadProductThumbnail = (file: File, options: {
+  productId?: number; menuId: number; modelName: string; referenceImage?: string;
+}) => {
+  const data = new FormData();
+  data.append('image', file);
+  if (options.productId) data.append('productId', String(options.productId));
+  if (options.menuId) data.append('menuId', String(options.menuId));
+  data.append('modelName', options.modelName);
+  if (options.referenceImage) data.append('referenceImage', options.referenceImage);
+  return request<{ url: string; width: number; height: number }>({ method: 'POST', url: '/products/thumbnail', data, timeout: 60000 });
+};
+
+export const scanProductFolderImport = (postObj: { sourceDirectory: string; menuId: number; parameterType?: 'auto' | 'core' | 'water-well' }) => {
+  return request<ProductFolderScanResult>({
+    method: "POST",
+    url: "/products/folder-import/scan",
+    data: postObj,
+    timeout: LONG_REQUEST_TIMEOUT,
+  });
+};
+
+export const importProductFolders = (postObj: { sourceDirectory: string; menuId: number; parameterType?: 'auto' | 'core' | 'water-well' }) => {
+  return request<ProductFolderImportResult>({
+    method: "POST",
+    url: "/products/folder-import",
+    data: postObj,
+    timeout: 10 * 60 * 1000,
+  });
 };
 
 export const getProductById = (id: number | string, lang: string = DEFAULT_PRODUCT_LANG) => {

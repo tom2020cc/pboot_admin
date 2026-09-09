@@ -1,5 +1,6 @@
 (function () {
   const { $, api, escapeAttr, escapeHtml, formatDate, postJson, renderNavigation, setStatus } = window.FtpTool;
+  const CURRENT_SCANNER_VERSION = 5;
   const categoryLabels = {
     "dangerous-path": "伪装脚本",
     "executable-in-upload": "上传目录脚本",
@@ -15,6 +16,7 @@
   let configReady = false;
   let securityRunning = false;
   let uploadRunning = false;
+  let currentCheckpoint = { exists: false, valid: false, processedFiles: 0 };
   let allFindings = [];
   let pollTimer = null;
 
@@ -43,6 +45,8 @@
   function updateActionState() {
     const blocked = securityRunning || uploadRunning || !configReady;
     ["scanBtn", "fullScanBtn", "baselineBtn", "adoptBaselineBtn", "forceBaselineBtn", "hardeningBtn"].forEach((id) => { $(id).disabled = blocked; });
+    $("resumeScanBtn").disabled = blocked || !currentCheckpoint.valid;
+    $("clearCheckpointBtn").disabled = securityRunning || uploadRunning;
     $("cancelScanBtn").disabled = !securityRunning;
     $("monitorSaveBtn").disabled = securityRunning || uploadRunning;
     if (uploadRunning && !securityRunning) setStatus("FTP 发布正在运行，安全操作暂时停用");
@@ -72,27 +76,30 @@
     $("scanHistory").innerHTML = history && history.length
       ? history.map((item) => {
           const summary = item.summary || {};
-          const legacy = Number(item.scannerVersion || 0) < 2;
+          const legacy = Number(item.scannerVersion || 0) < CURRENT_SCANNER_VERSION;
           const scanLabel = item.scanType === "incremental" ? "增量快检" : "完整复核";
-          return `<div class="history-item"><strong>${escapeHtml(formatDate(item.finishedAt))} · ${scanLabel}${legacy ? " · 旧规则" : ""}</strong><span>文件 ${summary.files || 0}，深查 ${summary.contentScanned || 0}，跳过 ${summary.skippedUnchanged || 0}，高风险 ${summary.high || 0}，新增 ${summary.newFiles || 0}，变化 ${summary.modifiedFiles || 0}${legacy ? "（仅供参考）" : ""}</span></div>`;
+          return `<div class="history-item"><strong>${escapeHtml(formatDate(item.finishedAt))} · ${scanLabel}${legacy ? " · 旧规则" : ""}</strong><span>文件 ${summary.files || 0}，深查 ${summary.contentScanned || 0}，图片快检 ${summary.mediaMetadataOnly || 0}，断点复用 ${summary.resumedFiles || 0}，高风险 ${summary.high || 0}，新增 ${summary.newFiles || 0}，变化 ${summary.modifiedFiles || 0}${legacy ? "（仅供参考）" : ""}</span></div>`;
         }).join("")
       : `<div class="empty">暂无历史记录</div>`;
   }
 
   function renderSecurityState(state) {
     securityRunning = Boolean(state.running);
+    currentCheckpoint = state.checkpoint || { exists: false, valid: false, processedFiles: 0 };
     updatePosture(state);
     $("monitorEnabled").checked = Boolean(state.monitor?.enabled);
     $("monitorInterval").value = state.monitor?.intervalMinutes || 360;
     $("monitorFullDays").value = state.monitor?.fullScanIntervalDays || 7;
     const result = state.result;
     const summary = result?.summary || {};
-    $("securityFiles").textContent = result ? summary.files || 0 : "-";
+    $("securityFiles").textContent = result ? summary.files || 0 : state.total || "-";
     $("securityHigh").textContent = summary.high || 0;
     $("securityMedium").textContent = summary.medium || 0;
     $("securityNew").textContent = summary.newFiles || 0;
     $("securityModified").textContent = summary.modifiedFiles || 0;
     $("securitySkipped").textContent = summary.skippedUnchanged || 0;
+    $("securityMediaFast").textContent = summary.mediaMetadataOnly || state.mediaMetadataOnly || 0;
+    $("securityResumed").textContent = summary.resumedFiles || state.resumedFiles || 0;
     $("securityLogs").textContent = (state.logs || []).join("\n") || "等待操作。";
     $("securityLogs").scrollTop = $("securityLogs").scrollHeight;
     renderHistory(state.history || []);
@@ -117,8 +124,19 @@
       : state.error
         ? `扫描失败：${state.error}`
         : result
-          ? `${result.scanType === "incremental" ? "增量快检" : "完整复核"}完成：深查 ${summary.contentScanned || 0}，跳过未变化 ${summary.skippedUnchanged || 0}`
-          : "等待扫描";
+          ? `${result.scanType === "incremental" ? "增量快检" : "完整复核"}完成：深查 ${summary.contentScanned || 0}，图片快速核对 ${summary.mediaMetadataOnly || 0}，断点复用 ${summary.resumedFiles || 0}`
+          : currentCheckpoint.exists && currentCheckpoint.valid
+            ? `巡检已暂停：${currentCheckpoint.processedFiles || 0} 个文件已保存，可继续`
+            : "等待扫描";
+
+    const checkpointNote = $("checkpointNote");
+    checkpointNote.hidden = !currentCheckpoint.exists;
+    checkpointNote.className = `checkpoint-note ${currentCheckpoint.valid ? "valid" : "invalid"}`;
+    checkpointNote.textContent = currentCheckpoint.exists
+      ? currentCheckpoint.valid
+        ? `已保存断点：${currentCheckpoint.processedFiles || 0} 个文件，${formatDate(currentCheckpoint.updatedAt)}。重新连接后可从这里继续。`
+        : "检测到旧断点，但 FTP 站点或可信基线已经变化；请清除后重新巡检。"
+      : "";
 
     const badge = $("securityBadge");
     if (state.running) {
@@ -141,6 +159,10 @@
       badge.className = "status-badge safe";
       badge.textContent = "未发现高风险";
       setStatus("扫描完成");
+    } else if (currentCheckpoint.exists && currentCheckpoint.valid) {
+      badge.className = "status-badge warn";
+      badge.textContent = "巡检可继续";
+      setStatus(`巡检已暂停，已保存 ${currentCheckpoint.processedFiles || 0} 个文件断点`);
     } else {
       badge.className = "status-badge";
       badge.textContent = "尚未扫描";
@@ -156,6 +178,8 @@
     $("scanWarnings").innerHTML = (result?.warnings || []).map((warning) => `<div class="warning-row">${escapeHtml(warning)}</div>`).join("");
     $("forceBaselineBtn").hidden = !state.baselineBlocked;
     $("adoptBaselineBtn").hidden = !state.canAdoptBaseline;
+    $("resumeScanBtn").hidden = !currentCheckpoint.exists;
+    $("clearCheckpointBtn").hidden = !currentCheckpoint.exists;
     $("scanBtn").textContent = state.baseline?.exists ? "增量快检（推荐）" : "首次完整巡检";
     $("baselineBtn").textContent = state.baseline?.exists ? "重新建立可信基线" : "完整扫描并建立基线";
     updateActionState();
@@ -193,6 +217,7 @@
   }
 
   async function startScan(mode, allowFindings = false, scanType = "incremental") {
+    if (currentCheckpoint.exists && !confirm("开始新的巡检会清除上次断点，确定重新开始吗？")) return;
     if (mode === "baseline") {
       const question = allowFindings
         ? "扫描发现了高风险项。仍设为可信基线会把当前状态视为正常，确定继续吗？"
@@ -216,9 +241,23 @@
 
   async function cancelScan() {
     await postJson("/api/security/cancel");
-    setStatus("正在取消安全巡检");
+    setStatus("正在暂停安全巡检并保存断点");
     await refreshSecurityStatus();
     schedulePoll(700);
+  }
+
+  async function resumeScan() {
+    await postJson("/api/security/resume", {});
+    setStatus("正在从断点继续巡检");
+    await refreshSecurityStatus();
+    schedulePoll(700);
+  }
+
+  async function clearCheckpoint() {
+    if (!confirm("确定清除上次巡检断点吗？已检查的文件进度将不能继续使用。")) return;
+    await postJson("/api/security/checkpoint/clear", {});
+    setStatus("巡检断点已清除");
+    await refreshSecurityStatus();
   }
 
   async function adoptBaseline() {
@@ -249,6 +288,8 @@
   $("scanBtn").onclick = () => startScan("scan", false, "incremental").catch((error) => setStatus(error.message, true));
   $("fullScanBtn").onclick = () => startScan("scan", false, "full").catch((error) => setStatus(error.message, true));
   $("baselineBtn").onclick = () => startScan("baseline").catch((error) => setStatus(error.message, true));
+  $("resumeScanBtn").onclick = () => resumeScan().catch((error) => setStatus(error.message, true));
+  $("clearCheckpointBtn").onclick = () => clearCheckpoint().catch((error) => setStatus(error.message, true));
   $("adoptBaselineBtn").onclick = () => adoptBaseline().catch((error) => setStatus(error.message, true));
   $("forceBaselineBtn").onclick = () => startScan("baseline", true).catch((error) => setStatus(error.message, true));
   $("monitorSaveBtn").onclick = () => saveMonitor().catch((error) => setStatus(error.message, true));

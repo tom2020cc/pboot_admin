@@ -1,5 +1,22 @@
 import { BadRequestException } from '@nestjs/common';
 
+export function extractAiChoiceText(
+  payload: any,
+  contextLabel = 'AI',
+) {
+  const choice = payload?.choices?.[0];
+  const finishReason = String(choice?.finish_reason || '').toLowerCase();
+  if (finishReason === 'length' || finishReason === 'max_tokens') {
+    throw new BadRequestException(`${contextLabel} 输出被截断，请自动切换备用模型重试`);
+  }
+
+  const text = String(choice?.message?.content || '').trim();
+  if (!text) {
+    throw new BadRequestException(`${contextLabel} 返回内容为空，请自动切换备用模型重试`);
+  }
+  return text;
+}
+
 /**
  * Robustly extract a JSON object from an AI model's text response.
  *

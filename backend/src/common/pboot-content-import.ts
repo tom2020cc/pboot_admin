@@ -8,10 +8,13 @@ export const PBOOT_LANG_MAP: Record<string, string> = {
   ru: 'ru',
   ar: 'ar',
   pt: 'pt',
+  id: 'id',
+  tr: 'tr',
+  vi: 'vi',
 };
 
 const PBOOT_LANGS = Object.keys(PBOOT_LANG_MAP);
-const PREFERRED_LANGS = ['cn', 'en', 'es', 'fr', 'ru', 'ar', 'pt'];
+const PREFERRED_LANGS = ['cn', 'en', 'es', 'fr', 'ru', 'ar', 'pt', 'id', 'tr', 'vi'];
 
 export type PbootContentRow = {
   id: number;
@@ -38,6 +41,14 @@ export type PbootContentRow = {
   sort_name: string;
   ext_bigpic?: string;
   ext_video?: string;
+  ext_drill_depth?: string;
+  ext_core_capacity?: string;
+  ext_drill_diameter?: string;
+  ext_pullback?: string;
+  ext_pullback_unit?: string;
+  ext_engine?: string;
+  ext_parameter_values?: Record<string, string>;
+  ext_custom_parameters?: { fieldName: string; name: string; value: string }[];
 };
 
 export type PbootContentGroup = {
@@ -65,6 +76,70 @@ export const queryPbootRows = <T>(db: any, sql: string, params: any[] = []) => {
   } finally {
     stmt.free();
   }
+};
+
+const quoteSqliteIdentifier = (value: string) => `"${String(value || '').replace(/"/g, '""')}"`;
+
+const readPbootTableColumns = (db: any, tableName: string) => {
+  const table = queryPbootRows<{ name: string }>(
+    db,
+    'select name from sqlite_master where type = ? and lower(name) = lower(?) limit 1',
+    ['table', tableName],
+  )[0];
+  if (!table?.name) return [];
+  return queryPbootRows<{ name: string }>(db, `pragma table_info(${quoteSqliteIdentifier(table.name)})`)
+    .map((column) => String(column.name || '').trim())
+    .filter(Boolean);
+};
+
+const buildOptionalContentExtSql = (db: any) => {
+  const columns = readPbootTableColumns(db, 'ay_content_ext');
+  const byLowerName = new Map(columns.map((column) => [column.toLowerCase(), column]));
+  const contentIdColumn = byLowerName.get('contentid');
+  if (!contentIdColumn) {
+    return {
+      projection: `'' as ext_bigpic, '' as ext_video`,
+      join: '',
+    };
+  }
+
+  const findColumns = (preferred: string[], fallback: (column: string) => boolean) => {
+    const result: string[] = [];
+    for (const name of preferred) {
+      const actual = byLowerName.get(name.toLowerCase());
+      if (actual && !result.includes(actual)) result.push(actual);
+    }
+    for (const column of columns) {
+      if (fallback(column.toLowerCase()) && !result.includes(column)) result.push(column);
+    }
+    return result;
+  };
+  const bigPictureColumns = findColumns(
+    ['ext_bigpic', 'ext_cp_bigpic', 'ext_rig_big_pic'],
+    (column) => column.startsWith('ext_') && /big_?pic/.test(column),
+  );
+  const videoColumns = findColumns(
+    ['ext_video', 'ext_rig_video'],
+    (column) => column.startsWith('ext_') && column.includes('video') && !column.includes('isnot'),
+  );
+  const coalesce = (columnNames: string[], alias: string) => {
+    if (!columnNames.length) return `'' as ${alias}`;
+    const values = columnNames.map(
+      (column) => `nullif(trim(cast(e.${quoteSqliteIdentifier(column)} as text)), '')`,
+    );
+    return `coalesce(${values.join(', ')}, '') as ${alias}`;
+  };
+
+  const parameterNames = ['ext_drill_depth', 'ext_core_capacity', 'ext_drill_diameter', 'ext_pullback', 'ext_pullback_unit', 'ext_engine'];
+  const customFields = readPbootTableColumns(db, 'ay_extfield').includes('name')
+    ? queryPbootRows<{ name: string }>(db, 'select name from ay_extfield where mcode=? and type=1', ['3'])
+      .map((field) => field.name).filter((name) => /^ext_[a-zA-Z][a-zA-Z0-9_]{0,55}$/.test(name) && !parameterNames.includes(name) && name !== 'ext_video' && name !== 'ext_bigpic') : [];
+  return {
+    projection: [coalesce(bigPictureColumns, 'ext_bigpic'), coalesce(videoColumns, 'ext_video'),
+      ...[...parameterNames, ...customFields].map((name) => coalesce(byLowerName.has(name.toLowerCase()) ? [byLowerName.get(name.toLowerCase())] : [], quoteSqliteIdentifier(name))),
+    ].join(', '),
+    join: `left join ay_content_ext e on e.${quoteSqliteIdentifier(contentIdColumn)} = c.id`,
+  };
 };
 
 export const normalizePbootImage = (value: string) => {
@@ -97,7 +172,7 @@ export const toPbootDate = (value: unknown) => {
 export const normalizePbootSlug = (value: string) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
-  const generatedMatch = raw.match(/^(vue-(?:news|product)-\d+)-(cn|en|es|fr|ru|ar|pt)$/i);
+  const generatedMatch = raw.match(/^(vue-(?:news|product)-\d+)-(cn|en|es|fr|ru|ar|pt|id|tr|vi)$/i);
   if (generatedMatch) return generatedMatch[1].toLowerCase();
   return raw
     .replace(/^\/+/, '')
@@ -106,16 +181,29 @@ export const normalizePbootSlug = (value: string) => {
 };
 
 export const readPbootContentGroups = (db: any, mcode: string, typeName: string) => {
+  const contentExt = buildOptionalContentExtSql(db);
   const rows = queryPbootRows<PbootContentRow>(
     db,
-    `select c.*, e.ext_bigpic, e.ext_video, s.mcode, s.filename as sort_filename, s.name as sort_name
+    `select c.*, ${contentExt.projection}, s.mcode, s.filename as sort_filename, s.name as sort_name
      from ay_content c
      join ay_content_sort s on s.acode = c.acode and s.scode = c.scode
-     left join ay_content_ext e on e.contentid = c.id
+     ${contentExt.join}
      where s.mcode = ?
      order by c.id asc`,
     [mcode],
   );
+
+  if (mcode === '3' && readPbootTableColumns(db, 'ay_extfield').includes('name')) {
+    const fields = queryPbootRows<{ name: string; description: string }>(db, 'select name,description from ay_extfield where mcode=? and type=1', ['3'])
+      .filter((field) => /^ext_[a-zA-Z][a-zA-Z0-9_]{0,55}$/.test(field.name));
+    for (const row of rows) {
+      const values = fields.map((field) => ({ fieldName: field.name, name: field.description, value: String((row as unknown as Record<string, unknown>)[field.name] || '') }));
+      row.ext_custom_parameters = values.filter((field) => /^ext_param_[a-z0-9_]{1,48}$/.test(field.fieldName));
+      row.ext_parameter_values = Object.fromEntries(values.map((field) => [field.fieldName, field.value]));
+      const engine = values.find((field) => field.fieldName === 'ext_engine') || values.find((field) => /^(发动机|发动机参数|engine)$/i.test(field.name.trim()));
+      if (engine) row.ext_engine = engine.value;
+    }
+  }
 
   const groups = new Map<string, PbootContentGroup>();
   for (const row of rows) {

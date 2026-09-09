@@ -6,6 +6,7 @@
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
+  window.NavigationIcons?.decorateWorkspace();
 
   const escapeHtml = (value) => String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -21,7 +22,7 @@
       if (!nav) return;
       nav.innerHTML = navigation.map((item) => {
         const active = item.id === page;
-        return `<a class="${active ? "active" : ""}" href="${escapeHtml(item.url)}"${active ? ' aria-current="page"' : ""}>${escapeHtml(item.label)}</a>`;
+        return `<a class="${active ? "active" : ""}" href="${escapeHtml(item.url)}"${active ? ' aria-current="page"' : ""}>${NavigationIcons.icon(item.id)}<span>${escapeHtml(item.label)}</span></a>`;
       }).join("");
     })
     .catch(() => {});

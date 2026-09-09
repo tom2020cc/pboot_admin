@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="/site-context.js"></script>
     <title>PbootCMS FTP 安全巡检</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -37,9 +38,11 @@
             <button class="success" id="scanBtn">增量快检</button>
             <button id="fullScanBtn">完整复核</button>
             <button id="baselineBtn">完整扫描并建立基线</button>
+            <button class="primary" id="resumeScanBtn" hidden>继续上次巡检</button>
+            <button id="clearCheckpointBtn" hidden>清除断点</button>
             <button class="primary" id="adoptBaselineBtn" hidden>将本次结果设为基线</button>
             <button class="danger-outline" id="forceBaselineBtn" hidden>确认仍设为基线</button>
-            <button class="danger-outline" id="cancelScanBtn" disabled>取消扫描</button>
+            <button class="danger-outline" id="cancelScanBtn" disabled>暂停巡检</button>
           </div>
           <div class="monitor-controls">
             <label class="check"><input id="monitorEnabled" type="checkbox" />定时巡检</label>
@@ -52,15 +55,18 @@
         <div class="progress-block">
           <div class="progress-meta"><span id="securityProgressText">等待扫描</span><span id="securityProgressCount">0 / 0</span></div>
           <div class="progress-track"><div class="progress-bar" id="securityProgressBar"></div></div>
+          <div class="checkpoint-note" id="checkpointNote" hidden></div>
         </div>
 
-        <section class="metrics" style="margin-top:15px" aria-label="巡检统计">
+        <section class="metrics security-metrics" style="margin-top:15px" aria-label="巡检统计">
           <div class="metric"><span>远端文件</span><strong id="securityFiles">-</strong></div>
           <div class="metric high"><span>高风险</span><strong id="securityHigh">0</strong></div>
           <div class="metric medium"><span>需关注</span><strong id="securityMedium">0</strong></div>
           <div class="metric"><span>新增文件</span><strong id="securityNew">0</strong></div>
           <div class="metric"><span>已变化</span><strong id="securityModified">0</strong></div>
           <div class="metric safe"><span>跳过未变化</span><strong id="securitySkipped">0</strong></div>
+          <div class="metric safe"><span>图片快速核对</span><strong id="securityMediaFast">0</strong></div>
+          <div class="metric safe"><span>断点复用</span><strong id="securityResumed">0</strong></div>
         </section>
 
         <div class="security-split">

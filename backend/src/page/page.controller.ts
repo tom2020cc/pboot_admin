@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query 
 import { SavePageDto, SyncPageDto } from './dto/page.dto';
 import { PageService } from './page.service';
 import { TranslateNewsDto } from '../news/dto/translate-news.dto';
+import { OptimizeSeoDto } from '../common/dto/optimize-seo.dto';
 
 @Controller('pages')
 export class PageController {
@@ -20,6 +21,11 @@ export class PageController {
   @Post('translate-draft')
   translateDraft(@Body() body: TranslateNewsDto) {
     return this.pageService.translateDraft(body);
+  }
+
+  @Post('optimize-seo')
+  optimizeSeo(@Body() body: OptimizeSeoDto) {
+    return this.pageService.optimizeSeoDraft({ ...body, contentType: 'page' });
   }
 
   @Get()

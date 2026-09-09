@@ -8,37 +8,45 @@
       :target="isLocalTool(item.id) ? undefined : '_blank'"
       :rel="isLocalTool(item.id) ? undefined : 'noopener'"
     >
-      {{ item.label }}
+      <el-icon class="tool-nav-icon" aria-hidden="true"><component :is="item.icon" /></el-icon>
+      <span>{{ item.label }}</span>
     </a>
   </nav>
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{ activeId?: string }>(), { activeId: "admin" });
+import { computed } from "vue";
+import { storeToRefs } from "pinia";
+import { Connection, Cpu, Document, House, Monitor, Search, Setting, Tickets, Upload } from "@element-plus/icons-vue";
+import { useSitesStore } from "@/stores/sites";
+import { buildToolUrls } from "@/utils/toolUrls";
+import { API_BASE_URL } from "@/utils/request";
 
-const numberEnv = (value: unknown, fallback: number) => {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+withDefaults(defineProps<{ activeId?: string }>(), { activeId: "admin" });
+const { activeSiteId } = storeToRefs(useSitesStore());
+
+const urls = buildToolUrls(window.location.origin, import.meta.env, API_BASE_URL);
+
+const withSite = (url: string) => {
+  if (!activeSiteId.value) return url;
+  const parsed = new URL(url);
+  parsed.searchParams.set("siteId", String(activeSiteId.value));
+  return parsed.toString();
 };
 
-const frontendPort = numberEnv(import.meta.env.VITE_FRONTEND_PORT, 5178);
-const backendPort = numberEnv(import.meta.env.VITE_BACKEND_PORT, 5000);
-const configPort = numberEnv(import.meta.env.VITE_CONFIG_WIZARD_PORT, 5190);
-const seoPort = numberEnv(import.meta.env.VITE_SEO_TOOL_PORT, 5188);
-const ftpPort = numberEnv(import.meta.env.VITE_FTP_TOOL_PORT, 5189);
+const items = computed(() => [
+  { id: "admin", label: "管理后台", icon: House, url: urls.admin },
+  { id: "backend", label: "后端接口", icon: Connection, url: urls.backend },
+  { id: "sites", label: "站点管理", icon: Monitor, url: urls.sites },
+  { id: "quotation", label: "报价单生成", icon: Tickets, url: urls.quotation },
+  { id: "brochure", label: "产品介绍", icon: Document, url: withSite(urls.brochure) },
+  { id: "seo", label: "SEO 检查", icon: Search, url: withSite(urls.seo) },
+  { id: "models", label: "模型总览", icon: Cpu, url: withSite(urls.models) },
+  { id: "models-config", label: "模型配置", icon: Setting, url: withSite(urls.modelsConfig) },
+  { id: "ftp", label: "FTP 发布", icon: Upload, url: withSite(urls.ftp) },
+]);
 
-const items = [
-  { id: "admin", label: "🖥️ 管理后台", url: `http://localhost:${frontendPort}/#/` },
-  { id: "backend", label: "🔌 后端接口", url: `http://localhost:${backendPort}/api-docs` },
-  { id: "config", label: "⚙️ 项目配置", url: `http://localhost:${configPort}` },
-  { id: "quotation", label: "报价单生成", url: `http://localhost:${frontendPort}/#/quotations` },
-  { id: "seo", label: "📊 SEO 检查", url: `http://localhost:${seoPort}` },
-  { id: "models", label: "🧠 模型总览", url: `http://localhost:${seoPort}/models.html` },
-  { id: "models-config", label: "🔑 模型配置", url: `http://localhost:${seoPort}/models-config.html` },
-  { id: "ftp", label: "📤 FTP 发布", url: `http://localhost:${ftpPort}` },
-];
-
-const isLocalTool = (id: string) => id === "admin" || id === "quotation";
+const isLocalTool = (id: string) => id === "admin" || id === "sites" || id === "quotation" || id === "brochure";
 </script>
 
 <style scoped>
@@ -55,6 +63,9 @@ const isLocalTool = (id: string) => id === "admin" || id === "quotation";
 }
 
 .tool-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: 0 0 auto;
   padding: 7px 14px;
   border-radius: 999px;
@@ -65,6 +76,11 @@ const isLocalTool = (id: string) => id === "admin" || id === "quotation";
   transition:
     color 0.15s ease,
     background-color 0.15s ease;
+}
+
+.tool-nav-icon {
+  flex: 0 0 auto;
+  font-size: 15px;
 }
 
 .tool-nav a:hover {

@@ -1,11 +1,14 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('quotations')
+@Index(['siteId', 'quotationNo'], { unique: true })
 export class Quotation {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index({ unique: true })
+  @Column({ default: 0, comment: 'Managed site id' })
+  siteId: number;
+
   @Column({ length: 80, comment: 'Quotation number' })
   quotationNo: string;
 

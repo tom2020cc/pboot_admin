@@ -1,18 +1,23 @@
 <template>
   <el-form ref="formRef" :model="form" :rules="rules" label-width="96px" class="entity-form">
-    <el-form-item label="内容栏目" prop="menuId">
-      <el-select v-model="form.menuId" class="full-control" placeholder="请选择新闻所属栏目">
-        <el-option v-for="item in menuOptions" :key="item.id" :label="item.optionLabel" :value="Number(item.id)" />
-      </el-select>
-    </el-form-item>
+    <div class="form-section">
+      <div class="section-heading"><h3>基础信息</h3></div>
+      <el-form-item label="内容栏目" prop="menuId">
+        <el-select v-model="form.menuId" class="full-control" placeholder="请选择新闻所属栏目">
+          <el-option v-for="item in menuOptions" :key="item.id" :label="item.optionLabel" :value="Number(item.id)" />
+        </el-select>
+      </el-form-item>
 
-    <el-form-item label="缩略图">
-      <ThumbnailUpload v-model="form.thumbnail" />
-    </el-form-item>
+      <el-form-item label="缩略图" class="thumbnail-field">
+        <ThumbnailUpload v-model="form.thumbnail" :upload="uploadThumbnail" />
+      </el-form-item>
+    </div>
 
-    <el-form-item label="多语言内容" class="language-item">
+    <div class="form-section language-section">
+      <div class="section-heading"><h3>多语言内容</h3></div>
+      <el-form-item class="language-item" label-width="0">
       <el-tabs v-model="activeLang" class="language-tabs">
-        <el-tab-pane v-for="item in form.translations" :key="item.lang" :label="getLanguageName(item.lang)" :name="item.lang">
+        <el-tab-pane v-for="item in visibleTranslations" :key="item.lang" :label="getLanguageName(item.lang)" :name="item.lang">
           <div class="translation-panel">
             <div v-if="item.lang === DEFAULT_NEWS_LANG" class="seo-toolbar">
               <el-select v-model="seoModel" class="model-select" placeholder="选择 AI SEO 模型">
@@ -26,30 +31,19 @@
               <el-button
                 type="success"
                 :loading="optimizingSeo"
-                :disabled="!availableSeoModels.length || Boolean(translatingLang) || optimizingAlts"
+                :disabled="!availableSeoModels.length || Boolean(translatingLang)"
                 @click="optimizeChineseSeo(item)"
               >
                 AI 优化中文 SEO
               </el-button>
-              <el-button
-                type="success"
-                plain
-                :loading="optimizingAlts"
-                :disabled="!availableSeoModels.length || Boolean(translatingLang) || optimizingSeo"
-                @click="fillImageAlts(item)"
-              >
-                AI 补全图片 ALT
-              </el-button>
-              <span class="translate-tip">「AI 优化中文 SEO」优化全部 SEO 字段并补全图片 ALT；「AI 补全图片 ALT」只补正文图片缺失的 ALT，不改任何文字。</span>
             </div>
             <div v-if="item.lang !== DEFAULT_NEWS_LANG" class="translate-toolbar">
-              <el-select v-model="translationModel" class="model-select" placeholder="选择翻译模型">
+              <el-select v-model="translationModel" class="model-select" placeholder="选择翻译模型" :disabled="translatingAll || Boolean(translatingLang)">
                 <el-option
-                  v-for="model in translationModels"
+                  v-for="model in selectableTranslationModels"
                   :key="model.value"
-                  :label="model.available ? (model.displayLabel || model.label) : `${model.displayLabel || model.label}（未配置 Key）`"
+                  :label="model.displayLabel || model.label"
                   :value="model.value"
-                  :disabled="!model.available"
                 />
               </el-select>
               <el-button
@@ -60,7 +54,7 @@
               >
                 生成{{ getLanguageName(item.lang) }}
               </el-button>
-              <span class="translate-tip">从中文标签页的标题、副标题、关键词、描述和正文生成。</span>
+              <span class="translate-tip">从中文内容生成；URL 自动使用当前语言前缀，已带正确前缀的自定义 URL 保留。</span>
             </div>
 
             <el-form-item label="内容标题" label-width="86px" required>
@@ -100,21 +94,27 @@
           </div>
         </el-tab-pane>
       </el-tabs>
-    </el-form-item>
+      </el-form-item>
+    </div>
 
-    <el-form-item label="状态">
-      <el-switch v-model="form.show" active-text="显示" inactive-text="隐藏" />
-    </el-form-item>
+    <div class="form-section publish-section">
+      <div class="section-heading"><h3>发布设置</h3></div>
+      <div class="publish-grid">
+        <el-form-item label="状态">
+          <el-switch v-model="form.show" active-text="显示" inactive-text="隐藏" />
+        </el-form-item>
 
-    <el-form-item label="排序">
-      <el-input-number v-model="form.orderNum" :min="0" :max="999" />
-    </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="form.orderNum" :min="0" :max="999" />
+        </el-form-item>
+      </div>
 
-    <el-form-item>
-      <el-button type="primary" :loading="loading" @click="submitForm">{{ submitText }}</el-button>
-      <el-button @click="$emit('reset')">重置</el-button>
-      <el-button @click="$router.push('/news')">返回列表</el-button>
-    </el-form-item>
+      <el-form-item label-width="0" class="action-row">
+        <el-button type="primary" :loading="loading" @click="submitForm">{{ submitText }}</el-button>
+        <el-button @click="$emit('reset')">重置</el-button>
+        <el-button @click="$router.push('/news')">返回列表</el-button>
+      </el-form-item>
+    </div>
   </el-form>
 </template>
 
@@ -128,17 +128,27 @@ import {
   getTranslationModels,
   optimizeNewsSeoDraft,
   translateNewsDraft,
+  uploadNewsThumbnail,
   type NewsForm,
   type NewsTranslation,
   type TranslationModel,
 } from "@/api/news";
 import { getErrorMessage } from "@/utils/request";
+import { resolvePreferredTranslationModel, savePreferredTranslationModel } from "@/utils/translationModelPreference";
+import { useAvailableLanguages } from "@/composables/useAvailableLanguages";
 import type { MenuItem } from "@/api/menus";
 import ThumbnailUpload from "@/components/ThumbnailUpload.vue";
 import SourceCodeEditor from "@/components/SourceCodeEditor.vue";
 import { filterMenusByContentLangAndModel } from "@/utils/menuLanguage";
+import { buildLanguageUrlName, ensureLanguageUrlName } from "@/utils/seoUrlName";
+import { ensureTranslationMenusExist } from "@/utils/translationMenuGuard";
 
 const form = defineModel<NewsForm>({ required: true });
+const availableLanguages = useAvailableLanguages();
+const visibleTranslations = computed(() => {
+  const codes = new Set(availableLanguages.value.map((item) => item.code));
+  return (form.value.translations || []).filter((item) => codes.has(item.lang as any));
+});
 
 const props = defineProps<{
   menus: MenuItem[];
@@ -146,6 +156,19 @@ const props = defineProps<{
   loading?: boolean;
   entityId?: number | string;
 }>();
+
+const uploadThumbnail = async (file: File) => {
+  const title = (form.value.translations?.find(item => item.lang === DEFAULT_NEWS_LANG)?.title || form.value.title || '').trim();
+  if (!props.entityId && !title) throw new Error('请先填写中文新闻标题，再上传缩略图');
+  if (!props.entityId && !form.value.menuId) throw new Error('请先选择中文新闻栏目，再上传缩略图');
+  const result = await uploadNewsThumbnail(file, {
+    newsId: props.entityId ? Number(props.entityId) : undefined,
+    menuId: form.value.menuId,
+    title,
+    referenceImage: form.value.thumbnail,
+  });
+  return result.data.url;
+};
 
 const emit = defineEmits<{
   submit: [];
@@ -159,14 +182,16 @@ const activeLang = ref(DEFAULT_NEWS_LANG);
 const translatingLang = ref("");
 const translatingAll = ref(false);
 const optimizingSeo = ref(false);
-const optimizingAlts = ref(false);
 const translationModel = ref("");
 const seoModel = ref("");
 const translationModels = ref<TranslationModel[]>([]);
-const hasAvailableTranslationModel = computed(() => translationModels.value.some((item) => item.available));
+const selectableTranslationModels = computed(() =>
+  translationModels.value.filter((item) => item.available && item.operational !== false),
+);
+const hasAvailableTranslationModel = computed(() => selectableTranslationModels.value.length > 0);
 const availableSeoModels = computed(() =>
   translationModels.value.filter(
-    (item) => item.available && item.value !== "qwen-mt-lite" && ["zhipu", "deepseek", "qwen", "openai"].includes(item.provider),
+    (item) => item.available && item.operational !== false && item.value !== "qwen-mt-lite" && ["zhipu", "deepseek", "qwen", "openai"].includes(item.provider),
   ),
 );
 const entityIdText = computed(() => (props.entityId === undefined || props.entityId === null ? "" : String(props.entityId)));
@@ -232,8 +257,7 @@ const loadTranslationModels = async () => {
   try {
     const res = await getTranslationModels();
     translationModels.value = [...res.data];
-    const preferredTranslation = translationModels.value.find((item) => item.available);
-    if (preferredTranslation) translationModel.value = preferredTranslation.value;
+    translationModel.value = resolvePreferredTranslationModel(translationModels.value, translationModel.value);
     const preferredSeoModel = availableSeoModels.value[0];
     seoModel.value = preferredSeoModel?.value || "";
     return true;
@@ -268,7 +292,8 @@ const optimizeChineseSeo = async (target: NewsTranslation) => {
     target.title = res.data.title;
     target.subtitle = res.data.subtitle;
     target.keywords = res.data.keywords;
-    target.urlName = target.urlName || res.data.urlName;
+    target.urlName = String(target.urlName || "").trim()
+      || buildLanguageUrlName(DEFAULT_NEWS_LANG, res.data.urlName, res.data.title, getDefaultUrlName(DEFAULT_NEWS_LANG));
     target.summary = res.data.summary;
     target.description = res.data.summary;
     target.content = res.data.content;
@@ -281,51 +306,23 @@ const optimizeChineseSeo = async (target: NewsTranslation) => {
   }
 };
 
-const countMissingAltImages = (html: string) =>
-  (String(html || "").match(/<img\b[^>]*>/gi) || []).filter(
-    (tag) => !(tag.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1] || "").trim(),
-  ).length;
+const checkTranslationMenus = (targets: NewsTranslation[]) => ensureTranslationMenusExist({
+  menus: props.menus,
+  sourceMenuId: form.value.menuId,
+  targets: targets.map((item) => ({ lang: String(item.lang) })),
+  model: "2",
+  contentLabel: "新闻",
+  getLanguageName,
+});
 
-const fillImageAlts = async (target: NewsTranslation) => {
-  if (target.lang !== DEFAULT_NEWS_LANG) return;
-  if (!target.content?.trim()) {
-    ElMessage.warning("请先填写正文内容，才能补全图片 ALT");
-    return;
-  }
-  const missing = countMissingAltImages(target.content);
-  if (!missing) {
-    ElMessage.info("正文图片均已填写 ALT，无需补全");
-    return;
-  }
-  if (!seoModel.value) {
-    ElMessage.warning("请先配置智谱或 OpenAI API Key");
-    return;
-  }
+const generateTranslation = async (
+  target: NewsTranslation,
+  showSuccess = true,
+  modelValue = translationModel.value,
+  skipMenuCheck = false,
+) => {
+  if (!skipMenuCheck && !(await checkTranslationMenus([target]))) return false;
 
-  optimizingAlts.value = true;
-  try {
-    const res = await optimizeNewsSeoDraft({
-      model: seoModel.value,
-      contentType: "news",
-      title: target.title || "",
-      keywords: target.keywords || "",
-      urlName: target.urlName || "",
-      summary: target.summary || "",
-      content: target.content || "",
-      onlyAlts: true,
-    });
-    const filled = res.data.imageAlts?.length || 0;
-    if (filled) target.content = res.data.content;
-    syncDefaultFields();
-    ElMessage.success(filled ? `已为 ${filled} 张图片补全 ALT，请检查后保存` : "AI 未返回有效 ALT，正文未修改");
-  } catch (e) {
-    ElMessage.error(getErrorMessage(e, "图片 ALT 补全失败"));
-  } finally {
-    optimizingAlts.value = false;
-  }
-};
-
-const generateTranslation = async (target: NewsTranslation, showSuccess = true) => {
   const source = form.value.translations?.find((item) => item.lang === DEFAULT_NEWS_LANG);
   if (!source?.title?.trim() && !source?.summary?.trim() && !source?.content?.trim()) {
     ElMessage.warning("请先在中文标签页填写标题、描述或正文");
@@ -338,7 +335,7 @@ const generateTranslation = async (target: NewsTranslation, showSuccess = true) 
     const res = await translateNewsDraft({
       sourceLang: DEFAULT_NEWS_LANG,
       targetLang: String(target.lang),
-      model: translationModel.value,
+      model: modelValue,
       title: source?.title || "",
       subtitle: source?.subtitle || "",
       keywords: source?.keywords || "",
@@ -347,12 +344,22 @@ const generateTranslation = async (target: NewsTranslation, showSuccess = true) 
     });
 
     target.title = res.data.title;
+    target.urlName = ensureLanguageUrlName(
+      String(target.lang),
+      target.urlName,
+      res.data.title,
+      source.urlName,
+      getDefaultUrlName(String(target.lang)),
+    );
     target.subtitle = res.data.subtitle;
     target.keywords = res.data.keywords || target.keywords || res.data.title;
     target.summary = res.data.summary;
     target.content = res.data.content;
     target.description = res.data.summary;
-    if (!String(target.urlName || "").trim()) fillDefaultUrlName(target);
+    if (res.data.fallbackUsed) {
+      const fallbackModel = translationModels.value.find((item) => item.value === res.data.model);
+      ElMessage.info(`原模型暂时不可用，已自动改用 ${fallbackModel?.label || res.data.model} 完成`);
+    }
     if (!showSuccess) return true;
     ElMessage.success(`${getLanguageName(String(target.lang))}翻译已生成，请检查后保存`);
   } catch (e) {
@@ -366,23 +373,55 @@ const generateTranslation = async (target: NewsTranslation, showSuccess = true) 
 const generateAllTranslations = async () => {
   if (translatingAll.value || translatingLang.value) return false;
 
-  const targets = (form.value.translations || []).filter((item) => item.lang !== DEFAULT_NEWS_LANG);
-  if (!targets.length) return false;
+  const allTargets = visibleTranslations.value.filter((item) => item.lang !== DEFAULT_NEWS_LANG);
+  if (!allTargets.length) return false;
+  const activeIndex = allTargets.findIndex((item) => String(item.lang) === String(activeLang.value));
+  const targets = activeLang.value === DEFAULT_NEWS_LANG || activeIndex < 0
+    ? allTargets
+    : allTargets.slice(activeIndex);
+  if (!(await checkTranslationMenus(targets))) return false;
+  const modelValue = translationModel.value;
+  if (!modelValue) {
+    ElMessage.warning("请先选择可用的翻译模型");
+    return false;
+  }
 
   translatingAll.value = true;
   try {
     for (const target of targets) {
       activeLang.value = String(target.lang);
-      const success = await generateTranslation(target, false);
-      if (!success) return false;
+      const success = await generateTranslation(target, false, modelValue, true);
+      if (!success) {
+        ElMessage.warning(`翻译在 ${getLanguageName(String(target.lang))} 停止；当前标签已保留在这里，再点一键翻译即可从这里继续`);
+        return false;
+      }
     }
 
     activeLang.value = DEFAULT_NEWS_LANG;
-    ElMessage.success("全部语言已按顺序生成，请检查后保存或同步");
+    ElMessage.success(`已从 ${getLanguageName(String(targets[0].lang))} 开始完成 ${targets.length} 种语言，请检查后保存或同步`);
     return true;
   } finally {
     translatingAll.value = false;
   }
+};
+
+const generateCurrentTranslation = async () => {
+  if (translatingAll.value || translatingLang.value) return false;
+  if (activeLang.value === DEFAULT_NEWS_LANG) {
+    ElMessage.warning("请先切换到需要翻译的语言标签");
+    return false;
+  }
+
+  const target = visibleTranslations.value.find((item) => String(item.lang) === String(activeLang.value));
+  if (!target) {
+    ElMessage.warning("没有找到当前语言");
+    return false;
+  }
+  if (!translationModel.value) {
+    ElMessage.warning("请先选择可用的翻译模型");
+    return false;
+  }
+  return generateTranslation(target, true, translationModel.value);
 };
 
 watch(
@@ -390,6 +429,8 @@ watch(
   () => syncTranslations(),
   { immediate: true },
 );
+
+watch(translationModel, (value) => savePreferredTranslationModel(value));
 
 onMounted(loadTranslationModels);
 
@@ -411,10 +452,12 @@ const submitForm = async () => {
 
 defineExpose({
   generateAllTranslations,
+  generateCurrentTranslation,
   syncTranslations,
   syncDefaultFields,
   ensureDefaultUrlNames,
   translatingAll,
+  translatingLang,
 });
 </script>
 
@@ -423,14 +466,68 @@ defineExpose({
   width: 100%;
   max-width: none;
   box-sizing: border-box;
-  padding: 24px;
+  overflow: hidden;
+  padding: 0 28px;
   background: #fff;
   border: 1px solid var(--el-border-color-light);
   border-radius: 8px;
+  box-shadow: 0 2px 10px rgb(31 45 61 / 4%);
 }
 
 .full-control {
   width: 100%;
+}
+
+.form-section {
+  padding: 24px 0 20px;
+}
+
+.form-section + .form-section {
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  margin-bottom: 20px;
+  padding-left: 12px;
+  border-left: 4px solid var(--el-color-primary);
+}
+
+.section-heading h3 {
+  margin: 0;
+  color: var(--el-text-color-primary);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+.thumbnail-field :deep(.el-form-item__content),
+.thumbnail-field :deep(.thumb-upload) {
+  min-width: 0;
+  width: 100%;
+}
+
+.publish-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 28px;
+}
+
+.publish-grid :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.publish-section {
+  padding-bottom: 24px;
+}
+
+.action-row {
+  margin-top: 22px;
+  margin-bottom: 0;
+  padding-top: 20px;
+  border-top: 1px dashed var(--el-border-color);
 }
 
 .language-item :deep(.el-form-item__content) {
@@ -446,7 +543,7 @@ defineExpose({
 }
 
 .translation-panel {
-  padding: 16px 0 4px;
+  padding: 18px 0 2px;
 }
 
 .translation-panel :deep(.el-input),
@@ -459,9 +556,10 @@ defineExpose({
 .seo-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 16px;
-  padding: 12px;
+  padding: 12px 14px;
   background: #f7f9fc;
   border: 1px solid var(--el-border-color-light);
   border-radius: 8px;
@@ -477,8 +575,10 @@ defineExpose({
 }
 
 .translate-tip {
+  flex: 1 1 320px;
   color: var(--el-text-color-regular);
   font-size: 13px;
+  line-height: 20px;
 }
 
 .field-tip {
@@ -491,7 +591,39 @@ defineExpose({
 
 @media (min-width: 1280px) {
   .entity-form {
-    padding: 28px 32px;
+    padding-right: 32px;
+    padding-left: 32px;
+  }
+}
+
+@media (max-width: 900px) {
+  .publish-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .publish-grid :deep(.el-form-item) {
+    margin-bottom: 18px;
+  }
+}
+
+@media (max-width: 640px) {
+  .entity-form {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .form-section {
+    padding-top: 20px;
+  }
+
+  .model-select {
+    width: 100%;
+  }
+
+  .translate-toolbar :deep(.el-button),
+  .seo-toolbar :deep(.el-button) {
+    width: 100%;
   }
 }
 </style>

@@ -13,6 +13,9 @@ export const NEWS_LANGUAGES = [
   { code: "ru", name: "Русский" },
   { code: "ar", name: "العربية" },
   { code: "pt", name: "Português" },
+  { code: "id", name: "Bahasa Indonesia" },
+  { code: "tr", name: "Türkçe" },
+  { code: "vi", name: "Tiếng Việt" },
 ] as const;
 
 export type NewsLanguageCode = (typeof NEWS_LANGUAGES)[number]["code"];
@@ -31,6 +34,7 @@ export type NewsTranslation = {
 };
 
 export type NewsItem = {
+  translationProgress?: NewsTranslationProgress;
   id: number;
   menuId: number;
   title: string;
@@ -51,7 +55,40 @@ export type NewsItem = {
   updateTime?: string;
 };
 
-export type NewsForm = Omit<NewsItem, "id" | "createTime" | "updateTime">;
+export type NewsForm = Omit<NewsItem, "id" | "createTime" | "updateTime" | "translationProgress">;
+
+export type NewsTranslationProgress = {
+  status: 'complete' | 'partial' | 'untranslated' | 'not-required';
+  total: number;
+  completed: number;
+  completedLanguages: string[];
+  missing: { lang: string; fields: string[] }[];
+};
+
+export type NewsScopeSyncResult = {
+  siteId: number;
+  siteName: string;
+  menuId: number;
+  menuName: string;
+  totalNews: number;
+  totalLanguages: number;
+  readyCount: number;
+  skipped: { newsId: number; title: string; lang: string; reason: string }[];
+  blocked: { newsId: number; title: string; lang: string; reason: string }[];
+  syncedCount: number;
+  created: number;
+  updated: number;
+  deleted: number;
+  backupPath: string;
+};
+
+export const previewNewsScopeSync = (menuId: number) => request<NewsScopeSyncResult>({
+  method: 'POST', url: '/news/pboot-scope/preview-all', data: { menuId }, timeout: LONG_REQUEST_TIMEOUT,
+});
+
+export const syncAllNewsScopeLanguages = (menuId: number) => request<NewsScopeSyncResult>({
+  method: 'POST', url: '/news/pboot-scope/sync-all', data: { menuId }, timeout: 10 * 60 * 1000,
+});
 
 export type TranslationModel = {
   value: string;
@@ -59,6 +96,11 @@ export type TranslationModel = {
   displayLabel?: string;
   provider: string;
   available: boolean;
+  operational?: boolean;
+  healthStatus?: "ok" | "failed" | "untested";
+  healthElapsedMs?: number | null;
+  healthMessage?: string;
+  healthTestedAt?: string;
   priority?: number;
   recommended?: boolean;
   purpose?: string;
@@ -82,6 +124,8 @@ export type TranslateDraftPayload = {
 export type TranslateDraftResult = {
   targetLang: string;
   model: string;
+  requestedModel?: string;
+  fallbackUsed?: boolean;
   title: string;
   subtitle: string;
   keywords: string;
@@ -98,7 +142,6 @@ export type OptimizeNewsSeoPayload = {
   urlName?: string;
   summary?: string;
   content?: string;
-  onlyAlts?: boolean;
 };
 
 export type ImageAltDetail = {
@@ -174,6 +217,40 @@ export type PbootContentStats = {
   pbootCount: number;
   syncCount: number;
   diff: number;
+};
+
+export type NewsFolderScanItem = {
+  title: string;
+  relativePath: string;
+  thumbnailImage: string;
+  thumbnailWillGenerate: boolean;
+  detailHtml: string;
+  detailImages: string[];
+  duplicate: boolean;
+  warnings: string[];
+};
+
+export type NewsFolderScanResult = {
+  sourceDirectory: string;
+  menuId: number;
+  menuName: string;
+  total: number;
+  importable: number;
+  duplicates: number;
+  items: NewsFolderScanItem[];
+};
+
+export type NewsFolderImportResult = {
+  menuId: number;
+  menuName: string;
+  localBackupPath: string;
+  total: number;
+  createdCount: number;
+  skippedCount: number;
+  failedCount: number;
+  created: Array<{ id: number; title: string; relativePath: string }>;
+  skipped: Array<{ title: string; reason: string }>;
+  failed: Array<{ title: string; reason: string }>;
 };
 
 export type MenuTranslationPayload = {
@@ -299,6 +376,36 @@ export const getNewsPbootStats = (menuId?: number | string, lang: string = DEFAU
 
 export const createNews = (postObj: NewsForm) => {
   return request<NewsItem>({ method: "POST", url: "/news", data: normalizeNewsPayload(postObj) });
+};
+
+export const uploadNewsThumbnail = (file: File, options: {
+  newsId?: number; menuId: number; title: string; referenceImage?: string;
+}) => {
+  const data = new FormData();
+  data.append('image', file);
+  if (options.newsId) data.append('newsId', String(options.newsId));
+  if (options.menuId) data.append('menuId', String(options.menuId));
+  data.append('title', options.title);
+  if (options.referenceImage) data.append('referenceImage', options.referenceImage);
+  return request<{ url: string; width: number; height: number }>({ method: 'POST', url: '/news/thumbnail', data, timeout: 60000 });
+};
+
+export const scanNewsFolderImport = (postObj: { sourceDirectory: string; menuId: number }) => {
+  return request<NewsFolderScanResult>({
+    method: "POST",
+    url: "/news/folder-import/scan",
+    data: postObj,
+    timeout: LONG_REQUEST_TIMEOUT,
+  });
+};
+
+export const importNewsFolders = (postObj: { sourceDirectory: string; menuId: number }) => {
+  return request<NewsFolderImportResult>({
+    method: "POST",
+    url: "/news/folder-import",
+    data: postObj,
+    timeout: 10 * 60 * 1000,
+  });
 };
 
 export const getNewsById = (id: number | string, lang: string = DEFAULT_NEWS_LANG) => {

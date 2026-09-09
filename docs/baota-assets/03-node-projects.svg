@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="690" viewBox="0 0 1200 690" role="img" aria-labelledby="title desc">
+  <title id="title">宝塔 Node 项目配置示意</title>
+  <desc id="desc">在宝塔 Node 项目管理中配置管理后端、SEO 工具和 FTP 工具三个 PM2 服务。</desc>
+  <style>.title{font:700 28px "Microsoft YaHei",Arial;fill:#172033}.head{font:700 18px "Microsoft YaHei",Arial;fill:#172033}.label{font:14px "Microsoft YaHei",Arial;fill:#667085}.value{font:600 14px Consolas,"Microsoft YaHei";fill:#172033}.box{fill:#fff;stroke:#cfd8e6;stroke-width:2}.field{fill:#f8fafc;stroke:#d8e0eb}</style>
+  <rect width="1200" height="690" fill="#f5f7fa"/>
+  <text x="50" y="52" class="title">宝塔「网站 → Node 项目」需要添加 3 个服务</text>
+
+  <g transform="translate(50 86)">
+    <rect width="1100" height="170" rx="8" class="box"/><rect width="12" height="170" rx="6" fill="#1677ff"/>
+    <text x="34" y="38" class="head">1. pboot-admin-api</text>
+    <text x="34" y="70" class="label">项目目录</text><rect x="124" y="51" width="500" height="32" rx="5" class="field"/><text x="140" y="73" class="value">/www/wwwroot/pboot_admin_center/backend</text>
+    <text x="34" y="112" class="label">启动文件</text><rect x="124" y="93" width="250" height="32" rx="5" class="field"/><text x="140" y="115" class="value">dist/main.js</text>
+    <text x="410" y="112" class="label">端口</text><rect x="462" y="93" width="100" height="32" rx="5" class="field"/><text x="490" y="115" class="value">5108</text>
+    <text x="660" y="70" class="label">运行用户</text><rect x="750" y="51" width="130" height="32" rx="5" class="field"/><text x="794" y="73" class="value">www</text>
+    <text x="660" y="112" class="label">Node 版本</text><rect x="750" y="93" width="170" height="32" rx="5" class="field"/><text x="785" y="115" class="value">20 LTS / 22 LTS</text>
+    <text x="950" y="70" class="label">守护</text><rect x="1000" y="51" width="70" height="32" rx="16" fill="#2f9e5b"/><circle cx="1053" cy="67" r="12" fill="#fff"/>
+  </g>
+
+  <g transform="translate(50 276)">
+    <rect width="1100" height="170" rx="8" class="box"/><rect width="12" height="170" rx="6" fill="#2f9e5b"/>
+    <text x="34" y="38" class="head">2. pboot-seo-tool</text>
+    <text x="34" y="70" class="label">项目目录</text><rect x="124" y="51" width="570" height="32" rx="5" class="field"/><text x="140" y="73" class="value">/www/wwwroot/pboot_admin_center/tools/seo_publish_tool</text>
+    <text x="34" y="112" class="label">启动文件</text><rect x="124" y="93" width="250" height="32" rx="5" class="field"/><text x="140" y="115" class="value">server.js</text>
+    <text x="410" y="112" class="label">端口</text><rect x="462" y="93" width="100" height="32" rx="5" class="field"/><text x="490" y="115" class="value">5388</text>
+    <text x="730" y="70" class="label">环境变量</text><rect x="820" y="51" width="250" height="32" rx="5" class="field"/><text x="840" y="73" class="value">SEO_TOOL_PORT=5388</text>
+  </g>
+
+  <g transform="translate(50 466)">
+    <rect width="1100" height="170" rx="8" class="box"/><rect width="12" height="170" rx="6" fill="#ee9418"/>
+    <text x="34" y="38" class="head">3. pboot-ftp-tool</text>
+    <text x="34" y="70" class="label">项目目录</text><rect x="124" y="51" width="570" height="32" rx="5" class="field"/><text x="140" y="73" class="value">/www/wwwroot/pboot_admin_center/tools/ftp_publish_tool</text>
+    <text x="34" y="112" class="label">启动文件</text><rect x="124" y="93" width="250" height="32" rx="5" class="field"/><text x="140" y="115" class="value">server.js</text>
+    <text x="410" y="112" class="label">端口</text><rect x="462" y="93" width="100" height="32" rx="5" class="field"/><text x="490" y="115" class="value">5389</text>
+    <text x="730" y="70" class="label">环境变量</text><rect x="820" y="51" width="250" height="32" rx="5" class="field"/><text x="840" y="73" class="value">FTP_TOOL_PORT=5389</text>
+  </g>
+</svg>

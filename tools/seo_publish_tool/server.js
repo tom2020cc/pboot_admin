@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const initSqlJs = require("sql.js");
 const cheerio = require("cheerio");
 const seoAi = require("./ai-seo");
+const siteRuntime = require("../site-runtime");
 
 const TOOL_ROOT = __dirname;
 const PACKAGE_ROOT = path.resolve(TOOL_ROOT, "..", "..");
@@ -45,23 +46,57 @@ function writeJson(file, data) {
   fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
-const CONFIG_BACKUP_FILES = [
-  { id: "seo", label: "SEO 与搜索引擎配置", file: CONFIG_PATH, format: "json", required: true },
-  { id: "ai", label: "AI 模型 API Key", file: AI_CONFIG_PATH, format: "json" },
-  { id: "ftp", label: "FTP 发布配置", file: FTP_CONFIG_PATH, format: "json" },
-  { id: "backendEnv", label: "后端环境配置", file: BACKEND_ENV_PATH, format: "env" },
-  { id: "googleSubmitted", label: "Google Indexing API 续传状态", file: GOOGLE_SUBMITTED_PATH, format: "json" },
-  { id: "googleInspections", label: "Google Search Console 诊断记录", file: GOOGLE_INSPECTION_PATH, format: "json" },
-  { id: "indexCoverage", label: "搜索引擎收录快照", file: SEARCH_INDEX_COVERAGE_PATH, format: "json" },
-  { id: "aiRepairState", label: "AI 修复断点状态", file: AI_REPAIR_STATE_PATH, format: "json" },
-];
+function currentSeoConfigPath() {
+  const site = siteRuntime.currentSite();
+  const configPath = siteRuntime.siteFile("seo", "seo.config.json", site?.isDefault ? CONFIG_PATH : "");
+  if (!fs.existsSync(configPath)) {
+    let template = {};
+    try {
+      template = readJson(CONFIG_PATH);
+    } catch (_error) {
+      template = {};
+    }
+    const next = {
+      ...template,
+      siteName: site?.name || template.siteName || "PbootCMS",
+      siteBaseUrl: site?.publicBaseUrl || template.siteBaseUrl || "http://localhost",
+      localRoot: site?.rootPath || template.localRoot || "..",
+      databasePath: site?.dbPath || template.databasePath || "",
+      indexNow: { enabled: false, key: "", endpoint: "https://api.indexnow.org/indexnow", keys: {} },
+      googleSearchConsole: { sitemapUrl: "" },
+      googleIndexing: { serviceAccount: null, clientEmail: "", dailyQuota: 200 },
+      baidu: { enabled: false, token: "", site: site?.publicBaseUrl || "" },
+      yandexWebmaster: {},
+    };
+    writeJson(configPath, next);
+  }
+  return configPath;
+}
+
+const currentSearchIndexCoveragePath = () => siteRuntime.siteFile("seo", "search-index-coverage.json", siteRuntime.currentSite()?.isDefault ? SEARCH_INDEX_COVERAGE_PATH : "");
+const currentGoogleInspectionPath = () => siteRuntime.siteFile("google", "google-inspections.json", siteRuntime.currentSite()?.isDefault ? GOOGLE_INSPECTION_PATH : "");
+const currentGoogleSubmittedPath = () => siteRuntime.siteFile("google", "google-submitted.json", siteRuntime.currentSite()?.isDefault ? GOOGLE_SUBMITTED_PATH : "");
+const currentAiRepairStatePath = () => siteRuntime.siteFile("state", "ai-repair-state.json", siteRuntime.currentSite()?.isDefault ? AI_REPAIR_STATE_PATH : "");
+const currentFtpConfigPath = () => siteRuntime.siteFile("ftp", "ftp.config.json", siteRuntime.currentSite()?.isDefault ? FTP_CONFIG_PATH : "");
+
+function getConfigBackupFiles() {
+  return [
+    { id: "seo", label: "SEO 与搜索引擎配置", file: currentSeoConfigPath(), format: "json", required: true },
+    { id: "ai", label: "AI 模型 API Key", file: AI_CONFIG_PATH, format: "json" },
+    { id: "ftp", label: "FTP 发布配置", file: currentFtpConfigPath(), format: "json" },
+    { id: "backendEnv", label: "后端环境配置", file: BACKEND_ENV_PATH, format: "env" },
+    { id: "googleSubmitted", label: "Google Indexing API 续传状态", file: currentGoogleSubmittedPath(), format: "json" },
+    { id: "googleInspections", label: "Google Search Console 诊断记录", file: currentGoogleInspectionPath(), format: "json" },
+    { id: "indexCoverage", label: "搜索引擎收录快照", file: currentSearchIndexCoveragePath(), format: "json" },
+    { id: "aiRepairState", label: "AI 修复断点状态", file: currentAiRepairStatePath(), format: "json" },
+  ];
+}
 
 const PORTABLE_SEO_KEYS = ["localRoot", "databasePath", "localPort", "localTestBaseUrl"];
 const PORTABLE_FTP_KEYS = ["localRoot", "localPort"];
 const PORTABLE_ENV_KEYS = new Set([
   "BACKEND_PORT",
   "FRONTEND_PORT",
-  "CONFIG_WIZARD_PORT",
   "SEO_TOOL_PORT",
   "FTP_TOOL_PORT",
   "DB_SQLJS_LOCATION",
@@ -99,7 +134,7 @@ function buildConfigBackup(scope = "all") {
       content: `${JSON.stringify(modelKeys, null, 2)}\n`,
     };
   } else {
-    for (const item of CONFIG_BACKUP_FILES) {
+    for (const item of getConfigBackupFiles()) {
       if (!fs.existsSync(item.file)) continue;
       files[item.id] = {
         label: item.label,
@@ -199,9 +234,10 @@ function importConfigBackup(bundle, mode = "portable") {
   }
 
   const scope = bundle.scope === "ai-keys" ? "ai-keys" : "all";
+  const configBackupFiles = getConfigBackupFiles();
   const importItems = scope === "ai-keys"
-    ? CONFIG_BACKUP_FILES.filter((item) => item.id === "ai")
-    : CONFIG_BACKUP_FILES;
+    ? configBackupFiles.filter((item) => item.id === "ai")
+    : configBackupFiles;
   if (scope === "ai-keys" && !bundle.files.ai) {
     throw new Error("模型 Key 备份中缺少 AI 模型 API Key 数据。");
   }
@@ -228,11 +264,14 @@ function importConfigBackup(bundle, mode = "portable") {
     }
   }
 
-  const backupRoot = path.join(PACKAGE_ROOT, "backups", `config-import-${configBackupTimestamp()}`);
+  const backupBase = siteRuntime.currentSite()?.directory
+    ? path.join(siteRuntime.currentSite().directory, "backups")
+    : path.join(PACKAGE_ROOT, "backups");
+  const backupRoot = path.join(backupBase, `config-import-${configBackupTimestamp()}`);
   fs.mkdirSync(backupRoot, { recursive: true });
   const currentBackupItems = scope === "ai-keys"
-    ? CONFIG_BACKUP_FILES.filter((item) => ["ai", "backendEnv"].includes(item.id))
-    : CONFIG_BACKUP_FILES;
+    ? configBackupFiles.filter((item) => ["ai", "backendEnv"].includes(item.id))
+    : configBackupFiles;
   for (const item of currentBackupItems) {
     if (fs.existsSync(item.file)) {
       fs.copyFileSync(item.file, path.join(backupRoot, `${item.id}.${item.format === "env" ? "env" : "json"}`));
@@ -306,14 +345,13 @@ function getProjectSettings() {
   const env = parseEnvFile(BACKEND_ENV_PATH);
   let ftp = {};
   try {
-    ftp = readJson(FTP_CONFIG_PATH);
+    ftp = readJson(currentFtpConfigPath());
   } catch (_error) {
     ftp = {};
   }
   return {
     backendPort: Number(env.BACKEND_PORT || 5000),
     frontendPort: Number(env.FRONTEND_PORT || 5178),
-    configPort: Number(env.CONFIG_WIZARD_PORT || 5190),
     seoPort: PORT,
     ftpPort: Number(ftp.localPort || 5189),
     localDatabasePath: path.resolve(PACKAGE_ROOT, "backend", env.DB_SQLJS_LOCATION || "dev.sqlite"),
@@ -325,17 +363,17 @@ function buildNavigation(active = "seo") {
   return [
     { id: "admin", label: "管理后台", url: `http://localhost:${ports.frontendPort}/#/` },
     { id: "backend", label: "后端接口", url: `http://localhost:${ports.backendPort}/api-docs` },
-    { id: "config", label: "项目配置", url: `http://localhost:${ports.configPort}` },
+    { id: "sites", label: "站点管理", url: `http://localhost:${ports.frontendPort}/#/sites` },
     { id: "quotation", label: "报价单生成", url: `http://localhost:${ports.frontendPort}/#/quotations` },
     { id: "seo", label: "SEO 检查", url: `http://localhost:${ports.seoPort}` },
     { id: "models", label: "模型总览", url: `http://localhost:${ports.seoPort}/models.html` },
     { id: "models-config", label: "模型配置", url: `http://localhost:${ports.seoPort}/models-config.html` },
     { id: "ftp", label: "FTP 发布", url: `http://localhost:${ports.ftpPort}` },
-  ].map((item) => ({ ...item, active: item.id === active }));
+  ].map((item) => ({ ...item, url: siteRuntime.withSiteQuery(item.url), active: item.id === active }));
 }
 
 function readConfig() {
-  const config = readJson(CONFIG_PATH);
+  const config = readJson(currentSeoConfigPath());
   return {
     siteName: "PbootCMS",
     siteBaseUrl: "http://localhost",
@@ -614,12 +652,22 @@ function findLocalEditorRecord(localDb, kind, record) {
   if (!localDb) return null;
   const acode = String(record.acode || "");
   const lang = PBOOT_LANG_TO_LOCAL[acode] || acode;
+  const site = siteRuntime.currentSite();
+  const scopeFor = (table, alias = "") => {
+    if (!tableExists(localDb, table)) return null;
+    const hasSiteId = queryRows(localDb, `pragma table_info("${table}")`).some(column => column.name === 'siteId');
+    if (!hasSiteId) return site && !site.isDefault ? null : { sql: '1=1', params: [] };
+    if (!site?.id) return null;
+    return { sql: `${alias ? alias + '.' : ''}siteId=?`, params: [Number(site.id)] };
+  };
 
   if (kind === "menu") {
-    const match = queryRows(localDb, "select id from menu where code=? limit 1", [
-      `pboot:${acode}:${record.scode}`,
-    ])[0];
-    return match ? { route: "menus", id: match.id } : null;
+    const scope = scopeFor('menu');
+    if (!scope) return null;
+    const matches = queryRows(localDb, `select id from menu where code=? and ${scope.sql} limit 2`, [
+      `pboot:${acode}:${record.scode}`, ...scope.params,
+    ]);
+    return matches.length === 1 ? { route: "menus", id: matches[0].id } : null;
   }
 
   const modelMap = {
@@ -628,39 +676,31 @@ function findLocalEditorRecord(localDb, kind, record) {
     "3": { route: "products", table: "product", translation: "product_translations", foreignKey: "productId" },
   };
   if (String(record.mcode) === "4") {
-    const match = queryRows(localDb, "select id from video where pbootId=? limit 1", [record.id])[0];
-    return match ? { route: "videos", id: match.id } : null;
+    return null;
   }
 
   const model = modelMap[String(record.mcode || "")];
   if (!model || !tableExists(localDb, model.table)) return null;
   const filename = String(record.filename || "").trim();
   const title = String(record.title || "").trim();
+  const scope = scopeFor(model.table, 'c');
+  if (!scope) return null;
   let match;
 
-  if (tableExists(localDb, model.translation)) {
-    match = queryRows(
-      localDb,
-      `select "${model.foreignKey}" as localId
-       from "${model.translation}"
-       where lang=? and (
-         (? <> '' and lower(urlName)=lower(?)) or
-         (? <> '' and title=?)
-       )
-       order by case when ? <> '' and lower(urlName)=lower(?) then 0 else 1 end
-       limit 1`,
-      [lang, filename, filename, title, title, filename, filename],
-    )[0];
-  }
-  if (!match) {
-    match = queryRows(
-      localDb,
-      `select id as localId from "${model.table}"
-       where ((? <> '' and lower(urlName)=lower(?)) or (? <> '' and title=?))
-       order by case when ? <> '' and lower(urlName)=lower(?) then 0 else 1 end
-       limit 1`,
-      [filename, filename, title, title, filename, filename],
-    )[0];
+  // Prefer a unique URL match. Ambiguous titles must not open an arbitrary record.
+  for (const [column, value] of [['urlName', filename], ['title', title]]) {
+    if (!value) continue;
+    if (tableExists(localDb, model.translation)) {
+      const rows = queryRows(localDb, `select distinct c.id as localId from "${model.translation}" t
+        join "${model.table}" c on c.id=t."${model.foreignKey}"
+        where t.lang=? and lower(t."${column}")=lower(?) and ${scope.sql} limit 2`, [lang, value, ...scope.params]);
+      if (rows.length > 1) return null;
+      if (rows.length === 1) { match = rows[0]; break; }
+    }
+    const rows = queryRows(localDb, `select c.id as localId from "${model.table}" c
+      where lower(c."${column}")=lower(?) and ${scope.sql} limit 2`, [value, ...scope.params]);
+    if (rows.length > 1) return null;
+    if (rows.length === 1) { match = rows[0]; break; }
   }
   return match ? { route: model.route, id: match.localId } : null;
 }
@@ -669,27 +709,40 @@ function buildVueEditorUrl(localDb, kind, record) {
   const localRecord = findLocalEditorRecord(localDb, kind, record);
   if (!localRecord) return "";
   const frontendPort = getProjectSettings().frontendPort;
-  return `http://localhost:${frontendPort}/#/${localRecord.route}/edit/${localRecord.id}`;
+  return siteRuntime.withSiteQuery(`http://localhost:${frontendPort}/#/${localRecord.route}/edit/${localRecord.id}`);
 }
 
 function addIssue(issues, severity, type, title, detail, url, meta = {}) {
   issues.push({ severity, type, title, detail, url, ...meta });
 }
 
+function addCategorySeoIssues(issues, sort, url, meta) {
+  const name = String(sort.name || sort.scode || '').trim();
+  const title = stripHtml(sort.title || '');
+  const description = stripHtml(sort.description || '');
+  const keywords = String(sort.keywords || '').trim();
+  const guidance = meta.acode === 'cn' ? '请在中文栏目编辑页完善后同步到 PB。' : '请先完善中文栏目，再翻译栏目并同步到 PB。';
+  if (!title) addIssue(issues, 'low', '栏目', `${name} 未设置独立 SEO 标题`, `模板可能回退使用栏目名称，请结合实际页面检查。${guidance}`, url, { ...meta, code: 'category-seo-title-missing' });
+  if (!description) addIssue(issues, 'medium', '栏目', `${name} 缺少 SEO 描述`, guidance, url, { ...meta, code: 'category-seo-description-missing' });
+  if (!keywords) addIssue(issues, 'low', '栏目', `${name} 未填写 SEO 关键字`, `可按内容管理需要补充；不是 Google 收录或排名的必要条件。${guidance}`, url, { ...meta, code: 'category-seo-keywords-missing' });
+  if (title.length > 65) addIssue(issues, 'low', '栏目', `${name} SEO 标题偏长`, `当前 ${title.length} 字符，建议检查展示效果；这是编辑提示，不是搜索引擎硬性字数限制。`, url, { ...meta, code: 'category-title-too-long' });
+  if (description && (description.length < 50 || description.length > 180)) addIssue(issues, 'low', '栏目', `${name} SEO 描述长度需关注`, `当前 ${description.length} 字符，请确认准确概括栏目内容；搜索摘要会按展示宽度截断，没有固定字数门槛。`, url, { ...meta, code: 'category-description-length' });
+}
+
 function calculateSeoHealth(stats, issues) {
-  const totalRecords = Math.max(1, Number(stats.menus || 0) + Number(stats.contents || 0));
+  const totalRecords = Math.max(0, Number(stats.checkedRecords ?? (Number(stats.menus || 0) + Number(stats.contents || 0))));
   const penalty = issues.reduce((sum, item) => {
     if (item.severity === "high") return sum + 10;
     if (item.severity === "medium") return sum + 3;
     return sum + 0.5;
   }, 0);
   const affected = new Set(
-    issues
+    issues.flatMap((item) => item.affectedRecords || [item])
       .filter((item) => item.recordKind && item.recordId)
       .map((item) => `${item.recordKind}:${item.acode || ""}:${item.recordId}`),
   ).size;
   return {
-    score: Math.max(0, Math.round(100 - (penalty / totalRecords) * 25)),
+    score: totalRecords ? Math.max(0, Math.round(100 - (penalty / totalRecords) * 25)) : null,
     affectedRecords: affected,
     cleanRecords: Math.max(0, totalRecords - affected),
     totalRecords,
@@ -713,7 +766,7 @@ async function inspectSite() {
     const routing = getPbootRouting(db);
     const sorts = queryRows(
       db,
-      `select s.id,s.acode,s.scode,s.pcode,s.name,s.filename,s.mcode,s.status,s.sorting,s.outlink,
+      `select s.id,s.acode,s.scode,s.pcode,s.name,s.filename,s.mcode,s.status,s.sorting,s.outlink,s.title,s.keywords,s.description,
               m.type as model_type,m.urlname as model_urlname
        from ay_content_sort s
        left join ay_model m on m.mcode=s.mcode
@@ -748,15 +801,18 @@ async function inspectSite() {
       const sortMeta = {
         editUrl: sortEditUrl,
         recordKind: "menu",
-        recordId: String(sort.id || ""),
+        recordId: String(sort.scode || ""),
         acode,
       };
-      if (!sort.name) addIssue(issues, "high", "栏目", `栏目缺少名称 #${sort.scode}`, `语言 ${acode}`, "", sortMeta);
-      if (!sort.filename) addIssue(issues, "medium", "栏目", `${sort.name || sort.scode} 缺少 URL 名称`, "建议给栏目设置简短英文 URL。", "", sortMeta);
 
       const sortPath = buildPbootSortPath(sort, routing);
       const url = buildPbootUrl(languageBaseUrl(config, acode, areas, true), sortPath, "/");
       const localUrl = buildPbootUrl(languageBaseUrl(config, acode, areas, false), sortPath, "/");
+      if (!isVideoType(sort.mcode, type)) {
+        if (!String(sort.name || '').trim()) addIssue(issues, "high", "栏目", `栏目缺少名称 #${sort.scode}`, `语言 ${acode}`, url, sortMeta);
+        if (!String(sort.filename || '').trim()) addIssue(issues, "medium", "栏目", `${sort.name || sort.scode} 缺少 URL 名称`, "建议给栏目设置简短英文 URL。", url, sortMeta);
+        addCategorySeoIssues(issues, sort, url, sortMeta);
+      }
       urls.push({
         kind: "栏目",
         lang: acode,
@@ -798,12 +854,12 @@ async function inspectSite() {
         acode,
       };
 
-      if (!title) addIssue(issues, "high", type, `${type} #${row.id} 缺少标题`, `语言 ${acode}`, url, contentMeta);
+      if (!isVideo && !title) addIssue(issues, "high", type, `${type} #${row.id} 缺少标题`, `语言 ${acode}`, url, contentMeta);
       if (!isVideo && !isNews && !row.filename) {
         addIssue(issues, "high", type, `${title || `#${row.id}`} 缺少 URL 名称`, "建议使用当前语言前缀 + 中文主 ID，例如 en-1096。", url, contentMeta);
       }
       if (!isVideo) {
-        if (!keywords) addIssue(issues, "medium", type, `${title || `#${row.id}`} 缺少关键词`, "SEO 三要素之一，建议 3-8 个核心关键词。", url, contentMeta);
+        if (!keywords) addIssue(issues, "low", type, `${title || `#${row.id}`} 未填写关键词`, "可按内容管理需要补充；不是 Google 收录或排名的必要条件。", url, contentMeta);
         if (!description) addIssue(issues, "medium", type, `${title || `#${row.id}`} 缺少描述`, "SEO 三要素之一，建议 80-160 字符。", url, contentMeta);
         if (title.length > 65) addIssue(issues, "low", type, `${title || `#${row.id}`} 标题偏长`, `当前 ${title.length} 字符，搜索结果中可能被截断，建议控制在 65 字符以内。`, url, { ...contentMeta, code: "title-too-long" });
         if (description && description.length < 50) addIssue(issues, "low", type, `${title || `#${row.id}`} 描述偏短`, `当前 ${description.length} 字符，建议补充到 50-160 字符并包含核心卖点。`, url, { ...contentMeta, code: "description-too-short" });
@@ -830,7 +886,7 @@ async function inspectSite() {
     }
 
     const duplicateUrlMap = new Map();
-    for (const item of urls) {
+    for (const item of urls.filter(entry => !isVideoType('', entry.type))) {
       const matches = duplicateUrlMap.get(item.url) || [];
       matches.push(item);
       duplicateUrlMap.set(item.url, matches);
@@ -842,6 +898,9 @@ async function inspectSite() {
       }, {});
       const duplicateCount = Math.max(...Object.values(sameKindCounts));
       if (duplicateCount > 1) {
+        const affectedRecords = matches.filter(item => sameKindCounts[item.kind] > 1).map(item => ({
+          recordKind: item.kind === '栏目' ? 'menu' : 'content', recordId: item.id, acode: item.lang,
+        }));
         addIssue(
           issues,
           "high",
@@ -851,16 +910,15 @@ async function inspectSite() {
           url,
           {
             editUrl: matches.find((item) => item.editUrl)?.editUrl || "",
-            recordKind: matches[0]?.kind || "",
-            recordId: matches[0]?.id || "",
-            acode: matches[0]?.lang || "",
+            ...affectedRecords[0],
+            affectedRecords,
           },
         );
       }
     }
 
     const duplicateTitleMap = new Map();
-    for (const item of urls.filter((entry) => entry.kind === "内容" && entry.title)) {
+    for (const item of urls.filter((entry) => entry.kind === "内容" && entry.title && !isVideoType('', entry.type))) {
       const key = `${item.lang}|${item.type}|${item.title.trim().toLocaleLowerCase()}`;
       const matches = duplicateTitleMap.get(key) || [];
       matches.push(item);
@@ -882,6 +940,7 @@ async function inspectSite() {
           recordId: first.id || "",
           acode: first.lang || "",
           code: "duplicate-title",
+          affectedRecords: matches.map(item => ({ recordKind: 'content', recordId: item.id, acode: item.lang })),
         },
       );
     }
@@ -892,6 +951,7 @@ async function inspectSite() {
       areas: areas.length,
       menus: sorts.length,
       contents: contents.length,
+      checkedRecords: urls.filter(item => !isVideoType('', item.type)).length,
       urls: uniqueUrls.length,
       issues: issues.length,
       highIssues: issues.filter((item) => item.severity === "high").length,
@@ -1171,7 +1231,7 @@ async function generateFiles() {
 
 function getFtpToolInfo() {
   const toolRoot = path.resolve(TOOL_ROOT, "..", "ftp_publish_tool");
-  const configPath = path.join(toolRoot, "ftp.config.json");
+  const configPath = currentFtpConfigPath();
   let config = {};
   try {
     config = readJson(configPath);
@@ -1184,7 +1244,7 @@ function getFtpToolInfo() {
     configPath,
     port,
     baseUrl: `http://127.0.0.1:${port}`,
-    browserUrl: `http://localhost:${port}`,
+    browserUrl: siteRuntime.withSiteQuery(`http://localhost:${port}`),
     configured: Boolean(config.host && config.user),
   };
 }
@@ -1193,8 +1253,13 @@ async function requestFtpTool(pathname, options = {}) {
   const info = getFtpToolInfo();
   const { timeout = 6000, ...fetchOptions } = options;
   try {
+    const siteId = siteRuntime.currentSite()?.id;
     const response = await fetch(`${info.baseUrl}${pathname}`, {
       ...fetchOptions,
+      headers: {
+        ...(fetchOptions.headers || {}),
+        ...(siteId ? { "X-Pboot-Site-Id": String(siteId) } : {}),
+      },
       signal: AbortSignal.timeout(timeout),
     });
     const data = await response.json();
@@ -1257,7 +1322,7 @@ function ensureIndexNowKeys(config, siteRoot, hosts) {
     next.indexNow.key = next.indexNow.keys[mainHost] || "";
     changed = true;
   }
-  if (changed) writeJson(CONFIG_PATH, next);
+  if (changed) writeJson(currentSeoConfigPath(), next);
   return { config: next, keyFiles };
 }
 
@@ -2010,7 +2075,7 @@ async function resolveYandexHost() {
 
   const config = readConfig();
   config.yandexWebmaster = { ...(config.yandexWebmaster || {}), userId, hostId };
-  writeJson(CONFIG_PATH, config);
+  writeJson(currentSeoConfigPath(), config);
   return { userId, hostId, host: cfg.host, hosts };
 }
 
@@ -2031,7 +2096,7 @@ async function submitYandexSitemap(sitemapUrl) {
 
 function loadSearchIndexCoverageStore() {
   try {
-    const parsed = readJson(SEARCH_INDEX_COVERAGE_PATH);
+    const parsed = readJson(currentSearchIndexCoveragePath());
     return {
       baidu: parsed?.baidu && typeof parsed.baidu === "object" ? parsed.baidu : null,
       yandex: parsed?.yandex && typeof parsed.yandex === "object" ? parsed.yandex : null,
@@ -2043,7 +2108,7 @@ function loadSearchIndexCoverageStore() {
 }
 
 function saveSearchIndexCoverageStore(store) {
-  writeJson(SEARCH_INDEX_COVERAGE_PATH, store);
+  writeJson(currentSearchIndexCoveragePath(), store);
 }
 
 function normalizeIndexCoverageUrls(values) {
@@ -2349,8 +2414,8 @@ function getGoogleSearchConsoleSettings(config = readConfig()) {
       databasePath,
       configuredPort: Number(config.localPort || PORT),
       runningPort: PORT,
-      configPath: CONFIG_PATH,
-      isolatedConfig: path.dirname(CONFIG_PATH) === TOOL_ROOT,
+      configPath: currentSeoConfigPath(),
+      isolatedConfig: path.dirname(currentSeoConfigPath()) !== TOOL_ROOT,
     },
     checklist,
     issues,
@@ -2858,7 +2923,7 @@ async function inspectSearchConsoleUrl(inspectionUrl, siteUrl) {
 
 function loadGoogleInspectionStore() {
   try {
-    const parsed = JSON.parse(fs.readFileSync(GOOGLE_INSPECTION_PATH, "utf8"));
+    const parsed = JSON.parse(fs.readFileSync(currentGoogleInspectionPath(), "utf8"));
     return {
       results: parsed && typeof parsed.results === "object" && parsed.results ? parsed.results : {},
       updatedAt: String(parsed?.updatedAt || ""),
@@ -2869,7 +2934,7 @@ function loadGoogleInspectionStore() {
 }
 
 function saveGoogleInspectionStore(store) {
-  fs.writeFileSync(GOOGLE_INSPECTION_PATH, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  fs.writeFileSync(currentGoogleInspectionPath(), `${JSON.stringify(store, null, 2)}\n`, "utf8");
 }
 
 function recordSearchConsoleInspection(result) {
@@ -2973,7 +3038,7 @@ async function querySearchConsolePerformance(siteUrl, days = 28, rowLimit = 250)
 
 function loadGoogleSubmitted() {
   try {
-    const data = JSON.parse(fs.readFileSync(GOOGLE_SUBMITTED_PATH, "utf8"));
+    const data = JSON.parse(fs.readFileSync(currentGoogleSubmittedPath(), "utf8"));
     return {
       submitted: data && typeof data.submitted === "object" && data.submitted ? data.submitted : {},
       daily: data && typeof data.daily === "object" && data.daily ? data.daily : {},
@@ -2984,7 +3049,7 @@ function loadGoogleSubmitted() {
 }
 
 function saveGoogleSubmitted(store) {
-  fs.writeFileSync(GOOGLE_SUBMITTED_PATH, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  fs.writeFileSync(currentGoogleSubmittedPath(), `${JSON.stringify(store, null, 2)}\n`, "utf8");
 }
 
 function pacificDateKey(date = new Date()) {
@@ -3073,7 +3138,7 @@ async function handleApi(req, res, pathname) {
       sendJson(res, {
         type: "pboot-seo-config-backup",
         version: 1,
-        items: CONFIG_BACKUP_FILES.map((item) => ({
+        items: getConfigBackupFiles().map((item) => ({
           id: item.id,
           label: item.label,
           available: fs.existsSync(item.file),
@@ -3222,11 +3287,12 @@ async function handleApi(req, res, pathname) {
       sendJson(res, {
         config,
         navigation: buildNavigation(),
+        site: siteRuntime.publicSiteContext(),
         instance: {
           port: PORT,
           toolRoot: TOOL_ROOT,
           projectRoot: path.resolve(TOOL_ROOT, "..", ".."),
-          configPath: CONFIG_PATH,
+          configPath: currentSeoConfigPath(),
           configuredPort: Number(config.localPort || 5188),
           siteRoot: resolveSiteRoot(config),
           databasePath: findDatabase(config),
@@ -3267,7 +3333,7 @@ async function handleApi(req, res, pathname) {
       if (!/^https?:\/\//i.test(next.localTestBaseUrl)) {
         throw new Error("本地测试地址必须以 http:// 或 https:// 开头。");
       }
-      writeJson(CONFIG_PATH, next);
+      writeJson(currentSeoConfigPath(), next);
       sendJson(res, { config: next, publicUrlWarning: isSuspiciousPublicUrl(next.siteBaseUrl) });
       return;
     }
@@ -3333,13 +3399,13 @@ async function handleApi(req, res, pathname) {
       if (body.clear) {
         config.googleIndexing = { ...current, serviceAccount: null, clientEmail: "", dailyQuota };
         googleTokenCache.clear();
-        writeJson(CONFIG_PATH, config);
+        writeJson(currentSeoConfigPath(), config);
         sendJson(res, { enabled: false, message: "已清除 Google 服务账号配置。" });
         return;
       }
       if (body.quotaOnly) {
         config.googleIndexing = { ...current, dailyQuota };
-        writeJson(CONFIG_PATH, config);
+        writeJson(currentSeoConfigPath(), config);
         const quota = googleQuotaInfo(loadGoogleSubmitted(), config);
         sendJson(res, { ok: true, dailyQuota, quota, message: `本地每日提交限额已保存为 ${dailyQuota} 条。` });
         return;
@@ -3347,7 +3413,7 @@ async function handleApi(req, res, pathname) {
       const serviceAccount = parseServiceAccount(body.serviceAccount);
       config.googleIndexing = { ...current, serviceAccount, clientEmail: serviceAccount.client_email, dailyQuota };
       googleTokenCache.clear();
-      writeJson(CONFIG_PATH, config);
+      writeJson(currentSeoConfigPath(), config);
       sendJson(res, {
         enabled: true,
         clientEmail: serviceAccount.client_email,
@@ -3602,7 +3668,7 @@ async function handleApi(req, res, pathname) {
       const config = readConfig();
       if (body.clear) {
         config.yandexWebmaster = { verification: null };
-        writeJson(CONFIG_PATH, config);
+        writeJson(currentSeoConfigPath(), config);
         sendJson(res, { ok: true, message: "已清除 Yandex 验证文件配置（网站根目录里已保存的文件不会自动删除）。" });
         return;
       }
@@ -3621,7 +3687,7 @@ async function handleApi(req, res, pathname) {
       const target = path.join(siteRoot, filename);
       fs.writeFileSync(target, `${content}\n`, "utf8");
       config.yandexWebmaster = { verification: { filename, savedAt: new Date().toISOString() } };
-      writeJson(CONFIG_PATH, config);
+      writeJson(currentSeoConfigPath(), config);
       sendJson(res, {
         ok: true,
         filename,
@@ -3639,14 +3705,14 @@ async function handleApi(req, res, pathname) {
       const config = readConfig();
       if (body.clear) {
         config.yandexWebmaster = { ...(config.yandexWebmaster || {}), oauthToken: "" };
-        writeJson(CONFIG_PATH, config);
+        writeJson(currentSeoConfigPath(), config);
         sendJson(res, { ok: true, message: "已清除 Yandex OAuth token。" });
         return;
       }
       const token = String(body.token || "").trim();
       if (!token) throw new Error("请粘贴 Yandex OAuth token。");
       config.yandexWebmaster = { ...(config.yandexWebmaster || {}), oauthToken: token };
-      writeJson(CONFIG_PATH, config);
+      writeJson(currentSeoConfigPath(), config);
       sendJson(res, { ok: true, message: "已保存 Yandex OAuth token。" });
       return;
     }
@@ -3678,7 +3744,7 @@ async function handleApi(req, res, pathname) {
       const config = readConfig();
       if (body.clear) {
         config.bingWebmaster = { ...(config.bingWebmaster || {}), verification: null };
-        writeJson(CONFIG_PATH, config);
+        writeJson(currentSeoConfigPath(), config);
         sendJson(res, { ok: true, message: "已清除 Bing 验证码配置（网站根目录里的 BingSiteAuth.xml 不会自动删除）。" });
         return;
       }
@@ -3691,7 +3757,7 @@ async function handleApi(req, res, pathname) {
       const target = path.join(siteRoot, filename);
       fs.writeFileSync(target, buildBingSiteAuthXml(code), "utf8");
       config.bingWebmaster = { ...(config.bingWebmaster || {}), verification: { code, savedAt: new Date().toISOString() } };
-      writeJson(CONFIG_PATH, config);
+      writeJson(currentSeoConfigPath(), config);
       sendJson(res, {
         ok: true,
         filename,
@@ -3709,14 +3775,14 @@ async function handleApi(req, res, pathname) {
       const config = readConfig();
       if (body.clear) {
         config.bingWebmaster = { ...(config.bingWebmaster || {}), apiKey: "" };
-        writeJson(CONFIG_PATH, config);
+        writeJson(currentSeoConfigPath(), config);
         sendJson(res, { ok: true, message: "已清除 Bing Webmaster API Key。" });
         return;
       }
       const apiKey = String(body.apiKey || "").trim();
       if (!apiKey) throw new Error("请粘贴 Bing Webmaster API Key。");
       config.bingWebmaster = { ...(config.bingWebmaster || {}), apiKey };
-      writeJson(CONFIG_PATH, config);
+      writeJson(currentSeoConfigPath(), config);
       sendJson(res, { ok: true, message: "已保存 Bing Webmaster API Key。" });
       return;
     }
@@ -3749,7 +3815,7 @@ async function handleApi(req, res, pathname) {
       const config = readConfig();
       if (body.clear) {
         config.baidu = { enabled: true, token: "", site: "" };
-        writeJson(CONFIG_PATH, config);
+        writeJson(currentSeoConfigPath(), config);
         sendJson(res, { ok: true, message: "已清除百度推送配置。" });
         return;
       }
@@ -3760,7 +3826,7 @@ async function handleApi(req, res, pathname) {
         token,
         site: String(body.site || "").trim(),
       };
-      writeJson(CONFIG_PATH, config);
+      writeJson(currentSeoConfigPath(), config);
       sendJson(res, { ok: true, message: "已保存百度推送配置。" });
       return;
     }
@@ -3821,35 +3887,41 @@ async function handleApi(req, res, pathname) {
 }
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  if (url.pathname.startsWith("/api/")) {
-    handleApi(req, res, url.pathname);
-    return;
-  }
-  const seoPageAliases = new Set([
-    "/",
-    "/index.html",
-    "/audit.html",
-    "/search-engines.html",
-    "/google.html",
-    "/bing.html",
-    "/baidu.html",
-    "/yandex.html",
-    "/settings.html",
-  ]);
-  const filePath = seoPageAliases.has(url.pathname)
-    ? path.join(PUBLIC_ROOT, "index.html")
-    : path.join(PUBLIC_ROOT, url.pathname.replace(/^\/+/, ""));
-  const resolvedPath = path.resolve(filePath);
-  if (resolvedPath !== PUBLIC_ROOT && !resolvedPath.startsWith(`${PUBLIC_ROOT}${path.sep}`)) {
-    res.writeHead(403);
-    res.end("Forbidden");
-    return;
-  }
-  sendFile(res, resolvedPath);
+  siteRuntime.runForRequest(req, res, () => {
+    const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    if (url.pathname.startsWith("/api/")) {
+      handleApi(req, res, url.pathname);
+      return;
+    }
+    if (url.pathname === "/site-context.js") {
+      sendFile(res, path.join(PACKAGE_ROOT, "tools", "site-context-client.js"));
+      return;
+    }
+    const seoPageAliases = new Set([
+      "/",
+      "/index.html",
+      "/audit.html",
+      "/search-engines.html",
+      "/google.html",
+      "/bing.html",
+      "/baidu.html",
+      "/yandex.html",
+      "/settings.html",
+    ]);
+    const filePath = seoPageAliases.has(url.pathname)
+      ? path.join(PUBLIC_ROOT, "index.html")
+      : path.join(PUBLIC_ROOT, url.pathname.replace(/^\/+/, ""));
+    const resolvedPath = path.resolve(filePath);
+    if (resolvedPath !== PUBLIC_ROOT && !resolvedPath.startsWith(`${PUBLIC_ROOT}${path.sep}`)) {
+      res.writeHead(403);
+      res.end("Forbidden");
+      return;
+    }
+    sendFile(res, resolvedPath);
+  });
 });
 
-server.listen(PORT, () => {
+if (require.main === module) server.listen(PORT, () => {
   const config = readConfig();
   console.log(`SEO publish tool is running: http://localhost:${PORT}`);
   console.log(`Project root: ${path.resolve(TOOL_ROOT, "..", "..")}`);
@@ -3857,3 +3929,5 @@ server.listen(PORT, () => {
   console.log(`Database    : ${findDatabase(config)}`);
   console.log(`Public site : ${config.siteBaseUrl}`);
 });
+
+module.exports = { inspectSite, findLocalEditorRecord, buildVueEditorUrl, calculateSeoHealth, addCategorySeoIssues };

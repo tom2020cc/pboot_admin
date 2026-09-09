@@ -6,10 +6,10 @@ export class OptimizeSeoDto {
   @IsString()
   model: string;
 
-  @ApiProperty({ description: 'Content type', enum: ['news', 'product'] })
+  @ApiProperty({ description: 'Content type', enum: ['news', 'product', 'page'] })
   @IsString()
-  @IsIn(['news', 'product'])
-  contentType: 'news' | 'product';
+  @IsIn(['news', 'product', 'page'])
+  contentType: 'news' | 'product' | 'page';
 
   @ApiProperty({ description: 'Simplified Chinese title' })
   @IsString()

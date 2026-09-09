@@ -21,6 +21,18 @@
             <el-icon><Menu /></el-icon>
             <span>菜单管理</span>
           </el-menu-item>
+          <el-menu-item index="/sites">
+            <el-icon><Monitor /></el-icon>
+            <span>站点管理</span>
+          </el-menu-item>
+          <el-menu-item index="/product-fields">
+            <el-icon><SetUp /></el-icon>
+            <span>产品字段管理</span>
+          </el-menu-item>
+          <el-menu-item index="/template-bindings">
+            <el-icon><Connection /></el-icon>
+            <span>模板栏目绑定</span>
+          </el-menu-item>
           <el-menu-item index="/users">
             <el-icon><User /></el-icon>
             <span>用户管理</span>
@@ -62,7 +74,7 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from "vue-router";
 import { isCollapse } from "@/components/layout/isCollapse";
-import { Document, Goods, House, Menu, Picture, Setting, Tickets, User, VideoCamera } from "@element-plus/icons-vue";
+import { Connection, Document, Goods, House, Menu, Monitor, Picture, Setting, SetUp, Tickets, User, VideoCamera } from "@element-plus/icons-vue";
 
 const route = useRoute();
 </script>

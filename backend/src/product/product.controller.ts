@@ -1,5 +1,9 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseFilters, UseInterceptors } from '@nestjs/common';
+import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { UploadI18nFilter } from '../img-upload/img-upload.controller';
+import { UploadProductThumbnailDto } from './dto/upload-product-thumbnail.dto';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { SyncProductDto } from './dto/sync-product.dto';
@@ -8,17 +12,43 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { OptimizeSeoDto } from '../common/dto/optimize-seo.dto';
 import { TranslateMenuContentDto } from '../common/dto/translate-menu-content.dto';
 import { PbootScopeDto } from '../common/dto/pboot-scope.dto';
+import { ImportProductFolderDto } from './dto/import-product-folder.dto';
+import { SyncProductScopeDto } from './dto/sync-product-scope.dto';
 
 @Controller('products')
 @ApiTags('产品管理')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
+  @Post('thumbnail')
+  @ApiOperation({ summary: '生成 500x400 产品缩略图，保存到当前型号目录' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', properties: { image: { type: 'string', format: 'binary' }, productId: { type: 'integer' }, menuId: { type: 'integer' }, modelName: { type: 'string' }, referenceImage: { type: 'string' } }, required: ['image'] } })
+  @UseFilters(UploadI18nFilter)
+  @UseInterceptors(FileInterceptor('image', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 4 } }))
+  uploadThumbnail(@Body() postObj: UploadProductThumbnailDto, @UploadedFile() file?: Express.Multer.File) {
+    return this.productService.uploadThumbnail(postObj, file);
+  }
+
   @ApiOperation({ summary: '新增产品', description: '添加一个产品内容' })
   @ApiBody({ type: CreateProductDto, description: '输入产品内容' })
   @Post()
   create(@Body() postObj: CreateProductDto) {
     return this.productService.create(postObj);
+  }
+
+  @ApiOperation({ summary: '扫描产品资料文件夹', description: '按型号子文件夹识别主图、轮播图、详情 HTML 和详情图片' })
+  @ApiBody({ type: ImportProductFolderDto })
+  @Post('folder-import/scan')
+  scanProductFolders(@Body() postObj: ImportProductFolderDto) {
+    return this.productService.scanProductFolderImport(postObj);
+  }
+
+  @ApiOperation({ summary: '从文件夹批量新增中文产品', description: '复制图片到当前网站并在指定中文产品栏目创建产品' })
+  @ApiBody({ type: ImportProductFolderDto })
+  @Post('folder-import')
+  importProductFolders(@Body() postObj: ImportProductFolderDto) {
+    return this.productService.importProductFolders(postObj);
   }
 
   @ApiOperation({ summary: '获取产品语言列表' })
@@ -128,6 +158,18 @@ export class ProductController {
   @Post('pboot-scope/push')
   pushPbootScope(@Body() postObj: PbootScopeDto) {
     return this.productService.pushPbootScope(postObj.menuId, postObj.lang);
+  }
+
+  @ApiOperation({ summary: '预检查中文产品栏目及子栏目的全部语言同步范围' })
+  @Post('pboot-scope/preview-all')
+  previewAllLanguageScope(@Body() postObj: SyncProductScopeDto) {
+    return this.productService.syncChineseProductScope(postObj.menuId, false);
+  }
+
+  @ApiOperation({ summary: '按中文栏目同步全部语言到 PB，只新增或更新，不删除产品' })
+  @Post('pboot-scope/sync-all')
+  syncAllLanguageScope(@Body() postObj: SyncProductScopeDto) {
+    return this.productService.syncChineseProductScope(postObj.menuId, true);
   }
 
   @ApiOperation({ summary: '修改产品', description: '根据id修改产品内容' })

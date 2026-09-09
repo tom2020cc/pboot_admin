@@ -1,6 +1,6 @@
-# PbootCMS 管理后台 + SEO 收录工具（shanbo.c）
+# PbootCMS 集中多站点管理系统
 
-PbootCMS 网站（`shanbo.c`）的辅助管理系统，包含一个 NestJS + Vue3 的管理后台，以及配套的 SEO 收录工具、FTP 发布工具、配置向导等独立工具。用于内容多语言翻译、SEO 优化、sitemap 生成、Google/Yandex 收录提交、视频管理等。
+一套服务集中管理多个 PbootCMS 网站，包含 NestJS + Vue3 管理后台、SEO 收录工具和 FTP 发布/安全巡检工具。支持内容多语言翻译、SEO 优化、sitemap、Google/Yandex 收录提交、视频与报价单管理。
 
 > ⚠️ 本仓库是「干净可移植包」，已排除所有密钥与本地数据（API Key、Google 服务账号私钥、FTP 密码、IndexNow Key、本地 SQLite 库等）。部署后需按下方说明自行配置。
 
@@ -12,7 +12,6 @@ PbootCMS 网站（`shanbo.c`）的辅助管理系统，包含一个 NestJS + Vue
 | 管理后台前端 | Vue 3 + Vite + Element Plus + TypeScript |
 | SEO 工具 | 原生 Node.js http 服务 + 原生 HTML/JS（无框架） |
 | FTP 工具 | 原生 Node.js http 服务 + 原生 HTML/JS |
-| 配置向导 | 原生 Node.js http 服务 + 原生 HTML/JS |
 
 ## 目录结构
 
@@ -28,9 +27,10 @@ pboot_admin_backup_xxxx/
 │   ├── seo_publish_tool/ # SEO 收录工具（sitemap/robots、Google Indexing、Yandex/IndexNow、AI SEO 修复）
 │   │   └── ai.config.example.json
 │   ├── ftp_publish_tool/ # FTP 发布工具
-│   └── config_wizard/    # 配置向导（写 backend/.env 的 Key、站点地址、油管配置等）
+│   └── config_wizard/    # 旧版兼容代码，集中版日常不再启动
+├── managed-sites/        # 每个受管网站独立的配置、接口、状态与备份目录
 ├── docs/                 # 文档
-├── *.cmd                 # Windows 一键脚本（安装/配置/启动/停止）
+├── *.cmd                 # Windows 一键脚本（安装/站点管理/启动/停止）
 └── README_FIRST.md       # 上手说明
 ```
 
@@ -38,40 +38,39 @@ pboot_admin_backup_xxxx/
 
 | 服务 | 端口 |
 |---|---|
-| 管理后台后端 | 5008（`backend/.env` 的 `BACKEND_PORT`） |
-| 管理后台前端 | 5178 |
-| SEO 工具 | 5288（端口被占时自动换 5289+） |
-| FTP 工具 | 5189（端口被占时自动换 5190+） |
+| 管理后台后端 | 5108（`backend/.env` 的 `BACKEND_PORT`） |
+| 管理后台前端 | 5278 |
+| SEO 工具 | 5388 |
+| FTP 工具 | 5389 |
 
 ## 部署步骤
 
+Linux 宝塔生产部署请优先阅读：[宝塔集中部署图文教程](docs/BAOTA_MULTI_SITE_DEPLOY_ZH.md)。项目同时提供 `deploy/` 下的 PM2、Nginx、生产环境变量和健康检查模板。
+
 1. **安装依赖**：双击 `00-install.cmd`（或 `pnpm install`）。
-2. **配置**：
-   - 复制 `backend/.env.example` → `backend/.env`，填写数据库路径、AI Key（DASHSCOPE_API_KEY / ZHIPU_API_KEY / DEEPSEEK_API_KEY / OPENAI_API_KEY）、`YOUTUBE_API_KEY` 等。
-   - 复制 `frontend/.env.example` → `frontend/.env.local`（如需）。
-   - SEO/FTP 工具的 `seo.config.json` / `ftp.config.json` 用各自页面的配置界面生成（不在仓库里）。
-3. **启动**：双击 `07-start-all.cmd`（后端使用可见常驻终端，前端、SEO、FTP 在后台运行），或单独运行 `02-start.cmd` / `05-start-seo-tool.cmd` / `06-start-ftp-tool.cmd`。配置向导只在修改配置时运行。
+2. **配置**：首次启动会自动生成 `backend/.env`。模型 Key 在模型配置页统一填写；各网站路径、数据库、网址和 YouTube 频道 ID 在站点管理中填写。
+3. **启动**：双击 `07-start-all.cmd`（后端使用可见常驻终端，前端、SEO、FTP 在后台运行），或单独运行 `02-start.cmd` / `05-start-seo-tool.cmd` / `06-start-ftp-tool.cmd`。
 4. **创建管理员**：双击 `03-create-admin.cmd`。
-5. 访问前端 `http://localhost:5178`、SEO 工具 `http://localhost:5288`。
+5. 访问前端 `http://localhost:5278`、SEO 工具 `http://localhost:5388`。
 
 ## 脚本速查
 
 | 脚本 | 作用 |
 |---|---|
 | `00-install.cmd` | 安装前后端依赖 |
-| `01-config.cmd` | 打开配置向导 |
+| `01-sites.cmd` | 启动服务并打开集中站点管理 |
 | `02-start.cmd` | 启动管理后台（后端可见终端 + 前端后台） |
 | `03-create-admin.cmd` | 创建管理员账号 |
 | `04-stop-ports.cmd` | 停止所有相关端口 |
 | `05-start-seo-tool.cmd` | 启动 SEO 收录工具 |
 | `06-start-ftp-tool.cmd` | 启动 FTP 发布工具 |
-| `07-start-all.cmd` | 启动日常四项服务，不常驻配置向导 |
+| `07-start-all.cmd` | 启动日常四项服务 |
 
 ## 包含 / 排除清单
 
 **包含**：全部源码（backend/src、frontend/src、tools 各工具的 js/html）、`package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、tsconfig/vite 配置、`docs/`、`.cmd` 脚本、`.env.example` / `ai.config.example.json` 等模板。
 
-**排除**：`node_modules/`、`dist/`、`*.log`、`*.sqlite` / `*.db`（本地库）、`backend/.env`、`frontend/.env.local`、`tools/*/seo.config.json`、`tools/*/ftp.config.json`、`tools/*/ai.config.json`、`google-submitted.json`、`.runtime.json`、`backend/uploads/`、`backups/`、`tools/*/logs/`。
+**排除**：`node_modules/`、`dist/`、`*.log`、`*.sqlite` / `*.db`（本地库）、`backend/.env`、`frontend/.env.local`、`managed-sites/*/`（每站 Key、FTP、Google、上传文件和断点）、`tools/*/ai.config.json`、`backups/`、`tools/*/logs/`。
 
 ## 常见问题
 

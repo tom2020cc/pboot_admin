@@ -42,7 +42,7 @@ if errorlevel 1 exit /b 1
 
 echo.
 echo OK: All dependencies are installed with pnpm.
-echo Next: run 01-config.cmd.
+echo Next: run 07-start-all.cmd, then add websites in Site Management.
 timeout /t 3 /nobreak >nul
 exit /b 0
 

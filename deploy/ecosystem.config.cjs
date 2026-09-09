@@ -1,0 +1,36 @@
+module.exports = {
+  apps: [
+    {
+      name: 'pboot-admin-api',
+      cwd: '/www/wwwroot/pboot_admin_center/backend',
+      script: 'dist/main.js',
+      instances: 1,
+      exec_mode: 'fork',
+      interpreter: 'node',
+      env: { NODE_ENV: 'production' },
+      autorestart: true,
+      max_memory_restart: '1G',
+      time: true,
+    },
+    {
+      name: 'pboot-seo-tool',
+      cwd: '/www/wwwroot/pboot_admin_center/tools/seo_publish_tool',
+      script: 'server.js',
+      interpreter: 'node',
+      env: { NODE_ENV: 'production', SEO_TOOL_PORT: '5388' },
+      autorestart: true,
+      max_memory_restart: '768M',
+      time: true,
+    },
+    {
+      name: 'pboot-ftp-tool',
+      cwd: '/www/wwwroot/pboot_admin_center/tools/ftp_publish_tool',
+      script: 'server.js',
+      interpreter: 'node',
+      env: { NODE_ENV: 'production', FTP_TOOL_PORT: '5389' },
+      autorestart: true,
+      max_memory_restart: '512M',
+      time: true,
+    },
+  ],
+};

@@ -1,45 +1,52 @@
-# Deployment Guide
+# Central Multi-Site Deployment Guide
 
-## Required software
+## Local Windows setup
 
-- Windows
-- Node.js LTS
-- phpStudy and the target PbootCMS website
+1. Install Node.js LTS, pnpm and phpStudy.
+2. Put this project in `E:\phpstudy_pro\WWW\pboot_admin_center`.
+3. Run `00-install.cmd` once.
+4. Run `07-start-all.cmd` and keep the visible backend API terminal open.
+5. Run `03-create-admin.cmd` when the installation has no administrator.
+6. Open `http://localhost:5278/#/sites`.
+7. Scan the phpStudy `WWW` parent directory, select the PbootCMS sites and import them.
 
-## Steps
+Do not create one copy of this management project per website. All websites share ports `5108`, `5278`, `5388` and `5389`; the selected `siteId` determines which website is read or changed.
 
-1. Copy this folder to the new computer.
-2. Double-click `00-install.cmd`.
-3. Double-click `01-config.cmd`.
-4. Fill in the PbootCMS site root, database path, public domain, translation keys, and FTP settings.
-5. Save the configuration.
-6. Double-click `07-start-all.cmd` and keep the visible backend terminal open.
-7. Open `http://localhost:5178`.
+## Per-site and shared data
 
-## First data import
+Shared by every website:
 
-For a new local database, import data in this order:
+- Backend/frontend/SEO/FTP source code and processes.
+- Administrator accounts.
+- AI model API keys.
+- YouTube Data API key.
 
-1. Open Menu Management and run `Sync menus from PbootCMS`.
-2. Open News Management and run `Sync PbootCMS data`.
-3. Open Product, Page and Video Management and import their data as needed.
+Independent for every website:
 
-Pulling data from PbootCMS is allowed when the local database is empty. Pushing
-local data to PbootCMS is still blocked when the relevant local table is empty,
-so an empty new installation cannot overwrite the website database.
+- PbootCMS root path, SQLite database and public URL.
+- YouTube channel ID.
+- SEO, Search Console, Indexing API, IndexNow and Baidu settings.
+- FTP credentials, trusted baseline, scan history and resume checkpoint.
+- Menu, news, product, page, video and quotation records, isolated by `siteId`.
 
-## Important notes
+Runtime files are stored in `managed-sites/<site-code>/` and are excluded from Git because they may contain secrets.
 
-- This package uses pnpm, matching the original project environment.
-- Do not install the main project dependencies with npm.
-- Do not copy `node_modules`.
-- Do not reuse `.env` from another website. Use `01-config.cmd` to generate a fresh one.
-- If ports are occupied, run `04-stop-ports.cmd`.
+## First import for a site
+
+1. Select the site in the top site switcher.
+2. Import menus from that site's PbootCMS database.
+3. Import news, products, pages and videos as needed.
+4. Check the selected site name before every full import, push or FTP operation.
+
+Full imports delete and rebuild only the selected site's central records. They no longer clear another site's data.
+
+## Production deployment
+
+For Linux and BT Panel, follow [BAOTA_MULTI_SITE_DEPLOY_ZH.md](BAOTA_MULTI_SITE_DEPLOY_ZH.md). Use one PM2 service set and one `managed-sites` directory. Do not assign a separate backend port to every PbootCMS website.
 
 ## Default ports
 
-- Backend: `http://localhost:5000`
-- Frontend: `http://localhost:5178`
-- Config wizard: `http://localhost:5190` (run `01-config.cmd` only when settings change)
-- SEO tool: `http://localhost:5188`
-- FTP tool: `http://localhost:5189`
+- Backend API: `http://localhost:5108`
+- Management frontend: `http://localhost:5278`
+- SEO tool: `http://localhost:5388`
+- FTP tool: `http://localhost:5389`

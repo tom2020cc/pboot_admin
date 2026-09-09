@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
+import { SitesService } from '../sites/sites.service';
 
 type GuardedTable = 'menu' | 'news' | 'product' | 'video' | 'page';
 
@@ -16,6 +17,7 @@ export class SyncGuardService {
   constructor(
     private readonly config: ConfigService,
     private readonly dataSource: DataSource,
+    private readonly sitesService: SitesService,
   ) {}
 
   async protectBeforeDangerousSync(action: string, requiredTable?: GuardedTable) {
@@ -27,21 +29,18 @@ export class SyncGuardService {
   }
 
   private assertProjectIsolation() {
-    const siteRootValue = this.config.get<string>('PBOOT_SITE_ROOT', '');
-    const pbootDbValue = this.config.get<string>('PBOOT_DB_PATH', '');
-    const packageRoot = path.resolve(__dirname, '..', '..', '..');
+    const currentSite = this.sitesService.getCurrentSite();
+    const siteRootValue = currentSite.rootPath;
+    const pbootDbValue = currentSite.dbPath;
     const siteRoot = path.resolve(siteRootValue || '.');
     const pbootDbPath = path.resolve(pbootDbValue || '.');
     const siteDataDir = path.join(siteRoot, 'data');
 
     if (!siteRootValue || !fs.existsSync(siteRoot) || !fs.statSync(siteRoot).isDirectory()) {
-      throw new BadRequestException('项目隔离保护：当前网站根目录无效，请先运行“打开配置向导”。');
-    }
-    if (!this.isPathInside(siteRoot, packageRoot)) {
-      throw new BadRequestException('项目隔离保护：当前 pboot_admin 不在所配置的网站根目录内，已禁止跨网站操作。');
+      throw new BadRequestException('项目隔离保护：当前网站根目录无效，请先到“站点管理”检查网站配置。');
     }
     if (!pbootDbValue || !fs.existsSync(pbootDbPath) || !fs.statSync(pbootDbPath).isFile()) {
-      throw new BadRequestException('项目隔离保护：当前网站数据库不存在，请在配置向导中重新选择 data 目录下的 .db 文件。');
+      throw new BadRequestException('项目隔离保护：当前网站数据库不存在，请在“站点管理”中重新选择 data 目录下的 .db 文件。');
     }
     if (!this.isPathInside(siteDataDir, pbootDbPath)) {
       throw new BadRequestException('项目隔离保护：所选数据库不属于当前网站，已禁止跨网站读取或写入。');
@@ -61,9 +60,11 @@ export class SyncGuardService {
       throw new BadRequestException(`同步保护：没有找到本地数据库 ${dbPath}`);
     }
 
-    const parsed = path.parse(dbPath);
     const safeAction = String(action || 'dangerous_sync').replace(/[^\w-]+/g, '_');
-    const backupPath = path.join(parsed.dir, `${parsed.name}.before_${safeAction}_${this.timestamp()}${parsed.ext}`);
+    const parsed = path.parse(dbPath);
+    const backupDir = path.join(this.sitesService.getCurrentSiteStorageDir('backups'), 'backend-database');
+    fs.mkdirSync(backupDir, { recursive: true });
+    const backupPath = path.join(backupDir, `${parsed.name}.before_${safeAction}_${this.timestamp()}${parsed.ext}`);
     fs.copyFileSync(dbPath, backupPath);
     return backupPath;
   }
@@ -130,9 +131,19 @@ export class SyncGuardService {
 
   private async countTable(tableName: string) {
     try {
+      const siteId = this.sitesService.getCurrentSiteId();
       if (tableName === 'news') {
         const rows = await this.dataSource.query(
-          'select count(*) as count from news n where exists (select 1 from news_translations t where t.newsId=n.id)',
+          'select count(*) as count from news n where n.siteId=? and exists (select 1 from news_translations t where t.newsId=n.id)',
+          [siteId],
+        );
+        return Number(rows?.[0]?.count ?? rows?.[0]?.COUNT ?? 0);
+      }
+      if (['menu', 'product', 'page', 'video'].includes(tableName)) {
+        const actualTable = tableName === 'video' ? 'video_item' : tableName;
+        const rows = await this.dataSource.query(
+          `select count(*) as count from "${actualTable}" where siteId=?`,
+          [siteId],
         );
         return Number(rows?.[0]?.count ?? rows?.[0]?.COUNT ?? 0);
       }

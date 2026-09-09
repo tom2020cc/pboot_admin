@@ -1,0 +1,14 @@
+Pboot Admin 集中管理版
+
+当前开发目录：E:\phpstudy_pro\WWW\pboot_admin_center
+默认管理站点：E:\phpstudy_pro\WWW\shanbo.c
+
+日常启动：双击 07-start-all.cmd
+
+管理后台：http://localhost:5278
+后端接口：http://localhost:5108/api-docs
+SEO 工具：http://localhost:5388
+FTP 工具：http://localhost:5389
+站点管理：http://localhost:5278/#/sites
+
+原项目目录仍保留，但旧端口服务已经停止。后续代码修改、测试和宝塔迁移均以本目录为准。

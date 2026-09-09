@@ -1,10 +1,13 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity()
-@Index(['playlistId', 'videoId'], { unique: true })
+@Index(['siteId', 'playlistId', 'videoId'], { unique: true })
 export class VideoItem {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({ default: 0, comment: 'Managed site id' })
+  siteId: number;
 
   @Column({ length: 64, comment: 'Owning VideoPlaylist.playlistId (PLxxx)' })
   playlistId: string;

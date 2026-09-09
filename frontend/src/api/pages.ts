@@ -4,10 +4,12 @@ import {
   DEFAULT_NEWS_LANG,
   NEWS_LANGUAGES,
   type NewsLanguageCode,
+  type OptimizeNewsSeoResult,
   type TranslateDraftPayload,
   type TranslateDraftResult,
   type TranslationModel,
 } from "@/api/news";
+import { buildLanguageUrlName } from "@/utils/seoUrlName";
 
 const LONG_REQUEST_TIMEOUT = 180000;
 
@@ -49,6 +51,17 @@ export type PageSyncPayload = {
   all?: boolean;
 };
 
+export type OptimizePageSeoPayload = {
+  model: string;
+  contentType: "page";
+  title: string;
+  subtitle?: string;
+  keywords?: string;
+  urlName?: string;
+  summary?: string;
+  content?: string;
+};
+
 export const createEmptyPageTranslations = (): PageTranslation[] =>
   NEWS_LANGUAGES.map((item) => ({
     lang: item.code,
@@ -74,17 +87,7 @@ export const ensurePageTranslations = (translations: PageTranslation[] = []) => 
 };
 
 export const buildPageUrlName = (sourceUrlName: string, targetLang: string, fallbackTitle: string) => {
-  const prefix = targetLang === DEFAULT_NEWS_LANG ? "cn" : String(targetLang || "cn").toLowerCase();
-  const normalized = String(sourceUrlName || fallbackTitle || "content")
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\/[^/]+/i, "")
-    .replace(/^\/+|\/+$/g, "")
-    .replace(/^(?:cn|en|es|fr|ru|ar|pt)-/i, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 56);
-  return `${prefix}-${normalized || "content"}`;
+  return buildLanguageUrlName(targetLang, fallbackTitle, sourceUrlName);
 };
 
 export const findMissingPageSeoFields = (translation: PageTranslation) => {
@@ -169,6 +172,15 @@ export const translatePageDraft = (postObj: TranslateDraftPayload) => {
   return request<TranslateDraftResult>({
     method: "POST",
     url: "/pages/translate-draft",
+    data: postObj,
+    timeout: LONG_REQUEST_TIMEOUT,
+  });
+};
+
+export const optimizePageSeoDraft = (postObj: OptimizePageSeoPayload) => {
+  return request<OptimizeNewsSeoResult>({
+    method: "POST",
+    url: "/pages/optimize-seo",
     data: postObj,
     timeout: LONG_REQUEST_TIMEOUT,
   });

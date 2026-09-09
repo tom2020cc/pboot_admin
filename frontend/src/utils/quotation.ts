@@ -1,5 +1,6 @@
 import { repairTranslatedHtml } from "@/api/uploads";
 import type { ProductItem } from "@/api/products";
+import { chineseParameterSpecs, productReferencePrice } from './productParameters';
 
 export type QuotationLine = {
   id: string;
@@ -74,11 +75,11 @@ export const createDefaultQuotation = (): QuotationDraft => ({
   quotationNo: createQuotationNo(),
   quotationDate: localDateValue(),
   title: "工程机械商业报价单",
-  companyName: "山东恒建行工程机械有限公司",
-  companySubtitle: "工程机械与钻探设备解决方案",
-  logoUrl: "https://shanbo.cc/static/logo.jpg",
-  website: "https://shanbo.cc",
-  assetBaseUrl: "https://shanbo.cc",
+  companyName: "",
+  companySubtitle: "",
+  logoUrl: "",
+  website: "",
+  assetBaseUrl: "",
   customerCompany: "",
   customerContact: "",
   salesName: "",
@@ -185,8 +186,9 @@ export const parseSpecificationText = (value = ""): QuotationSpec[] => {
   return specs;
 };
 
-export const createQuotationLine = (product: ProductItem, categoryName = ""): QuotationLine => {
-  const specs = extractProductSpecifications(product.content || "");
+export const createQuotationLine = (product: ProductItem, categoryName = "", currency = 'USD'): QuotationLine => {
+  const sharedSpecs = product.parameterRows?.map((row) => ({ group: '公共参数', name: row.unit ? `${row.name} (${row.unit})` : row.name, value: row.value })) ?? chineseParameterSpecs(product.sharedParameters);
+  const specs = [...sharedSpecs, ...extractProductSpecifications(product.content || "")];
   const fallback = [product.subtitle, product.summary].map(cleanText).filter(Boolean).slice(0, 2);
   const specText = specs.length
     ? formatSpecificationText(specs)
@@ -201,7 +203,7 @@ export const createQuotationLine = (product: ProductItem, categoryName = ""): Qu
     images: image ? [image] : [],
     quantity: 1,
     unit: "台",
-    unitPrice: 0,
+    unitPrice: productReferencePrice(product.sharedParameters, currency),
     specText,
     remark: "",
   };
@@ -234,8 +236,8 @@ export const publicAssetUrl = (value: string, baseUrl: string) => {
   const source = String(value || "").trim();
   if (!source) return "";
   if (/^(https?:)?\/\//i.test(source) || /^data:/i.test(source)) return source;
-  const base = String(baseUrl || "https://shanbo.cc").replace(/\/+$/, "");
-  return `${base}/${source.replace(/^\/+/, "")}`;
+  const base = String(baseUrl || "").replace(/\/+$/, "");
+  return base ? `${base}/${source.replace(/^\/+/, "")}` : source;
 };
 
 export const formatMoney = (value: number, currency = "USD") => {

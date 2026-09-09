@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="/site-context.js"></script>
     <title>PbootCMS SEO 检查工具</title>
     <script>
       (() => {
@@ -414,6 +415,7 @@
       }
     </style>
     <link rel="stylesheet" href="/seo-shell.css" />
+    <script defer src="/navigation-icons.js"></script>
     <script defer src="/seo-pages.js"></script>
   </head>
   <body class="seo-page">
@@ -461,6 +463,10 @@
         <button class="success" id="prepareGoogleBtn">一键准备 Google Sitemap</button>
         <span>生成、上传并检查公开 Sitemap，然后继续下方 Search Console 工作流。</span>
       </div>
+      <div class="toolbar" data-seo-pages="audit">
+        <button class="primary" id="auditRefreshBtn">刷新检查</button>
+      </div>
+      <div id="serviceStatus" class="note" role="status" hidden></div>
       <div class="toolbar engine-commandbar" data-seo-pages="bing">
         <button id="keyBtn">生成 IndexNow Key</button>
         <button class="warn" id="pushBtn">推送 IndexNow（Bing 等）</button>
@@ -1094,7 +1100,6 @@
             <label><input type="checkbox" value="description" checked /> 描述缺失</label>
             <label><input type="checkbox" value="description-too-long" checked /> 描述过长</label>
             <label><input type="checkbox" value="content-too-short" checked /> 正文过短</label>
-            <label><input type="checkbox" value="image-alt" checked /> 图片ALT</label>
           </div>
           <details class="gi-steps" id="aiKeyConfig">
             <summary>配置 AI API Key（未配置的模型会置灰，可在这里补填，保存即生效）</summary>
@@ -1448,7 +1453,7 @@
 
       function renderNavigation(items) {
         $("toolNav").innerHTML = (items || [])
-          .map((item) => `<a class="${item.active ? "active" : ""}" href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>`)
+          .map((item) => `<a class="${item.active ? "active" : ""}" href="${escapeHtml(item.url)}">${NavigationIcons.icon(item.id)}<span>${escapeHtml(item.label)}</span></a>`)
           .join("");
       }
 
@@ -3230,7 +3235,7 @@
         currentIssues = report.issues || [];
         currentUrls = report.urls || [];
         issuePage = 1;
-        $("healthScore").textContent = `${report.stats.health?.score ?? 0} 分`;
+        $("healthScore").textContent = report.stats.health?.score == null ? "暂无数据" : `${report.stats.health.score} 分`;
         $("healthDetail").textContent = `${report.stats.health?.cleanRecords ?? 0} 条记录无已知问题，${report.stats.health?.affectedRecords ?? 0} 条需关注`;
         $("urlCount").textContent = report.stats.urls;
         $("contentCount").textContent = report.stats.contents;
@@ -3329,6 +3334,7 @@
       }
 
       $("refreshBtn").onclick = () => runAction(refresh);
+      $("auditRefreshBtn").onclick = () => runAction(refresh);
       $("saveConfigBtn").onclick = () => runAction(async () => {
         const result = await api("/api/config", {
           method: "POST",
@@ -3818,7 +3824,12 @@
           setStatus("模型连接测试通过");
         });
 
-      Promise.all([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus(), loadBaiduStatus(), loadChineseEngines(), loadOverview(), loadIndexCoverage(), loadConfigBackupStatus()]).then(refresh).catch((error) => {
+      Promise.allSettled([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus(), loadBaiduStatus(), loadChineseEngines(), loadOverview(), loadIndexCoverage(), loadConfigBackupStatus()]).then((results) => {
+        const failed = results.filter(result => result.status === 'rejected');
+        $("serviceStatus").hidden = !failed.length;
+        $("serviceStatus").textContent = failed.length ? `${failed.length} 项辅助服务状态未加载` : '';
+      });
+      refresh().catch((error) => {
         setStatus(error.message || String(error), true);
       });
       loadAiStatus();

@@ -7,18 +7,28 @@ export type MenuItem = {
   publisher: string;
   href: string;
   code: string;
+  acode?: string;
+  sourceMenuId?: number;
+  pbootSyncPending?: boolean;
+  pendingDelete?: boolean;
+  translationNeedsUpdate?: boolean;
   urlName: string;
   model: string;
   listTemplate: string;
   detailTemplate: string;
   icon: string[];
+  thumbnail?: string | null;
+  largeImage?: string | null;
+  seoTitle?: string | null;
+  seoKeywords?: string | null;
+  seoDescription?: string | null;
   show: boolean;
   orderNum: number;
   createTime?: string;
   updateTime?: string;
 };
 
-export type MenuForm = Omit<MenuItem, "id" | "createTime" | "updateTime">;
+export type MenuForm = Omit<MenuItem, "id" | "createTime" | "updateTime" | "acode" | "pbootSyncPending" | "pendingDelete" | "translationNeedsUpdate">;
 
 export type MenuSyncResult = {
   msg: string;
@@ -52,6 +62,11 @@ export type MenuTranslationModel = {
   displayLabel?: string;
   provider: string;
   available: boolean;
+  operational?: boolean;
+  healthStatus?: "ok" | "failed" | "untested";
+  healthElapsedMs?: number | null;
+  healthMessage?: string;
+  healthTestedAt?: string;
   priority?: number;
   recommended?: boolean;
   purpose?: string;
@@ -68,13 +83,23 @@ export type MenuTranslateResult = {
   sourceCount: number;
   localBackupPath: string;
   note: string;
-  results: Array<{ acode: string; translated: number; skipped: number }>;
+  results: Array<{
+    acode: string;
+    translated: number;
+    created: number;
+    updated: number;
+    skipped: number;
+    model: string;
+  }>;
+  failures: Array<{ acode: string; message: string }>;
 };
 
 export type MenuPushAllResult = {
+  deleted: number;
   msg: string;
   backupPath: string;
   total: number;
+  created: number;
   updated: number;
   skipped: number;
   skippedFields: string[];
@@ -83,6 +108,13 @@ export type MenuPushAllResult = {
 export const getAll = () => {
   return request<MenuItem[]>({ method: "GET", url: "/menus" });
 };
+
+export const getPbootMenuModels = () => request<Array<{ value: string; label: string }>>({ method: 'GET', url: '/menus/pboot-models' });
+export const previewMenuDelete = (id: string | number) => request<{
+  canDelete: boolean; reason: string;
+  items: Array<{ id: string; name: string; acode: string }>;
+}>({ method: 'GET', url: `/menus/${id}/delete-preview` });
+export const restoreMenu = (id: string | number) => request({ method: 'POST', url: `/menus/${id}/restore` });
 
 export const create = (postObj: MenuForm) => {
   return request<MenuItem>({ method: "POST", url: "/menus", data: postObj });
@@ -120,14 +152,36 @@ export const getMenuTranslationModels = () => {
   return request<MenuTranslationModel[]>({ method: "GET", url: "/menus/translation-models" });
 };
 
-export const translateMenusFromChinese = (model: string) => {
+export type MenuSeoDraft = {
+  model: string;
+  lang: 'cn';
+  menuId?: string;
+  name: string;
+  parentName?: string;
+  seoTitle?: string;
+  seoKeywords?: string;
+  seoDescription?: string;
+};
+
+export const optimizeMenuSeoDraft = (data: MenuSeoDraft) => request<{
+  model: string;
+  lang: 'cn';
+  seoTitle: string;
+  seoKeywords: string;
+  seoDescription: string;
+}>({ method: 'POST', url: '/menus/optimize-seo', data, timeout: 180000 });
+
+export const translateMenusFromChinese = (model: string, targetAcodes?: string[]) => {
   return request<MenuTranslateResult>({
     method: "POST",
     url: "/menus/translate-all",
-    data: { model },
-    timeout: 180000,
+    data: { model, targetAcodes },
+    timeout: 1800000,
   });
 };
+
+export const translateMenuFromChinese = (id: string | number, model: string, targetAcodes: string[]) =>
+  request<MenuTranslateResult>({ method: 'POST', url: `/menus/${id}/translate`, data: { model, targetAcodes }, timeout: 600000 });
 
 export const syncAllMenusToPboot = () => {
   return request<MenuPushAllResult>({

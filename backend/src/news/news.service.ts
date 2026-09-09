@@ -35,9 +35,23 @@ import { TranslateMenuContentDto } from '../common/dto/translate-menu-content.dt
 import { MenuTranslationJob } from '../common/menu-translation-job';
 import { resolveChineseMenuScope } from '../common/menu-translation-scope';
 import { fetchWithAiRetry, formatAiErrorMessage, isFallbackableAiErrorText, sleep } from '../common/ai-retry';
-import { repairTranslatedHtml, translateHtmlContentSafely } from '../common/translation-html-utils';
+import { decodeEscapedHtml, repairTranslatedHtml, translateHtmlContentSafely } from '../common/translation-html-utils';
 import { buildTranslationModelCatalog, buildTranslationModelFallbackChain } from '../common/translation-model-catalog';
-import { extractTranslationJson } from '../common/ai-json';
+import { extractAiChoiceText, extractTranslationJson } from '../common/ai-json';
+import { SitesService } from '../sites/sites.service';
+import { copyUploadedImageToPboot, rewriteUploadedHtmlImages } from '../common/pboot-uploaded-images';
+import { createFolderAssetResolver } from '../common/folder-import-assets';
+import { ensureFolderThumbnail, resolveContentThumbnailDirectory, saveUploadedContentThumbnail } from '../common/content-thumbnail';
+import { UploadNewsThumbnailDto } from './dto/upload-news-thumbnail.dto';
+import { contentTranslationProgress, missingTranslationFields } from '../common/content-translation-progress';
+import { ImportNewsFolderDto } from './dto/import-news-folder.dto';
+import {
+  buildImportedNewsContent,
+  readNewsDetailHtml,
+  safeNewsAssetSegment,
+  scanNewsFolders,
+  type NewsFolderCandidate,
+} from './news-folder-import';
 
 const initSqlJs = require('sql.js');
 
@@ -50,6 +64,11 @@ type PbootLanguageConfig = {
   acode: string;
   scode: string;
   sortFilename: string;
+};
+
+type NewsContent = {
+  lang: string; title: string; urlName: string; subtitle: string; keywords: string;
+  description: string; summary: string; content: string;
 };
 
 type PbootSyncItem = {
@@ -71,11 +90,15 @@ const PBOOT_NEWS_SORTS: Record<string, PbootLanguageConfig> = {
   ru: { acode: 'ru', scode: '530', sortFilename: 'ru-Industry-News' },
   ar: { acode: 'ar', scode: '862', sortFilename: 'ar-Industry-News' },
   pt: { acode: 'pt', scode: '928', sortFilename: 'pt-Industry-News' },
+  id: { acode: 'id', scode: '', sortFilename: 'id-Industry-News' },
+  tr: { acode: 'tr', scode: '', sortFilename: 'tr-Industry-News' },
+  vi: { acode: 'vi', scode: '', sortFilename: 'vi-Industry-News' },
 };
 
 @Injectable()
 export class NewsService {
   private readonly menuTranslationJobs = new Map<string, MenuTranslationJob>();
+  private readonly adoptedLegacySites = new Set<number>();
 
   constructor(
     @InjectRepository(News) private readonly newsRepo: Repository<News>,
@@ -83,10 +106,12 @@ export class NewsService {
     @InjectRepository(Menu) private readonly menusRepo: Repository<Menu>,
     private readonly config: ConfigService,
     private readonly syncGuard: SyncGuardService,
+    private readonly sitesService: SitesService,
   ) {}
 
-  findLanguages() {
-    return NEWS_LANGUAGES;
+  async findLanguages() {
+    const configured = new Set((await this.sitesService.getCurrentSiteLanguages()).map((item) => item.code));
+    return NEWS_LANGUAGES.filter((item) => configured.has(item.code));
   }
 
   findTranslationModels() {
@@ -158,45 +183,72 @@ export class NewsService {
     }
 
     const chain = buildTranslationModelFallbackChain(models, model.value);
-    let lastError: unknown;
-    for (const candidate of chain) {
-      try {
-        const translated = await this.translateDraftWithModel({ ...postObj, model: candidate.value }, candidate);
-        return {
-          ...translated,
-          requestedModel: postObj.model,
-          fallbackUsed: candidate.value !== postObj.model,
-        };
-      } catch (error) {
-        lastError = error;
-        if (!isFallbackableAiErrorText(error instanceof Error ? error.message : String(error))) throw error;
+    const controller = new AbortController();
+    const deadlineMs = 165000;
+    let deadlineReached = false;
+    const timer = setTimeout(() => {
+      deadlineReached = true;
+      controller.abort();
+    }, deadlineMs);
+
+    try {
+      let lastError: unknown;
+      for (const candidate of chain) {
+        if (deadlineReached) break;
+        try {
+          const translated = await this.translateDraftWithModel(
+            { ...postObj, model: candidate.value },
+            candidate,
+            controller.signal,
+          );
+          return {
+            ...translated,
+            requestedModel: postObj.model,
+            fallbackUsed: candidate.value !== postObj.model,
+          };
+        } catch (error) {
+          lastError = error;
+          if (deadlineReached) break;
+          if (!isFallbackableAiErrorText(error instanceof Error ? error.message : String(error))) throw error;
+        }
       }
+      if (deadlineReached) {
+        throw new BadRequestException('当前语言在 165 秒内未完成，后台已停止本次请求，可从已保存进度继续');
+      }
+      throw lastError instanceof Error ? lastError : new BadRequestException('所有可用翻译模型均调用失败');
+    } finally {
+      clearTimeout(timer);
     }
-    throw lastError instanceof Error ? lastError : new BadRequestException('所有可用翻译模型均调用失败');
   }
 
-  private async translateDraftWithModel(postObj: TranslateNewsDto, model: ReturnType<NewsService['findTranslationModels']>[number]) {
-    if (model.value === 'google-free') return await this.translateWithGoogleFree(postObj);
-    if (model.value === 'mymemory-free') return await this.translateWithMyMemoryFree(postObj);
-    if (model.value === 'qwen-mt-lite') return await this.translateWithQwenMtLite(postObj);
-    if (model.provider === 'zhipu') return await this.translateWithZhipu(postObj);
-    if (model.provider === 'deepseek') return await this.translateWithDeepSeek(postObj);
-    if (model.provider === 'qwen') return await this.translateWithQwen(postObj);
+  private async translateDraftWithModel(
+    postObj: TranslateNewsDto,
+    model: ReturnType<NewsService['findTranslationModels']>[number],
+    signal?: AbortSignal,
+  ) {
+    if (model.value === 'google-free') return await this.translateWithGoogleFree(postObj, signal);
+    if (model.value === 'mymemory-free') return await this.translateWithMyMemoryFree(postObj, signal);
+    if (model.value === 'qwen-mt-lite') return await this.translateWithQwenMtLite(postObj, signal);
+    if (model.provider === 'zhipu') return await this.translateWithZhipu(postObj, signal);
+    if (model.provider === 'deepseek') return await this.translateWithDeepSeek(postObj, signal);
+    if (model.provider === 'qwen') return await this.translateWithQwen(postObj, signal);
 
-    return await this.translateWithOpenAI(postObj);
+    return await this.translateWithOpenAI(postObj, signal);
   }
 
   async startMenuTranslation(postObj: TranslateMenuContentDto) {
     const model = this.findTranslationModels().find((item) => item.value === postObj.model);
     if (!model) throw new BadRequestException('Unsupported translation model.');
     if (!model.available) throw new BadRequestException('The selected translation model is not configured.');
+    if (!(await this.getConfiguredLanguageCodes()).includes(postObj.targetLang)) {
+      throw new BadRequestException(`当前网站未配置 ${postObj.targetLang} 语言区域，无法翻译`);
+    }
 
-    const menus = await this.menusRepo.find({
-      select: ['id', 'parentId', 'code', 'urlName', 'href', 'name', 'model'],
-    });
+    const siteId = await this.currentSiteId();
+    const menus = await this.findSiteMenus();
     const scope = resolveChineseMenuScope(menus, postObj.menuId, postObj.targetLang, '2');
     const rows = await this.newsRepo.find({
-      where: { menuId: In(scope.sourceMenuIds) },
+      where: { siteId, menuId: In(scope.sourceMenuIds) },
       order: { orderNum: 'ASC', id: 'DESC' },
     });
     if (!rows.length) {
@@ -285,7 +337,7 @@ export class NewsService {
     if (!model.available) throw new BadRequestException('The selected translation model is not configured.');
 
     const rows = await this.newsRepo.find({
-      where: { id: In(failedIds) },
+      where: { siteId: await this.currentSiteId(), id: In(failedIds) },
       order: { orderNum: 'ASC', id: 'DESC' },
     });
     const sourceRows = await this.filterChineseSourceNews(rows);
@@ -376,7 +428,6 @@ export class NewsService {
           translatedRow.content = this.compactHtmlForStorage(String(translated.content || ''));
           translatedRow.urlName = this.pickMenuTranslationUrl(
             current?.urlName,
-            source?.urlName ?? news.urlName,
             job.targetLang,
             news.id,
           );
@@ -420,13 +471,12 @@ export class NewsService {
 
   private pickMenuTranslationUrl(
     currentUrl: string | undefined,
-    sourceUrl: string | undefined,
     targetLang: string,
     newsId: number,
   ) {
     const current = String(currentUrl || '').trim().replace(/^\/+/, '');
-    const source = String(sourceUrl || '').trim().replace(/^\/+/, '');
-    if (current && current !== source && !/^cn[-_/]/i.test(current)) return current;
+    const prefix = targetLang === DEFAULT_NEWS_LANG ? 'cn' : String(targetLang || 'cn').toLowerCase();
+    if (new RegExp(`^${prefix}[-_/]+`, 'i').test(current)) return current;
     return this.getDefaultNewsUrlName(targetLang, newsId);
   }
 
@@ -484,8 +534,9 @@ export class NewsService {
   }
 
   async optimizeSeoDraft(postObj: OptimizeSeoDto) {
+    const contentLabel = postObj.contentType === 'page' ? '单页' : '新闻';
     if (!postObj.title?.trim() && !postObj.summary?.trim() && !postObj.content?.trim()) {
-      throw new BadRequestException('请先填写中文标题、描述或正文');
+      throw new BadRequestException(`请先填写中文${contentLabel}标题、描述或正文`);
     }
     if (postObj.onlyAlts && !postObj.content?.trim()) {
       throw new BadRequestException('请先填写正文内容，才能补全图片 ALT');
@@ -502,7 +553,7 @@ export class NewsService {
 
     if (postObj.onlyAlts) {
       const altPrompt = [
-        '你是工程机械行业的中文 SEO 编辑。只处理图片 ALT，不改正文。',
+        `你是工程机械行业的中文 SEO 编辑。只处理${contentLabel}图片 ALT，不改正文。`,
         '为正文 HTML 中每个缺少 alt 或 alt 为空的 img 按原顺序生成一个 imageAlts 项。imageAlts 可以是字符串数组，也可以是包含 src、alt 的对象数组。',
         'ALT 要结合标题、关键词和图片附近正文，简洁准确，不堆砌关键词，不猜测图片中无法确认的细节。',
         '不得改写标题、关键词、描述或正文文字，不添加或删除图片，不修改任何 src、href、iframe 或已有非空 ALT。',
@@ -517,7 +568,7 @@ export class NewsService {
       const altParsed = this.parseTranslationJson(altRawText);
       const altKeywords = String(postObj.keywords || '').trim();
       const altTitle = String(postObj.title || '').trim();
-      const altFallback = [altKeywords.split(',')[0], altTitle].filter(Boolean).join(' - ') || '新闻内容图片';
+      const altFallback = [altKeywords.split(',')[0], altTitle].filter(Boolean).join(' - ') || `${contentLabel}内容图片`;
       const { html, imageAlts } = applyImageAltsOnly(
         postObj.content || '',
         Array.isArray(altParsed.imageAlts) ? altParsed.imageAlts : [],
@@ -537,7 +588,7 @@ export class NewsService {
     }
 
     const prompt = [
-      '你是工程机械行业的中文 SEO 编辑。优化下面这篇简体中文新闻草稿。',
+      `你是工程机械行业的中文 SEO 编辑。优化下面这份简体中文${contentLabel}草稿。`,
       '必须保持事实、产品型号、数字、公司名和技术参数准确，不得编造卖点、案例或数据。',
       '标题要自然清晰并包含核心主题，避免关键词堆砌和夸张点击诱导。',
       '副标题必须生成并补充搜索意图或核心卖点，不要留空；关键词只输出 3-5 个中文短语，用英文逗号分隔，宁少勿多，避免堆砌；描述控制在 80-160 个中文字符。',
@@ -580,7 +631,7 @@ export class NewsService {
         postObj.content || '',
         String(parsed.content || postObj.content || ''),
         Array.isArray(parsed.imageAlts) ? parsed.imageAlts : [],
-        fallbackAlt || '新闻内容图片',
+        fallbackAlt || `${contentLabel}内容图片`,
       ),
     };
   }
@@ -589,6 +640,7 @@ export class NewsService {
     const defaultContent = this.getDefaultContent(postObj);
     const news = this.newsRepo.create({
       ...postObj,
+      siteId: await this.currentSiteId(),
       title: defaultContent.title,
       urlName: defaultContent.urlName,
       subtitle: defaultContent.subtitle,
@@ -606,21 +658,139 @@ export class NewsService {
     return await this.findOneById(saved.id);
   }
 
+  async uploadThumbnail(postObj: UploadNewsThumbnailDto, file?: Express.Multer.File) {
+    if (!file?.buffer?.length) throw new BadRequestException('请选择缩略图');
+    if (file.buffer.length > 5 * 1024 * 1024) throw new BadRequestException('上传图片不能超过 5MB');
+    const news = postObj.newsId ? await this.findNewsEntity(postObj.newsId) : undefined;
+    if (!news && !postObj.menuId) throw new BadRequestException('请先选择中文新闻栏目，再上传缩略图');
+    const menu = news ? undefined : await this.requireChineseNewsImportMenu(postObj.menuId);
+    const title = news?.title || postObj.title || '';
+    const references = news ? [postObj.referenceImage || '', news.thumbnail] : [postObj.referenceImage || ''];
+    const root = this.getPbootSiteRoot();
+    const directory = resolveContentThumbnailDirectory(root, title, references, this.sitesService.getPbootPublicBaseUrl(), Number(news?.menuId || menu.id), 'news');
+    return saveUploadedContentThumbnail(root, directory, file.buffer);
+  }
+
+  async scanNewsFolderImport(postObj: ImportNewsFolderDto) {
+    const menu = await this.requireChineseNewsImportMenu(postObj.menuId);
+    const candidates = scanNewsFolders(postObj.sourceDirectory);
+    const duplicateNames = await this.findDuplicateNewsTitles(postObj.menuId, candidates);
+    const items = candidates.map((candidate) => this.createNewsFolderScanItem(candidate, duplicateNames));
+    return {
+      sourceDirectory: path.resolve(String(postObj.sourceDirectory || '').trim().replace(/^(["'])([\s\S]*)\1$/, '$2')),
+      menuId: Number(menu.id),
+      menuName: menu.name,
+      total: items.length,
+      importable: items.filter((item) => !item.duplicate).length,
+      duplicates: items.filter((item) => item.duplicate).length,
+      items,
+    };
+  }
+
+  async importNewsFolders(postObj: ImportNewsFolderDto) {
+    const menu = await this.requireChineseNewsImportMenu(postObj.menuId);
+    const candidates = scanNewsFolders(postObj.sourceDirectory);
+    if (!candidates.length) throw new BadRequestException('没有找到符合命名规则的新闻文件夹。');
+    const duplicateNames = await this.findDuplicateNewsTitles(postObj.menuId, candidates);
+    const protection = await this.syncGuard.protectBeforeDangerousSync('news_folder_import', 'news');
+    const siteRoot = this.getPbootSiteRoot();
+
+    const siteId = await this.currentSiteId();
+    const existing = await this.newsRepo.find({ where: { siteId, menuId: Number(menu.id) } });
+    let nextOrder = existing.reduce((maximum, news) => Math.max(maximum, Number(news.orderNum || 0)), 0) + 1;
+    const created: Array<{ id: number; title: string; relativePath: string }> = [];
+    const skipped: Array<{ title: string; reason: string }> = [];
+    const failed: Array<{ title: string; reason: string }> = [];
+
+    for (const candidate of candidates) {
+      const normalizedTitle = candidate.title.trim().toLocaleLowerCase();
+      if (duplicateNames.has(normalizedTitle)) {
+        skipped.push({ title: candidate.title, reason: '同栏目已存在相同标题' });
+        continue;
+      }
+
+      try {
+        const title = candidate.title.trim().slice(0, 120);
+        const generatedThumbnail = await ensureFolderThumbnail(candidate.directory, candidate.thumbnailSourceFile);
+        const resolveAsset = createFolderAssetResolver(siteRoot, candidate.directory,
+          path.join('static', 'codex', 'news-folder-import', String(menu.id), safeNewsAssetSegment(candidate.title)));
+        const thumbnail = resolveAsset(generatedThumbnail || candidate.thumbnailImageFile);
+        const detailImages = candidate.detailImageFiles.map(resolveAsset);
+        const sourceHtml = readNewsDetailHtml(candidate);
+        const content = buildImportedNewsContent(sourceHtml, title, detailImages);
+        const summary = `${title} 新闻详情`;
+        const urlName = buildLanguageSeoUrlName(DEFAULT_NEWS_LANG, title, title);
+        const saved = await this.create({
+          menuId: Number(menu.id),
+          title,
+          urlName,
+          subtitle: '',
+          keywords: title,
+          thumbnail,
+          summary,
+          content,
+          author: 'admin',
+          source: '文件夹批量导入',
+          show: true,
+          orderNum: nextOrder,
+          translations: [{
+            lang: DEFAULT_NEWS_LANG,
+            title,
+            urlName,
+            subtitle: '',
+            keywords: title,
+            summary,
+            content,
+          }],
+        });
+        nextOrder += 1;
+        duplicateNames.add(normalizedTitle);
+        created.push({ id: saved.id, title: candidate.title, relativePath: candidate.relativePath });
+      } catch (error) {
+        failed.push({ title: candidate.title, reason: error instanceof Error ? error.message : String(error) });
+      }
+    }
+
+    return {
+      menuId: Number(menu.id),
+      menuName: menu.name,
+      localBackupPath: protection.backupPath,
+      total: candidates.length,
+      createdCount: created.length,
+      skippedCount: skipped.length,
+      failedCount: failed.length,
+      created,
+      skipped,
+      failed,
+    };
+  }
+
   async findAll(menuId?: number, lang?: string) {
     const targetLang = resolveNewsLang(lang);
     const menuIds = await this.resolveMenuFilterIds(menuId, targetLang);
+    const siteId = await this.currentSiteId();
     const rows = await this.newsRepo.find({
-      where: menuIds?.length ? { menuId: In(menuIds) } : {},
+      where: menuIds?.length ? { siteId, menuId: In(menuIds) } : { siteId },
       order: { orderNum: 'ASC', id: 'DESC' },
     });
 
     const translations = rows.length
-      ? await this.translationRepo.find({
-          where: rows.map((row) => ({ newsId: row.id, lang: targetLang })),
-        })
+      ? await this.translationRepo.find({ where: { newsId: In(rows.map(row => row.id)) } })
       : [];
-    const translationMap = new Map(translations.map((item) => [item.newsId, item]));
-    return rows.filter((row) => translationMap.has(row.id)).map((row) => this.mergeTranslation(row, translationMap.get(row.id), targetLang));
+    const languages = await this.getConfiguredLanguageCodes();
+    const grouped = new Map<number, NewsTranslation[]>();
+    for (const translation of translations) {
+      const group = grouped.get(translation.newsId) || [];
+      group.push(translation);
+      grouped.set(translation.newsId, group);
+    }
+    return rows.flatMap(row => {
+      const saved = grouped.get(row.id) || [];
+      const translation = saved.find(item => item.lang === targetLang);
+      if (!translation && targetLang !== DEFAULT_NEWS_LANG) return [];
+      return [{ ...this.mergeTranslation(row, translation, targetLang),
+        translationProgress: contentTranslationProgress(row, saved, languages) }];
+    });
   }
 
   async getPbootStats(menuId?: number, lang?: string) {
@@ -641,22 +811,51 @@ export class NewsService {
   private async resolveMenuFilterIds(menuId?: number, lang = DEFAULT_NEWS_LANG) {
     if (!menuId) return undefined;
 
-    const menus = await this.menusRepo.find({ select: ['id', 'parentId', 'code', 'urlName', 'href', 'name', 'model'] });
+    const menus = await this.findSiteMenus();
     return resolveChineseMenuScope(menus, menuId, resolveNewsLang(lang), '2').sourceMenuIds;
+  }
+
+  private async requireChineseNewsImportMenu(menuId: number) {
+    const siteId = await this.currentSiteId();
+    const menu = await this.menusRepo.findOne({ where: { id: String(menuId), siteId } });
+    if (!menu) throw new BadRequestException('指定的新闻栏目不存在或不属于当前网站。');
+    if (!String(menu.code || '').startsWith('pboot:cn:') || String(menu.model || '') !== '2') {
+      throw new BadRequestException('文件夹新闻只能导入到当前网站的中文新闻栏目。');
+    }
+    return menu;
+  }
+
+  private async findDuplicateNewsTitles(menuId: number, candidates: NewsFolderCandidate[]) {
+    if (!candidates.length) return new Set<string>();
+    const siteId = await this.currentSiteId();
+    const existing = await this.newsRepo.find({ where: { siteId, menuId: Number(menuId) } });
+    return new Set(existing.map((news) => String(news.title || '').trim().toLocaleLowerCase()).filter(Boolean));
+  }
+
+  private createNewsFolderScanItem(candidate: NewsFolderCandidate, duplicateNames: Set<string>) {
+    return {
+      title: candidate.title,
+      relativePath: candidate.relativePath,
+      thumbnailImage: candidate.thumbnailImageFile,
+      thumbnailWillGenerate: Boolean(candidate.thumbnailSourceFile),
+      detailHtml: candidate.detailHtmlFile,
+      detailImages: candidate.detailImageFiles,
+      duplicate: duplicateNames.has(candidate.title.trim().toLocaleLowerCase()),
+      warnings: candidate.warnings,
+    };
   }
 
   private normalizeMenuSlug(menu: Pick<Menu, 'urlName' | 'href' | 'name'>) {
     return String(menu.urlName || menu.href || menu.name || '')
       .trim()
       .replace(/^\/+/, '')
-      .replace(/^(cn|en|es|fr|ru|ar|pt)[-_/]+/i, '')
+      .replace(/^(cn|en|es|fr|ru|ar|pt|id|tr|vi)[-_/]+/i, '')
       .toLowerCase();
   }
 
   async findOneById(id: number, lang?: string): Promise<NewsWithTranslations> {
     if (!id) return null;
-    const news = await this.newsRepo.findOneBy({ id });
-    if (!news) throw new NotFoundException('没有找到该新闻');
+    const news = await this.findNewsEntity(id);
 
     await this.ensureTranslations(news);
     const targetLang = resolveNewsLang(lang);
@@ -698,7 +897,7 @@ export class NewsService {
     await this.ensureTranslations(news);
     const translations = await this.translationRepo.find({ where: { newsId: id }, order: { id: 'ASC' } });
     const translationMap = new Map(translations.map((item) => [item.lang, item]));
-    const langs = options.all ? NEWS_LANGUAGES.map((item) => item.code) : [resolveNewsLang(options.lang || 'en')];
+    const langs = await this.resolveConfiguredSyncLanguages(options.all, options.lang, 'en');
     const dbPath = this.getPbootDbPath();
     const siteRoot = this.getPbootSiteRoot();
 
@@ -746,6 +945,103 @@ export class NewsService {
     };
   }
 
+  async syncChineseNewsScope(menuId: number, execute = false) {
+    const siteId = await this.currentSiteId();
+    const menus = await this.findSiteMenus();
+    const menu = menus.find((item) => Number(item.id) === menuId);
+    if (!menu?.code?.startsWith('pboot:cn:') || String(menu.model) !== '2') {
+      throw new BadRequestException('请选择当前网站的中文新闻栏目');
+    }
+    const scope = resolveChineseMenuScope(menus, menuId, DEFAULT_NEWS_LANG, '2');
+    const articles = await this.newsRepo.find({
+      where: { siteId, menuId: In(scope.sourceMenuIds) }, order: { orderNum: 'ASC', id: 'ASC' },
+    });
+    const translations = articles.length ? await this.translationRepo.find({
+      where: { newsId: In(articles.map((item) => item.id)) },
+    }) : [];
+    const translationMap = new Map(translations.map((item) => [`${item.newsId}:${item.lang}`, item]));
+    const langs = await this.getConfiguredLanguageCodes();
+    const dbPath = this.getPbootDbPath();
+    const siteRoot = this.getPbootSiteRoot();
+    if (!fs.existsSync(dbPath) || !fs.existsSync(siteRoot)) throw new BadRequestException('当前网站的 PB 数据库或网站目录不存在');
+    const SQL = await initSqlJs();
+    const originalBytes = fs.readFileSync(dbPath);
+    const db = new SQL.Database(new Uint8Array(originalBytes));
+    const skipped: { newsId: number; title: string; lang: string; reason: string }[] = [];
+    const blocked: typeof skipped = [];
+    const ready: { article: News; content: NewsContent; lang: string; config: PbootLanguageConfig }[] = [];
+    const configs = new Map<string, PbootLanguageConfig | string>();
+    const destinations = new Set<string>();
+    try {
+      for (const article of articles) {
+        const source = translationMap.get(`${article.id}:${DEFAULT_NEWS_LANG}`) || article;
+        for (const lang of langs) {
+          const translation = translationMap.get(`${article.id}:${lang}`);
+          const fields = missingTranslationFields(source, lang === DEFAULT_NEWS_LANG ? source : translation);
+          const item = { newsId: article.id, title: article.title, lang };
+          if (fields.length) {
+            skipped.push({ ...item, reason: `缺少${fields.join('、')}` });
+            continue;
+          }
+          const key = `${article.menuId}:${lang}`;
+          if (!configs.has(key)) {
+            try {
+              const config = await this.resolvePbootConfigFromMenu(PBOOT_NEWS_SORTS[lang], article.menuId);
+              const websiteMenu = this.queryOne(db, 'select mcode from ay_content_sort where acode=? and scode=? limit 1', [config.acode, config.scode]);
+              configs.set(key, !websiteMenu ? '对应栏目尚未写入 PB，请先同步栏目'
+                : String(websiteMenu.mcode) !== '2' ? `PB 栏目 ${config.scode} 不是新闻模型` : config);
+            } catch (error) {
+              if (!(error instanceof BadRequestException)) throw error;
+              configs.set(key, error.message);
+            }
+          }
+          const config = configs.get(key)!;
+          if (typeof config === 'string') {
+            blocked.push({ ...item, reason: config });
+            continue;
+          }
+          const content = this.pickContentForPboot(article, translation, lang);
+          const requestedFilename = this.normalizePbootFilename(content.urlName);
+          const filename = requestedFilename || `vue-news-${article.id}-${config.acode}`;
+          const existing = this.queryOne(db, 'select id,scode from ay_content where acode=? and filename=? limit 1', [config.acode, filename]);
+          if (existing && String(existing.scode) !== config.scode) {
+            blocked.push({ ...item, reason: `URL ${filename} 已被 PB 其他栏目使用，请先修改 URL 名称` });
+            continue;
+          }
+          const destination = requestedFilename ? `${config.acode}:url:${filename}`
+            : `${config.acode}:title:${config.scode}:${content.title.trim()}`;
+          if (destinations.has(destination)) {
+            blocked.push({ ...item, reason: '本次范围内存在重复 URL 或同栏目同名新闻，请先检查' });
+            continue;
+          }
+          destinations.add(destination);
+          ready.push({ article, content, lang, config });
+        }
+      }
+      const preview = {
+        siteId, siteName: this.sitesService.getCurrentSite().name, menuId, menuName: menu.name,
+        totalNews: articles.length, totalLanguages: langs.length, readyCount: ready.length, skipped, blocked,
+      };
+      if (!execute) return { ...preview, syncedCount: 0, created: 0, updated: 0, deleted: 0, backupPath: '' };
+      if (blocked.length) throw new BadRequestException(`同步前检查未通过，未写入任何新闻：${blocked.slice(0, 5).map((item) => `${item.title} / ${item.lang}：${item.reason}`).join('；')}`);
+      if (!ready.length) throw new BadRequestException('所选栏目及子栏目没有内容完整的新闻语言版本可同步');
+      await this.syncGuard.protectBeforeDangerousSync('news_chinese_scope_all_languages', 'news');
+      // The PB file may have changed while asynchronous preflight/backup checks were running.
+      if (!fs.readFileSync(dbPath).equals(originalBytes)) throw new BadRequestException('PB 数据刚刚发生变化，本次未写入，请重新检查后同步');
+      const backupPath = this.backupPbootDatabase(dbPath);
+      const synced = ready.map(({ article, content, lang, config }) => this.upsertPbootNews(db, article, content, lang, config, siteRoot));
+      if (!fs.readFileSync(dbPath).equals(originalBytes)) throw new BadRequestException('PB 数据刚刚发生变化，本次未写入，请重新检查后同步');
+      fs.writeFileSync(dbPath, Buffer.from(db.export()));
+      return {
+        ...preview, backupPath, syncedCount: synced.length, deleted: 0,
+        created: synced.filter((item) => item.action === 'created').length,
+        updated: synced.filter((item) => item.action === 'updated').length,
+      };
+    } finally {
+      db.close();
+    }
+  }
+
   async syncAllToPboot() {
     const dbPath = this.getPbootDbPath();
     const siteRoot = this.getPbootSiteRoot();
@@ -758,8 +1054,12 @@ export class NewsService {
     }
 
     await this.syncGuard.protectBeforeDangerousSync('news_push_all', 'news');
-    const newsRows = await this.newsRepo.find({ order: { orderNum: 'ASC', id: 'ASC' } });
+    const newsRows = await this.newsRepo.find({
+      where: { siteId: await this.currentSiteId() },
+      order: { orderNum: 'ASC', id: 'ASC' },
+    });
     await Promise.all(newsRows.map((row) => this.ensureTranslations(row)));
+    const langs = await this.getConfiguredLanguageCodes();
 
     const backupPath = this.backupPbootDatabase(dbPath);
     const SQL = await initSqlJs();
@@ -774,7 +1074,7 @@ export class NewsService {
         const translations = await this.translationRepo.find({ where: { newsId: news.id }, order: { id: 'ASC' } });
         const translationMap = new Map(translations.map((item) => [item.lang, item]));
 
-        for (const lang of NEWS_LANGUAGES.map((item) => item.code)) {
+        for (const lang of langs) {
           const config = PBOOT_NEWS_SORTS[lang];
           if (!config) continue;
 
@@ -812,7 +1112,8 @@ export class NewsService {
     const db = new SQL.Database(fs.readFileSync(dbPath));
 
     try {
-      const menus = await this.menusRepo.find();
+      const siteId = await this.currentSiteId();
+      const menus = await this.findSiteMenus();
       const scope = resolveChineseMenuScope(menus, menuId, targetLang, '2');
       const scodes = await this.resolvePbootFilterScodes(db, menuId, acode, '2');
       const scodeSet = new Set(scodes || []);
@@ -822,7 +1123,7 @@ export class NewsService {
         return row && scodeSet.has(String(row.scode));
       });
       const resolveMenuId = createPbootMenuResolver(db, menus, '2', 'pboot:cn:330');
-      const existingRows = await this.newsRepo.find({ where: { menuId: In(scope.sourceMenuIds) } });
+      const existingRows = await this.newsRepo.find({ where: { siteId, menuId: In(scope.sourceMenuIds) } });
       const existingTranslations = existingRows.length
         ? await this.translationRepo.find({
             where: existingRows.map((row) => ({ newsId: row.id, lang: targetLang })),
@@ -842,7 +1143,7 @@ export class NewsService {
         if (!news) {
           const resolvedMenuId = resolveMenuId(baseRow);
           const sourceMenuId = scope.sourceMenuIds.includes(resolvedMenuId) ? resolvedMenuId : Number(scope.sourceMenu.id);
-          news = await this.newsRepo.save(this.newsRepo.create(this.newsValuesFromPboot(baseRow, sourceMenuId)));
+          news = await this.newsRepo.save(this.newsRepo.create({ siteId, ...this.newsValuesFromPboot(baseRow, sourceMenuId) }));
           existingRows.push(news);
           created += 1;
         } else if (targetLang === DEFAULT_NEWS_LANG) {
@@ -906,11 +1207,12 @@ export class NewsService {
     const db = new SQL.Database(fs.readFileSync(dbPath));
 
     try {
-      const menus = await this.menusRepo.find();
+      const siteId = await this.currentSiteId();
+      const menus = await this.findSiteMenus();
       const scope = resolveChineseMenuScope(menus, menuId, targetLang, '2');
       const scodes = await this.resolvePbootFilterScodes(db, menuId, acode, '2');
       const rows = await this.newsRepo.find({
-        where: { menuId: In(scope.sourceMenuIds) },
+        where: { siteId, menuId: In(scope.sourceMenuIds) },
         order: { orderNum: 'ASC', id: 'ASC' },
       });
       const translations = rows.length
@@ -1020,11 +1322,11 @@ export class NewsService {
 
     try {
       const { sourceRows, groups } = readPbootNewsContentGroups(db);
-      const menus = await this.menusRepo.find();
+      const siteId = await this.currentSiteId();
+      const menus = await this.findSiteMenus();
       const resolveMenuId = createPbootMenuResolver(db, menus, '2', 'pboot:cn:330');
 
-      await this.translationRepo.createQueryBuilder().delete().from(NewsTranslation).execute();
-      await this.newsRepo.createQueryBuilder().delete().from(News).execute();
+      await this.deleteSiteNews(siteId);
 
       let imported = 0;
       let importedTranslations = 0;
@@ -1040,6 +1342,7 @@ export class NewsService {
         const updated = toPbootDate(base.update_time || base.date || base.create_time);
         const saved = await this.newsRepo.save(
           this.newsRepo.create({
+            siteId,
             menuId,
             title: base.title || '',
             urlName: base.filename || '',
@@ -1116,12 +1419,13 @@ export class NewsService {
     const db = new SQL.Database(fs.readFileSync(dbPath));
     const translations = await this.translationRepo.find({ where: { newsId: news.id }, order: { id: 'ASC' } });
     const translationMap = new Map(translations.map((item) => [item.lang, item]));
+    const langs = await this.getConfiguredLanguageCodes();
     let deleted = 0;
 
     try {
       deleted += this.deletePbootGeneratedContent(db, `vue-news-${news.id}-%`);
 
-      for (const lang of NEWS_LANGUAGES.map((item) => item.code)) {
+      for (const lang of langs) {
         const config = PBOOT_NEWS_SORTS[lang];
         if (!config) continue;
 
@@ -1140,19 +1444,15 @@ export class NewsService {
   }
 
   private getPbootDbPath() {
-    const configured = this.config.get<string>('PBOOT_DB_PATH');
-    if (!configured) {
-      throw new BadRequestException('PbootCMS database is not configured. Run 01-config.cmd first.');
-    }
-    return configured;
+    return this.sitesService.getPbootDbPath();
   }
 
   private getPbootSiteRoot() {
-    return this.config.get<string>('PBOOT_SITE_ROOT') || path.resolve(process.cwd(), '..', '..');
+    return this.sitesService.getPbootSiteRoot();
   }
 
   private getPbootPublicBaseUrl() {
-    return (this.config.get<string>('PBOOT_PUBLIC_BASE_URL') || 'http://localhost').replace(/\/$/, '');
+    return this.sitesService.getPbootPublicBaseUrl();
   }
 
   private backupPbootDatabase(dbPath: string) {
@@ -1280,12 +1580,13 @@ export class NewsService {
   private async resolvePbootConfigFromMenu(config: PbootLanguageConfig, menuId: number) {
     if (!menuId) return config;
 
-    const sourceMenu = await this.menusRepo.findOne({ where: { id: String(menuId) } });
+    const siteId = await this.currentSiteId();
+    const sourceMenu = await this.menusRepo.findOne({ where: { id: String(menuId), siteId } });
     if (!sourceMenu?.code?.startsWith('pboot:')) return config;
 
-    const menus = await this.menusRepo.find();
+    const menus = await this.findSiteMenus();
     const targetLang = PBOOT_LANG_MAP[config.acode] || config.acode;
-    const targetMenu = menus.find((menu) => {
+    const targetMenus = menus.filter((menu) => {
       if (!menu.code?.startsWith(`pboot:${config.acode}:`)) return false;
       try {
         return Number(resolveChineseMenuScope(menus, Number(menu.id), targetLang, '2').sourceMenu.id) === Number(sourceMenu.id);
@@ -1294,7 +1595,9 @@ export class NewsService {
       }
     });
 
-    if (!targetMenu) return config;
+    if (!targetMenus.length) throw new BadRequestException('缺少对应语言的新闻栏目，或中文来源不唯一，请先在菜单管理确认关联并同步栏目');
+    if (targetMenus.length > 1) throw new BadRequestException('对应语言的新闻栏目匹配不唯一，请先检查栏目');
+    const targetMenu = targetMenus[0];
 
     const scode = this.getPbootScode(targetMenu.code) || config.scode;
     return {
@@ -1342,34 +1645,11 @@ export class NewsService {
   }
 
   private preparePbootImage(thumbnail: string, siteRoot: string, now: string) {
-    if (!thumbnail) return '';
-    if (/^https?:\/\//.test(thumbnail) || thumbnail.startsWith('/static/')) return thumbnail;
-
-    const cleanName = path.basename(thumbnail);
-    const source = path.resolve(process.cwd(), 'uploads', cleanName);
-    if (!fs.existsSync(source)) return thumbnail;
-
-    const day = now.slice(0, 10).replace(/-/g, '');
-    const relativeDir = `/static/codex/news/${day}`;
-    const targetDir = path.join(siteRoot, relativeDir);
-    fs.mkdirSync(targetDir, { recursive: true });
-    fs.copyFileSync(source, path.join(targetDir, cleanName));
-    return `${relativeDir}/${cleanName}`.replace(/\\/g, '/');
+    return copyUploadedImageToPboot(thumbnail, this.sitesService, siteRoot, now, 'news');
   }
 
   private preparePbootContent(content: string, siteRoot: string, now: string) {
-    if (!content) return '';
-
-    return content.replace(/(<img\b[^>]*\bsrc=["'])([^"']+)(["'][^>]*>)/gi, (match, prefix, src, suffix) => {
-      const synced = this.preparePbootContentImage(String(src), siteRoot, now);
-      return `${prefix}${synced || src}${suffix}`;
-    });
-  }
-
-  private preparePbootContentImage(src: string, siteRoot: string, now: string) {
-    const match = src.match(/(?:https?:\/\/(?:localhost|127\.0\.0\.1):5000)?\/uploads\/([^?#"']+)/i);
-    if (!match) return src;
-    return this.preparePbootImage(decodeURIComponent(match[1]), siteRoot, now);
+    return rewriteUploadedHtmlImages(content, src => this.preparePbootImage(src, siteRoot, now));
   }
 
   private normalizePbootFilename(value: string) {
@@ -1414,7 +1694,7 @@ export class NewsService {
   private async resolvePbootFilterScodes(db: any, menuId: number | undefined, acode: string, mcode: string) {
     if (!menuId) return undefined;
 
-    const menus = await this.menusRepo.find();
+    const menus = await this.findSiteMenus();
     const selected = menus.find((menu) => Number(menu.id) === Number(menuId));
     if (!selected) throw new BadRequestException('The selected menu no longer exists.');
     const targetLang = PBOOT_LANG_MAP[acode] || acode;
@@ -1521,13 +1801,7 @@ export class NewsService {
   }
 
   private decodeHtmlEntities(content: string) {
-    return (content || '')
-      .replace(/&lt;/gi, '<')
-      .replace(/&gt;/gi, '>')
-      .replace(/&quot;/gi, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&apos;/gi, "'")
-      .replace(/&amp;/gi, '&');
+    return decodeEscapedHtml(content);
   }
 
   private stripHtml(html: string) {
@@ -1551,9 +1825,49 @@ export class NewsService {
 
   private async findNewsEntity(id: number) {
     if (!id) return null;
-    const news = await this.newsRepo.findOneBy({ id });
+    const news = await this.newsRepo.findOneBy({ id, siteId: await this.currentSiteId() });
     if (!news) throw new NotFoundException('没有找到该新闻');
     return news;
+  }
+
+  private async findSiteMenus() {
+    return this.menusRepo.find({ where: { siteId: await this.currentSiteId() } });
+  }
+
+  private async getConfiguredLanguageCodes() {
+    const supported = new Set<string>(NEWS_LANGUAGES.map((item) => item.code));
+    const configured = (await this.sitesService.getCurrentSiteLanguages())
+      .map((item) => item.code)
+      .filter((code) => supported.has(code));
+    return configured.length ? configured : [DEFAULT_NEWS_LANG];
+  }
+
+  private async resolveConfiguredSyncLanguages(all: boolean | undefined, lang: string | undefined, fallback: string) {
+    const configured = await this.getConfiguredLanguageCodes();
+    if (all) return configured;
+    const target = resolveNewsLang(lang || fallback);
+    if (!configured.includes(target)) throw new BadRequestException(`当前网站未配置 ${target} 语言区域，无法同步`);
+    return [target];
+  }
+
+  private async currentSiteId() {
+    const siteId = this.sitesService.getCurrentSiteId();
+    if (!siteId || this.adoptedLegacySites.has(siteId)) return siteId;
+    const scoped = await this.newsRepo.countBy({ siteId });
+    if (this.sitesService.isDefaultSite(siteId) && !scoped && await this.newsRepo.countBy({ siteId: 0 })) {
+      await this.newsRepo.update({ siteId: 0 }, { siteId });
+    }
+    this.adoptedLegacySites.add(siteId);
+    return siteId;
+  }
+
+  private async deleteSiteNews(siteId: number) {
+    const rows = await this.newsRepo.find({ where: { siteId }, select: { id: true } });
+    for (let offset = 0; offset < rows.length; offset += 300) {
+      const ids = rows.slice(offset, offset + 300).map((row) => row.id);
+      await this.translationRepo.delete({ newsId: In(ids) });
+    }
+    await this.newsRepo.delete({ siteId });
   }
 
   private getDefaultContent(postObj: Partial<CreateNewsDto>, fallback?: News) {
@@ -1586,23 +1900,25 @@ export class NewsService {
     const rows = NEWS_LANGUAGES.map(({ code }) => {
       const input = inputMap.get(code);
       const current = existingMap.get(code);
-      const base = code === DEFAULT_NEWS_LANG ? seed : seed;
+      const base = code === DEFAULT_NEWS_LANG
+        ? seed
+        : { title: '', urlName: '', subtitle: '', keywords: '', summary: '', content: '' };
 
       if (current) {
         if (!updateExisting && !input) return null;
         return {
           ...current,
-          title: input?.title ?? (code === DEFAULT_NEWS_LANG ? seed.title : current.title || base.title),
+          title: input?.title ?? (code === DEFAULT_NEWS_LANG ? seed.title : current.title),
           urlName: this.normalizeNewsUrlName(
-            input?.urlName ?? (code === DEFAULT_NEWS_LANG ? seed.urlName : current.urlName || base.urlName),
+            input?.urlName ?? (code === DEFAULT_NEWS_LANG ? seed.urlName : current.urlName),
             code,
             news.id,
           ),
-          subtitle: input?.subtitle ?? (code === DEFAULT_NEWS_LANG ? seed.subtitle : current.subtitle || base.subtitle),
-          keywords: input?.keywords ?? (code === DEFAULT_NEWS_LANG ? seed.keywords : current.keywords || base.keywords),
-          summary: input?.summary ?? (code === DEFAULT_NEWS_LANG ? seed.summary : current.summary || base.summary),
-          description: input?.summary ?? (code === DEFAULT_NEWS_LANG ? seed.summary : current.summary || base.summary),
-          content: this.compactHtmlForStorage(input?.content ?? (code === DEFAULT_NEWS_LANG ? seed.content : current.content || base.content)),
+          subtitle: input?.subtitle ?? (code === DEFAULT_NEWS_LANG ? seed.subtitle : current.subtitle),
+          keywords: input?.keywords ?? (code === DEFAULT_NEWS_LANG ? seed.keywords : current.keywords),
+          summary: input?.summary ?? (code === DEFAULT_NEWS_LANG ? seed.summary : current.summary),
+          description: input?.summary ?? (code === DEFAULT_NEWS_LANG ? seed.summary : current.summary),
+          content: this.compactHtmlForStorage(input?.content ?? (code === DEFAULT_NEWS_LANG ? seed.content : current.content)),
         };
       }
 
@@ -1750,7 +2066,7 @@ export class NewsService {
     return String(data?.choices?.[0]?.message?.content || '');
   }
 
-  private async translateWithOpenAI(postObj: TranslateNewsDto) {
+  private async translateWithOpenAI(postObj: TranslateNewsDto, signal?: AbortSignal) {
     const apiKey = this.getAiProviderKey('openai');
     const prompt = this.buildTranslationPrompt(postObj);
 
@@ -1760,6 +2076,7 @@ export class NewsService {
         'https://api.openai.com/v1/chat/completions',
         {
           method: 'POST',
+          signal,
           headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
@@ -1777,9 +2094,10 @@ export class NewsService {
               },
             ],
             temperature: 0.2,
+            max_completion_tokens: 8192,
           }),
         },
-        { attempts: 4, baseDelayMs: 8000, maxDelayMs: 45000 },
+        { attempts: 2, baseDelayMs: 5000, maxDelayMs: 8000, requestTimeoutMs: 55000, totalTimeoutMs: 70000 },
       );
     } catch (error) {
       throw new BadRequestException(`OpenAI translation failed after retries: ${formatAiErrorMessage(error)}`);
@@ -1789,14 +2107,14 @@ export class NewsService {
       throw new BadRequestException(`OpenAI 翻译失败：${(await response.text()).slice(0, 500)}`);
     }
     const data = await response.json();
-    return this.toTranslationResult(postObj, data?.choices?.[0]?.message?.content || '');
+    return this.toTranslationResult(postObj, extractAiChoiceText(data, 'OpenAI 内容翻译'));
   }
 
   private isZhipuModel(model: string) {
     return /^glm-/i.test(String(model || ''));
   }
 
-  private async translateWithDeepSeek(postObj: TranslateNewsDto) {
+  private async translateWithDeepSeek(postObj: TranslateNewsDto, signal?: AbortSignal) {
     const apiKey = this.getAiProviderKey('deepseek');
     const prompt = this.buildTranslationPrompt(postObj);
 
@@ -1806,6 +2124,7 @@ export class NewsService {
         'https://api.deepseek.com/chat/completions',
         {
           method: 'POST',
+          signal,
           headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
@@ -1823,9 +2142,10 @@ export class NewsService {
               },
             ],
             temperature: 0.2,
+            max_tokens: 8192,
           }),
         },
-        { attempts: 4, baseDelayMs: 8000, maxDelayMs: 45000 },
+        { attempts: 2, baseDelayMs: 5000, maxDelayMs: 8000, requestTimeoutMs: 55000, totalTimeoutMs: 70000 },
       );
     } catch (error) {
       throw new BadRequestException(`DeepSeek translation failed after retries: ${formatAiErrorMessage(error)}`);
@@ -1835,10 +2155,10 @@ export class NewsService {
       throw new BadRequestException(`DeepSeek 翻译失败：${(await response.text()).slice(0, 500)}`);
     }
     const data = await response.json();
-    return this.toTranslationResult(postObj, data?.choices?.[0]?.message?.content || '');
+    return this.toTranslationResult(postObj, extractAiChoiceText(data, 'DeepSeek 内容翻译'));
   }
 
-  private async translateWithQwen(postObj: TranslateNewsDto) {
+  private async translateWithQwen(postObj: TranslateNewsDto, signal?: AbortSignal) {
     const apiKey = this.getAiProviderKey('qwen');
     const prompt = this.buildTranslationPrompt(postObj);
 
@@ -1848,6 +2168,7 @@ export class NewsService {
         'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
         {
           method: 'POST',
+          signal,
           headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
@@ -1866,9 +2187,10 @@ export class NewsService {
             ],
             temperature: 0.2,
             enable_thinking: false,
+            max_tokens: 8192,
           }),
         },
-        { attempts: 4, baseDelayMs: 8000, maxDelayMs: 45000 },
+        { attempts: 2, baseDelayMs: 5000, maxDelayMs: 8000, requestTimeoutMs: 55000, totalTimeoutMs: 70000 },
       );
     } catch (error) {
       throw new BadRequestException(`Qwen translation failed after retries: ${formatAiErrorMessage(error)}`);
@@ -1878,10 +2200,10 @@ export class NewsService {
       throw new BadRequestException(`Qwen 翻译失败：${(await response.text()).slice(0, 500)}`);
     }
     const data = await response.json();
-    return this.toTranslationResult(postObj, data?.choices?.[0]?.message?.content || '');
+    return this.toTranslationResult(postObj, extractAiChoiceText(data, 'Qwen 内容翻译'));
   }
 
-  private async translateWithZhipu(postObj: TranslateNewsDto) {
+  private async translateWithZhipu(postObj: TranslateNewsDto, signal?: AbortSignal) {
     const apiKey = this.getAiProviderKey('zhipu');
     const prompt = this.buildTranslationPrompt(postObj);
 
@@ -1891,6 +2213,7 @@ export class NewsService {
         'https://open.bigmodel.cn/api/paas/v4/chat/completions',
         {
           method: 'POST',
+          signal,
           headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
@@ -1908,22 +2231,23 @@ export class NewsService {
               },
             ],
             temperature: 0.2,
+            max_tokens: 8192,
           }),
         },
-        { attempts: 4, baseDelayMs: 8000, maxDelayMs: 45000 },
+        { attempts: 2, baseDelayMs: 5000, maxDelayMs: 8000, requestTimeoutMs: 55000, totalTimeoutMs: 70000 },
       );
     } catch (error) {
       throw new BadRequestException(`Zhipu translation failed after retries: ${formatAiErrorMessage(error)}`);
     }
 
     const data = await response.json();
-    return this.toTranslationResult(postObj, data?.choices?.[0]?.message?.content || '');
+    return this.toTranslationResult(postObj, extractAiChoiceText(data, '智谱内容翻译'));
   }
 
   private toTranslationResult(postObj: TranslateNewsDto, rawText: string) {
     const parsed = this.parseTranslationJson(rawText);
 
-    return {
+    const result = {
       targetLang: postObj.targetLang,
       model: postObj.model,
       title: parsed.title || '',
@@ -1932,6 +2256,27 @@ export class NewsService {
       summary: parsed.summary || '',
       content: repairTranslatedHtml(parsed.content || ''),
     };
+    this.assertTranslationResult(postObj, result);
+    return result;
+  }
+
+  private assertTranslationResult(
+    source: TranslateNewsDto,
+    result: { title: string; subtitle: string; keywords: string; summary: string; content: string },
+  ) {
+    const requiredFields = ['title', 'subtitle', 'keywords', 'summary', 'content'] as const;
+    const missing = requiredFields.filter(
+      (field) => String(source[field] || '').trim() && !String(result[field] || '').trim(),
+    );
+    if (missing.length) {
+      throw new BadRequestException(`Translation quality check failed: empty ${missing.join(', ')} output.`);
+    }
+
+    const sourceTokens = String(source.content || '').match(/@@PBOOTCMS_IMAGE_\d{4}@@/g) || [];
+    const resultTokens = String(result.content || '').match(/@@PBOOTCMS_IMAGE_\d{4}@@/g) || [];
+    if (sourceTokens.join('|') !== resultTokens.join('|')) {
+      throw new BadRequestException('Translation quality check failed: an image placeholder was removed, duplicated, or reordered.');
+    }
   }
 
   private containsChineseText(value: unknown) {
@@ -2156,14 +2501,14 @@ export class NewsService {
     ].join('\n');
   }
 
-  private async translateWithGoogleFree(postObj: TranslateNewsDto) {
+  private async translateWithGoogleFree(postObj: TranslateNewsDto, signal?: AbortSignal) {
     try {
       const [title, subtitle, keywords, summary, content] = await Promise.all([
-        this.googleTranslateText(postObj.title || '', postObj.targetLang),
-        this.googleTranslateText(postObj.subtitle || '', postObj.targetLang),
-        this.googleTranslateText(postObj.keywords || '', postObj.targetLang),
-        this.googleTranslateText(postObj.summary || '', postObj.targetLang),
-        translateHtmlContentSafely(postObj.content || '', (text) => this.googleTranslateText(text, postObj.targetLang)),
+        this.googleTranslateText(postObj.title || '', postObj.targetLang, signal),
+        this.googleTranslateText(postObj.subtitle || '', postObj.targetLang, signal),
+        this.googleTranslateText(postObj.keywords || '', postObj.targetLang, signal),
+        this.googleTranslateText(postObj.summary || '', postObj.targetLang, signal),
+        translateHtmlContentSafely(postObj.content || '', (text) => this.googleTranslateText(text, postObj.targetLang, signal)),
       ]);
 
       return {
@@ -2176,18 +2521,18 @@ export class NewsService {
         content,
       };
     } catch {
-      return await this.translateWithMyMemoryFree({ ...postObj, model: 'mymemory-free' });
+      return await this.translateWithMyMemoryFree({ ...postObj, model: 'mymemory-free' }, signal);
     }
   }
 
-  private async translateWithQwenMtLite(postObj: TranslateNewsDto) {
-    const title = await this.qwenMtTranslateText(postObj.title || '', postObj.targetLang);
-    const subtitle = await this.qwenMtTranslateText(postObj.subtitle || '', postObj.targetLang);
-    const keywords = await this.qwenMtTranslateText(postObj.keywords || '', postObj.targetLang);
-    const summary = await this.qwenMtTranslateText(postObj.summary || '', postObj.targetLang);
+  private async translateWithQwenMtLite(postObj: TranslateNewsDto, signal?: AbortSignal) {
+    const title = await this.qwenMtTranslateText(postObj.title || '', postObj.targetLang, signal);
+    const subtitle = await this.qwenMtTranslateText(postObj.subtitle || '', postObj.targetLang, signal);
+    const keywords = await this.qwenMtTranslateText(postObj.keywords || '', postObj.targetLang, signal);
+    const summary = await this.qwenMtTranslateText(postObj.summary || '', postObj.targetLang, signal);
     const content = await translateHtmlContentSafely(
       postObj.content || '',
-      (text) => this.qwenMtTranslateText(text, postObj.targetLang),
+      (text) => this.qwenMtTranslateText(text, postObj.targetLang, signal),
     );
 
     return {
@@ -2201,7 +2546,7 @@ export class NewsService {
     };
   }
 
-  private async qwenMtTranslateText(text: string, targetLang: string) {
+  private async qwenMtTranslateText(text: string, targetLang: string, signal?: AbortSignal) {
     if (!text?.trim()) return '';
 
     const apiKey = this.getAiProviderKey('qwen');
@@ -2214,6 +2559,7 @@ export class NewsService {
           'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
           {
             method: 'POST',
+            signal,
             headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: 'qwen-mt-lite',
@@ -2239,13 +2585,13 @@ export class NewsService {
     return translated.join('');
   }
 
-  private async translateWithMyMemoryFree(postObj: TranslateNewsDto) {
+  private async translateWithMyMemoryFree(postObj: TranslateNewsDto, signal?: AbortSignal) {
     const [title, subtitle, keywords, summary, content] = await Promise.all([
-      this.myMemoryTranslateText(postObj.title || '', postObj.targetLang),
-      this.myMemoryTranslateText(postObj.subtitle || '', postObj.targetLang),
-      this.myMemoryTranslateText(postObj.keywords || '', postObj.targetLang),
-      this.myMemoryTranslateText(postObj.summary || '', postObj.targetLang),
-      translateHtmlContentSafely(postObj.content || '', (text) => this.myMemoryTranslateText(text, postObj.targetLang)),
+      this.myMemoryTranslateText(postObj.title || '', postObj.targetLang, signal),
+      this.myMemoryTranslateText(postObj.subtitle || '', postObj.targetLang, signal),
+      this.myMemoryTranslateText(postObj.keywords || '', postObj.targetLang, signal),
+      this.myMemoryTranslateText(postObj.summary || '', postObj.targetLang, signal),
+      translateHtmlContentSafely(postObj.content || '', (text) => this.myMemoryTranslateText(text, postObj.targetLang, signal)),
     ]);
 
     return {
@@ -2259,20 +2605,20 @@ export class NewsService {
     };
   }
 
-  private async googleTranslateText(text: string, targetLang: string) {
+  private async googleTranslateText(text: string, targetLang: string, signal?: AbortSignal) {
     if (!text.trim()) return '';
 
     const chunks = this.splitTextForGoogleTranslate(text);
     const translated: string[] = [];
 
     for (const chunk of chunks) {
-      translated.push(await this.googleTranslateChunk(chunk, targetLang));
+      translated.push(await this.googleTranslateChunk(chunk, targetLang, signal));
     }
 
     return translated.join('');
   }
 
-  private async googleTranslateChunk(text: string, targetLang: string) {
+  private async googleTranslateChunk(text: string, targetLang: string, signal?: AbortSignal) {
     const body = new URLSearchParams({
       client: 'gtx',
       sl: 'zh-CN',
@@ -2288,6 +2634,7 @@ export class NewsService {
         'User-Agent': 'Mozilla/5.0',
       },
       body,
+      signal,
     });
     if (!response.ok) {
       const message = await response.text().catch(() => '');
@@ -2329,24 +2676,25 @@ export class NewsService {
     return chunks;
   }
 
-  private async myMemoryTranslateText(text: string, targetLang: string) {
+  private async myMemoryTranslateText(text: string, targetLang: string, signal?: AbortSignal) {
     if (!text.trim()) return '';
 
     const chunks = this.splitTextForGoogleTranslate(text, 450);
     const translated: string[] = [];
     for (const chunk of chunks) {
-      translated.push(await this.myMemoryTranslateChunk(chunk, targetLang));
+      translated.push(await this.myMemoryTranslateChunk(chunk, targetLang, signal));
     }
     return translated.join('');
   }
 
-  private async myMemoryTranslateChunk(text: string, targetLang: string) {
+  private async myMemoryTranslateChunk(text: string, targetLang: string, signal?: AbortSignal) {
     const params = new URLSearchParams({
       q: text,
       langpair: `zh-CN|${this.getMyMemoryTargetLang(targetLang)}`,
     });
     const response = await fetch(`https://api.mymemory.translated.net/get?${params.toString()}`, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal,
     });
 
     if (!response.ok) {
@@ -2369,6 +2717,9 @@ export class NewsService {
       ru: 'Russian',
       ar: 'Arabic',
       pt: 'Portuguese',
+      id: 'Indonesian',
+      tr: 'Turkish',
+      vi: 'Vietnamese',
     };
     return map[lang] || lang;
   }
@@ -2381,6 +2732,9 @@ export class NewsService {
       ru: 'ru-RU',
       ar: 'ar-SA',
       pt: 'pt-PT',
+      id: 'id-ID',
+      tr: 'tr-TR',
+      vi: 'vi-VN',
     };
     return map[lang] || lang;
   }

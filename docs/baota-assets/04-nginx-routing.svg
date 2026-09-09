@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Nginx 域名与服务路由</title>
+  <desc id="desc">三个 HTTPS 管理域名分别路由到前端静态目录、管理 API、SEO 服务和 FTP 服务。</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0 0L10 3L0 6Z" fill="#64748b"/></marker></defs>
+  <style>.title{font:700 28px "Microsoft YaHei",Arial;fill:#172033}.head{font:700 17px "Microsoft YaHei",Arial;fill:#172033}.text{font:14px "Microsoft YaHei",Arial;fill:#526079}.code{font:14px Consolas;fill:#334155}.box{fill:#fff;stroke:#cfd8e6;stroke-width:2}.line{stroke:#64748b;stroke-width:2;fill:none;marker-end:url(#a)}</style>
+  <rect width="1200" height="630" fill="#f5f7fa"/><text x="50" y="52" class="title">Nginx 只开放 80/443，Node 端口只监听本机</text>
+  <rect x="50" y="94" width="310" height="154" rx="8" class="box"/><rect x="50" y="94" width="310" height="9" rx="4" fill="#1677ff"/>
+  <text x="76" y="139" class="head">admin.example.com</text><text x="76" y="173" class="code">/        → frontend/dist</text><text x="76" y="205" class="code">/api/*   → 127.0.0.1:5108</text><text x="76" y="229" class="text">管理页面与 API 同域，浏览器无跨域问题</text>
+  <rect x="50" y="278" width="310" height="124" rx="8" class="box"/><rect x="50" y="278" width="310" height="9" rx="4" fill="#2f9e5b"/>
+  <text x="76" y="323" class="head">seo-admin.example.com</text><text x="76" y="357" class="code">/ → 127.0.0.1:5388</text><text x="76" y="382" class="text">整站反向代理，超时设置 1800 秒</text>
+  <rect x="50" y="432" width="310" height="124" rx="8" class="box"/><rect x="50" y="432" width="310" height="9" rx="4" fill="#ee9418"/>
+  <text x="76" y="477" class="head">ftp-admin.example.com</text><text x="76" y="511" class="code">/ → 127.0.0.1:5389</text><text x="76" y="536" class="text">巡检时间较长，超时设置 3600 秒</text>
+
+  <rect x="500" y="94" width="250" height="462" rx="8" fill="#172033"/>
+  <text x="625" y="140" text-anchor="middle" style="font:700 21px 'Microsoft YaHei',Arial;fill:#fff">宝塔 Nginx</text>
+  <text x="625" y="182" text-anchor="middle" style="font:14px 'Microsoft YaHei',Arial;fill:#cbd5e1">SSL 证书</text><text x="625" y="210" text-anchor="middle" style="font:14px 'Microsoft YaHei',Arial;fill:#cbd5e1">域名解析</text><text x="625" y="238" text-anchor="middle" style="font:14px 'Microsoft YaHei',Arial;fill:#cbd5e1">请求头转发</text><text x="625" y="266" text-anchor="middle" style="font:14px 'Microsoft YaHei',Arial;fill:#cbd5e1">上传大小限制</text><text x="625" y="294" text-anchor="middle" style="font:14px 'Microsoft YaHei',Arial;fill:#cbd5e1">长任务超时</text>
+  <rect x="546" y="338" width="158" height="64" rx="6" fill="#243047" stroke="#64748b"/><text x="625" y="366" text-anchor="middle" style="font:700 15px 'Microsoft YaHei',Arial;fill:#fff">公网防火墙</text><text x="625" y="388" text-anchor="middle" style="font:13px 'Microsoft YaHei',Arial;fill:#cbd5e1">只放行 80 / 443</text>
+
+  <rect x="900" y="94" width="250" height="462" rx="8" class="box"/>
+  <text x="1025" y="140" text-anchor="middle" class="head">服务器内部</text>
+  <rect x="936" y="176" width="178" height="72" rx="6" fill="#eaf3ff" stroke="#91caff"/><text x="1025" y="207" text-anchor="middle" class="head">NestJS API</text><text x="1025" y="230" text-anchor="middle" class="code">5108</text>
+  <rect x="936" y="278" width="178" height="72" rx="6" fill="#edf9f1" stroke="#8fd4aa"/><text x="1025" y="309" text-anchor="middle" class="head">SEO Tool</text><text x="1025" y="332" text-anchor="middle" class="code">5388</text>
+  <rect x="936" y="380" width="178" height="72" rx="6" fill="#fff7e8" stroke="#f6c26b"/><text x="1025" y="411" text-anchor="middle" class="head">FTP Tool</text><text x="1025" y="434" text-anchor="middle" class="code">5389</text>
+  <text x="1025" y="500" text-anchor="middle" class="text">127.0.0.1</text><text x="1025" y="525" text-anchor="middle" class="text">不直接暴露端口</text>
+  <path d="M360 171H486" class="line"/><path d="M360 340H486" class="line"/><path d="M360 494H486" class="line"/>
+  <path d="M750 212H886" class="line"/><path d="M750 314H886" class="line"/><path d="M750 416H886" class="line"/>
+</svg>

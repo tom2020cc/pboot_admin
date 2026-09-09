@@ -19,8 +19,10 @@ seo.config.json
 ftp.config.json
 security-baseline.json
 security-scan-history.json
+security-scan-checkpoint.json
 security-evidence/
 ai.config.json
+ai.model-health.json
 google-submitted.json
 google-inspections.json
 search-index-coverage.json
@@ -32,3 +34,9 @@ git.token
 uploads/
 backups/
 tmp/
+artifacts/
+coverage/
+
+# 每个受管网站的运行配置、凭据、状态与备份
+managed-sites/*
+!managed-sites/README.md

@@ -2,7 +2,7 @@
   <div class="thumb-upload">
     <div class="input-row">
       <el-input v-model="model" placeholder="上传后自动填入文件名，也可手动输入" />
-      <el-upload action="#" :auto-upload="false" :show-file-list="false" accept="image/*" :on-change="handleChange">
+      <el-upload action="#" :auto-upload="false" :disabled="uploading" :show-file-list="false" accept="image/*" :on-change="handleChange">
         <el-button type="primary" :loading="uploading">
           <el-icon><UploadFilled /></el-icon>
           上传图片
@@ -11,25 +11,39 @@
     </div>
 
     <div v-if="model" class="preview-row">
-      <el-image :src="getUploadUrl(model)" fit="cover" class="preview" />
+      <el-image :src="previewUrl" :fit="upload ? 'contain' : 'cover'" class="preview" :class="{ 'product-thumbnail': upload }">
+        <template #error>
+          <div class="image-error">
+            <span>图片加载失败</span>
+            <el-button text :icon="Refresh" aria-label="重新加载图片" @click="reloadVersion++">重试</el-button>
+          </div>
+        </template>
+      </el-image>
       <el-button type="danger" link @click="model = ''">删除</el-button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { UploadFile } from "element-plus";
 import { ElMessage } from "element-plus";
 import { getImageUploadSizeError, getUploadUrl, uploadImages } from "@/api/uploads";
 import { getErrorMessage } from "@/utils/request";
-import { UploadFilled } from "@element-plus/icons-vue";
+import { Refresh, UploadFilled } from "@element-plus/icons-vue";
 
 const model = defineModel<string>({ required: true });
+const props = withDefaults(defineProps<{ label?: string; upload?: (file: File) => Promise<string> }>(), { label: '缩略图' });
 const uploading = ref(false);
+const reloadVersion = ref(0);
+const previewUrl = computed(() => {
+  const url = getUploadUrl(model.value);
+  return reloadVersion.value ? `${url}${url.includes('?') ? '&' : '?'}reload=${reloadVersion.value}` : url;
+});
+watch(model, () => { reloadVersion.value = 0; });
 
 const handleChange = async (file: UploadFile) => {
-  if (!file.raw) return;
+  if (!file.raw || uploading.value) return;
   const sizeError = getImageUploadSizeError(file.raw);
   if (sizeError) {
     ElMessage.warning(sizeError);
@@ -41,11 +55,14 @@ const handleChange = async (file: UploadFile) => {
 
   uploading.value = true;
   try {
-    const res = await uploadImages(formData);
-    model.value = res.data[0] || "";
-    ElMessage.success("缩略图上传成功");
+    if (props.upload) model.value = await props.upload(file.raw);
+    else {
+      const res = await uploadImages(formData);
+      model.value = res.data[0] || "";
+    }
+    ElMessage.success(`${props.label}上传成功`);
   } catch (e) {
-    ElMessage.error(getErrorMessage(e, "缩略图上传失败"));
+    ElMessage.error(getErrorMessage(e, `${props.label}上传失败`));
   } finally {
     uploading.value = false;
   }
@@ -55,6 +72,8 @@ const handleChange = async (file: UploadFile) => {
 <style scoped>
 .thumb-upload {
   display: flex;
+  width: 100%;
+  min-width: 0;
   flex-direction: column;
   gap: 10px;
 }
@@ -77,4 +96,7 @@ const handleChange = async (file: UploadFile) => {
   border: 1px solid #dcdfe6;
   border-radius: 6px;
 }
+
+.image-error { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--el-text-color-secondary); }
+.preview.product-thumbnail { height: auto; aspect-ratio: 5 / 4; }
 </style>

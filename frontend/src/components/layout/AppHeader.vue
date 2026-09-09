@@ -11,6 +11,25 @@
         <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
         <el-breadcrumb-item>{{ route.meta.title || "页面" }}</el-breadcrumb-item>
       </el-breadcrumb>
+      <div class="site-switcher">
+        <el-icon><Monitor /></el-icon>
+        <el-select
+          v-model="activeSiteId"
+          size="small"
+          filterable
+          :loading="sitesLoading"
+          placeholder="选择站点"
+          @change="handleSiteChange"
+        >
+          <el-option v-for="site in enabledSites" :key="site.id" :label="site.name" :value="site.id">
+            <span>{{ site.name }}</span>
+            <small>{{ site.code }}</small>
+          </el-option>
+        </el-select>
+        <el-tooltip content="站点管理" placement="bottom">
+          <el-button text class="site-settings" :icon="Setting" aria-label="站点管理" @click="router.push('/sites')" />
+        </el-tooltip>
+      </div>
     </div>
 
     <el-dropdown>
@@ -30,18 +49,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, onMounted, reactive } from "vue";
+import { storeToRefs } from "pinia";
 import { isCollapse } from "@/components/layout/isCollapse";
 import { useMyTokenStore } from "@/stores/myToken";
 import { getInfo } from "@/api/users";
 import { ElMessageBox, ElMessage } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowDown, Expand, Fold } from "@element-plus/icons-vue";
+import { ArrowDown, Expand, Fold, Monitor, Setting } from "@element-plus/icons-vue";
+import { useSitesStore } from "@/stores/sites";
 
 const router = useRouter();
 const route = useRoute();
 const userInfo = reactive({ email: "" });
 const tokenStore = useMyTokenStore();
+const sitesStore = useSitesStore();
+const { activeSiteId, enabledSites, loading: sitesLoading } = storeToRefs(sitesStore);
 
 const avatarText = computed(() => (userInfo.email ? userInfo.email.slice(0, 1).toUpperCase() : "U"));
 
@@ -66,7 +89,10 @@ async function getUser() {
   userInfo.email = res?.data?.email || "";
 }
 
+const handleSiteChange = (siteId: number) => sitesStore.selectSite(siteId);
+
 getUser();
+onMounted(() => sitesStore.refresh().catch(() => undefined));
 </script>
 
 <style lang="scss" scoped>
@@ -87,6 +113,22 @@ getUser();
   gap: 12px;
 }
 
+.site-switcher {
+  display: flex;
+  height: 38px;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px;
+  padding-left: 16px;
+  border-left: 1px solid var(--el-border-color-light);
+
+  :deep(.el-select) { width: 190px; }
+  :deep(.el-select-dropdown__item) { display: flex; justify-content: space-between; gap: 16px; }
+  small { color: var(--el-text-color-secondary); }
+}
+
+.site-settings { width: 30px; height: 30px; }
+
 .collapse-btn {
   width: 32px;
   height: 32px;
@@ -105,5 +147,9 @@ getUser();
   .left, .user-trigger { gap: 6px; }
   .user-trigger { margin-right: 0; }
   .user-trigger > span { display: none; }
+  .site-switcher { margin-left: 0; padding-left: 0; border-left: 0; }
+  .site-switcher > .el-icon { display: none; }
+  .site-switcher :deep(.el-select) { width: 138px; }
+  .site-settings { display: none; }
 }
 </style>

@@ -24,7 +24,7 @@ export class AppController {
   @Get('project-identity')
   @Public()
   getProjectIdentity() {
-    return { project: 'pboot-admin-20260729' };
+    return { project: 'pboot-admin-center' };
   }
 }
 

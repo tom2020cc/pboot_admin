@@ -7,6 +7,6 @@ export class PbootScopeDto {
   @Min(1)
   menuId: number;
 
-  @IsIn(['zh-CN', 'en', 'es', 'fr', 'ru', 'ar', 'pt'])
+  @IsIn(['zh-CN', 'en', 'es', 'fr', 'ru', 'ar', 'pt', 'id', 'tr', 'vi'])
   lang: string;
 }

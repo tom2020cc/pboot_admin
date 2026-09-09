@@ -33,7 +33,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { basicSetup } from "codemirror";
 import { html } from "@codemirror/lang-html";
 import { ElMessage } from "element-plus";
-import { getImageUploadSizeError, getUploadUrl, normalizeHtmlImageUrls, uploadImages } from "@/api/uploads";
+import { getImageUploadSizeError, normalizeHtmlImageUrls, uploadImages } from "@/api/uploads";
 import { getErrorMessage } from "@/utils/request";
 import { Picture } from "@element-plus/icons-vue";
 
@@ -133,8 +133,11 @@ const handleImageSelected = async (event: Event) => {
     const res = await uploadImages(formData);
     const filename = res.data[0];
     if (!filename) throw new Error("上传接口没有返回文件名");
-    const url = getUploadUrl(filename);
-    insertAtCursor(`\n<p><img src="${url}" alt="${file.name}" style="max-width:100%;" /></p>\n`);
+    const image = document.createElement('img');
+    image.src = `/uploads/${encodeURIComponent(filename)}`;
+    image.alt = file.name;
+    image.style.maxWidth = '100%';
+    insertAtCursor(`\n<p>${image.outerHTML}</p>\n`);
     ElMessage.success("图片已插入正文");
   } catch (e) {
     ElMessage.error(getErrorMessage(e, "图片插入失败"));

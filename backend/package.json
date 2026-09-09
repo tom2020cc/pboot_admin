@@ -5,6 +5,9 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -39,8 +42,11 @@
     "multer": "^2.2.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.12.0",
+    "playwright": "^1.63.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
+    "sanitize-html": "^2.17.7",
+    "sharp": "^0.35.4",
     "sql.js": "^1.14.1",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.20"
@@ -77,8 +83,19 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.(t|j)s$": [
+        "ts-jest",
+        {
+          "tsconfig": {
+            "allowJs": true
+          }
+        }
+      ]
     },
+    "transformIgnorePatterns": [
+      "node_modules/(?!\\.pnpm/|(?:htmlparser2|domhandler|domutils|dom-serializer|domelementtype|entities)/)",
+      "node_modules/\\.pnpm/(?!(?:htmlparser2|domhandler|domutils|dom-serializer|domelementtype|entities)@)"
+    ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],
