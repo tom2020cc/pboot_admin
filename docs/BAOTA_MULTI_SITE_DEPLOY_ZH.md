@@ -11,9 +11,10 @@
 
 - 项目：`/www/wwwroot/pboot_admin_center`；运行时使用宝塔 PM2 管理器选定的 Node。
 - 新数据库：`data/pboot-admin.sqlite`，不迁移本地账号、内容或密钥。
-- 启动配置：`deploy/baota.ecosystem.cjs`，包括 API、SEO 工具、FTP 工具及 SEO worker。必须使用宝塔现有 PM2 的命令、用户和 PM2_HOME，不创建第二套进程列表。
+- 启动配置：`deploy/baota.ecosystem.config.js`，包括 API、SEO 工具、FTP 工具及 SEO worker。必须使用宝塔现有 PM2 的命令、用户和 PM2_HOME，不创建第二套进程列表。
 - 启动、停止和日志在宝塔 PM2 管理器中查看；运行用户应与目录及 `.env` 权限匹配。
 - API/工具仅监听回环地址。前端构建输出在 `frontend/dist`，域名确定后配置独立 Nginx 站点；不改已有网站的域名或 80/443 配置。
+- 域名未配置时，可把 `deploy/nginx/pboot-admin-loopback.conf` 安装到宝塔 Nginx 的独立 vhost 配置，先执行 `nginx -t` 再 reload。仅监听 `127.0.0.1:5278`，可在服务器测试首页及 `/api/project-identity`，不可从公网访问。
 - 首次安装只完成内部服务。管理员账号初始化、管理域名、HTTPS、工具域名和模型密钥另行配置；不应直接开放内部端口到公网。
 - 正式环境必须设置随机 `JWT_SECRET`，关闭公开注册和默认 Swagger；准备脚本生成独立密钥，不输出到日志，也不覆盖已有 `.env`。新建管理员需在服务器端初始化，或之后由已有管理员添加，不再通过公网注册。
 - PDF 导出还需安装服务器 Chromium 及其系统依赖，不能把 Windows 浏览器复制到 Linux。
