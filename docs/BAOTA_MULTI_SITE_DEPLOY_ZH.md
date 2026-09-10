@@ -20,7 +20,18 @@
 - 正式环境必须设置随机 `JWT_SECRET`，关闭公开注册和默认 Swagger；准备脚本生成独立密钥，不输出到日志，也不覆盖已有 `.env`。新建管理员需在服务器端初始化，或之后由已有管理员添加，不再通过公网注册。
 - PDF 导出还需安装服务器 Chromium 及其系统依赖，不能把 Windows 浏览器复制到 Linux。
 - OpenCloudOS 9 本次使用 `pnpm --dir backend exec playwright install chromium`；根据 `ldd` 的缺失库补装 `mesa-libgbm`、`alsa-lib`。该系统不在 Playwright 官方支持列表内，安装后须实际渲染验证，并补齐中文字体。
+- 中文字体使用 `dnf install google-noto-sans-cjk-sc-fonts`，`fc-match :lang=zh-cn` 应返回 Noto Sans CJK SC。修改 PM2 运行用户时，还需以对应用户重新安装浏览器或配置共享浏览器目录。
 - SEO 全局默认暂停，无需搜索密钥也能安装启动。部署包应包含 `tools/seo-content-worker/skills/`。
+
+### 2026-09-11 安装验证
+
+- Node.js 22.23.2、pnpm 9.15.9、PM2 6.0.14；服务器完成前后端构建。
+- 宝塔 PM2 5.6 面板已列出四个进程；PM2 使用 `/root/.pm2`，标准 `pm2-root` 开机恢复已启用。未重启整台服务器进行验证。
+- 内部前端 `127.0.0.1:5278`、SEO 工具 `5388`、FTP 工具 `5389` 返回 HTTP 200；前端 `/api/project-identity` 正确转发到 `5108`。
+- SEO worker 的只读检查通过，协议版本 2，全局暂停，未调用模型、采集或发布内容。
+- Chromium 英文与中文 PDF 内存渲染通过；尚未完成真实产品介绍的用户流程测试。
+- 修复了全新安装无站点时两个工具因空配置路径反复退出的问题；未迁移本地数据库或修改业务网站。
+- 待配置：初始管理员、管理域名及 HTTPS、工具访问保护、站点档案和模型密钥。当前回环地址不能直接从公网访问。
 
 下面是手动部署参考；Node.js 应使用仍受支持的 LTS，项目最低要求 22.12.0。参考 [Node.js 官方版本与下载](https://nodejs.org/en/download)。
 
