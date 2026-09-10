@@ -31,6 +31,22 @@ export class PlanConfigDto {
   feeds: string[];
   @IsInt() @Min(1) @Max(168) intervalHours: number;
   @IsInt() @Min(1) @Max(10) dailyLimit: number;
+  @IsOptional() @IsBoolean() searchEnabled?: boolean;
+  @IsOptional() @IsInt() @Min(1) @Max(24) dailyCollectLimit?: number;
+  @IsOptional() @IsIn(['deepseek', 'brave']) searchProvider?:
+    'deepseek' | 'brave';
+  @IsOptional()
+  @IsIn(['deepseek-v4-flash', 'deepseek-v4-pro'])
+  researchModel?: string;
+  @IsOptional() @IsInt() @Min(1000) @Max(8000) maxOutputTokens?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(30) dailySearchLimit?: number;
+  @IsOptional() @IsString() @MaxLength(12000) knowledge?: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  productIds?: number[];
 }
 export class SavePlanDto {
   @IsInt() @Min(0) revision: number;
@@ -51,6 +67,7 @@ export class SourceDto {
 export class QueueDto {
   @IsIn(['collect', 'generate']) kind: string;
   @IsOptional() @IsInt() @Min(1) sourceId?: number;
+  @IsOptional() @IsInt() @Min(1) newsId?: number;
 }
 export class ArticleDto {
   @IsString() @MaxLength(120) title: string;
@@ -74,6 +91,7 @@ export class CollectedSourceDto {
   @IsString() @MaxLength(200) title: string;
   @IsString() @MaxLength(1000) url: string;
   @IsString() @MaxLength(60) publishedAt: string;
+  @IsOptional() @IsString() @MaxLength(12000) notes?: string;
 }
 export class CompleteJobDto extends LeaseDto {
   @IsOptional() @ValidateNested() @Type(() => ArticleDto) draft?: ArticleDto;
@@ -84,6 +102,12 @@ export class CompleteJobDto extends LeaseDto {
   @Type(() => CollectedSourceDto)
   sources?: CollectedSourceDto[];
   @IsOptional() @IsInt() @Min(0) @Max(1000000) tokens?: number;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(12)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  warnings?: string[];
 }
 export class FailJobDto extends LeaseDto {
   @IsString() @MaxLength(300) error: string;

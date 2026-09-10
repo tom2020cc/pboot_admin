@@ -3,6 +3,7 @@ import {
   CanActivate,
   Controller,
   ExecutionContext,
+  Get,
   Injectable,
   Param,
   Post,
@@ -40,6 +41,9 @@ export class SeoWorkerGuard implements CanActivate {
 @Controller('seo-worker')
 export class SeoWorkerController {
   constructor(private readonly service: SeoContentService) {}
+  @Get('health') health() {
+    return this.service.workerHealth();
+  }
   @Post('claim') claim() {
     return this.service.claim();
   }

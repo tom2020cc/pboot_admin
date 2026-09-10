@@ -15,7 +15,7 @@ function sourceUrl(value) {
   if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) throw new Error('SOURCE_URL_NOT_ALLOWED');
   return url;
 }
-async function readPublicFeed(value, signal) {
+async function readPublicText(value, signal, headers = {}) {
   const url = sourceUrl(value);
   let timer;
   const addresses = await Promise.race([
@@ -28,7 +28,7 @@ async function readPublicFeed(value, signal) {
     // Pin the validated address to the actual connection; never follow redirects.
     const req = https.get(url, {
       signal, timeout: 15000, agent: false,
-      headers: { 'User-Agent': 'PbootContentResearch/1.0', Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml', 'Accept-Encoding': 'identity' },
+      headers: { 'User-Agent': 'PbootContentResearch/1.0', Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml', 'Accept-Encoding': 'identity', ...headers },
       lookup: (_hostname, options, callback) => options.all ? callback(null, [address]) : callback(null, address.address, address.family),
     }, res => {
       if (res.statusCode !== 200) { res.resume(); req.destroy(new Error(`SOURCE_HTTP_${res.statusCode}`)); return; }
@@ -46,6 +46,7 @@ async function readPublicFeed(value, signal) {
     req.on('error', reject);
   });
 }
+const readPublicFeed = (value, signal) => readPublicText(value, signal);
 function parseFeed(xml, keywords) {
   if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error('XML_DECLARATION_NOT_ALLOWED');
   const tree = new XMLParser({ ignoreAttributes: false, processEntities: false }).parse(xml);
@@ -60,7 +61,9 @@ function parseFeed(xml, keywords) {
     const url = typeof link === 'string' ? link : link?.['@_href'];
     try { sourceUrl(url); } catch { return []; }
     const date = Date.parse(text(item.pubDate || item.published || item.updated));
-    return [{ title, url: String(url).slice(0, 1000), publishedAt: Number.isFinite(date) ? new Date(date).toISOString() : '' }];
+    const notes = text(item.summary || item.description || '').slice(0, 600);
+    return [{ title, url: String(url).slice(0, 1000), publishedAt: Number.isFinite(date) ? new Date(date).toISOString() : '',
+      ...(notes ? { notes: `RSS 文字摘要（待核实）：\n${notes}` } : {}) }];
   }).slice(0, 100);
 }
-module.exports = { isPublicAddress, sourceUrl, readPublicFeed, parseFeed };
+module.exports = { isPublicAddress, sourceUrl, readPublicFeed, readPublicText, parseFeed };

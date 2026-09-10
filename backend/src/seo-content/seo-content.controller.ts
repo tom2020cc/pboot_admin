@@ -22,6 +22,9 @@ export class SeoContentController {
   @Get() state() {
     return this.service.state();
   }
+  @Get('articles/:id/history') history(@Param('id', ParseIntPipe) id: number) {
+    return this.service.history(id);
+  }
   @Patch('plan') plan(@Body() body: SavePlanDto) {
     return this.service.savePlan(body);
   }
@@ -48,6 +51,12 @@ export class SeoContentController {
     @Body() body: SaveDraftDto,
   ) {
     return this.service.saveDraft(id, body);
+  }
+  @Post('jobs/:id/check') check(
+    @Param('id') id: string,
+    @Body() body: SaveDraftDto,
+  ) {
+    return this.service.check(id, body);
   }
   @Post('jobs/:id/schedule') schedule(
     @Param('id') id: string,

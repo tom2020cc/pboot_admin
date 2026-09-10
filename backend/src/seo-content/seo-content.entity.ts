@@ -17,6 +17,14 @@ export interface PlanConfig {
   feeds: string[];
   intervalHours: number;
   dailyLimit: number;
+  searchEnabled?: boolean;
+  dailyCollectLimit?: number;
+  searchProvider?: 'deepseek' | 'brave';
+  researchModel?: string;
+  maxOutputTokens?: number;
+  dailySearchLimit?: number;
+  knowledge?: string;
+  productIds?: number[];
 }
 export const defaultPlan = (): PlanConfig => ({
   industry: '',
@@ -28,6 +36,14 @@ export const defaultPlan = (): PlanConfig => ({
   feeds: [],
   intervalHours: 24,
   dailyLimit: 1,
+  searchEnabled: false,
+  dailyCollectLimit: 4,
+  searchProvider: 'deepseek',
+  researchModel: 'deepseek-v4-flash',
+  maxOutputTokens: 6000,
+  dailySearchLimit: 3,
+  knowledge: '',
+  productIds: [],
 });
 @Entity('seo_content_plan')
 export class SeoPlan {
@@ -55,6 +71,10 @@ export class SeoSource {
   @Column('text', { default: '' }) notes: string;
   @Column({ default: false }) verified: boolean;
   @CreateDateColumn() createdAt: Date;
+}
+export interface EditorialRules {
+  version: string;
+  rules: { id: string; title: string; text: string }[];
 }
 export interface ArticleDraft {
   title: string;
@@ -84,6 +104,19 @@ export class SeoJob {
   @Column('simple-json') snapshot: PlanConfig & {
     source?: { id: number; title: string; url: string; notes: string };
     provider?: string;
+    searchKeywords?: string[];
+    editorial?: EditorialRules;
+    products?: { id: number; title: string; text: string }[];
+    existingTitles?: string[];
+    previous?: {
+      id: number;
+      hash: string;
+      urlName: string;
+      draft: ArticleDraft;
+      media: string[];
+    };
+    appliedHash?: string;
+    searchReservations?: string[];
   };
   @Column('simple-json', { nullable: true }) draft: ArticleDraft | null;
   @Column({ default: '' }) leaseToken: string;

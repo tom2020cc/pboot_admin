@@ -49,6 +49,7 @@ managed-sites/
 
 - [2026-09-09 开发基线与备份说明](docs/PROJECT_BASELINE_20260909_ZH.md)
 - [SEO 内容计划与实施范围](docs/SEO_CONTENT_PLAN_ZH.md)
+- SEO 内容任务进程：主后端启动后运行 `08-start-seo-content.cmd`，不会自动开启网站计划。支持 DeepSeek 联网文字研究、独立写作模型、版本化 SEO Skill、本站资料及产品选择、旧文审核更新与历史对照。DeepSeek 使用服务端 `DEEPSEEK_API_KEY` 或已有模型配置；Brave 为可选项，RSS 无需搜索密钥。不采集图片、不生成图片或 ALT。
 - [新电脑集中版安装教程](docs/NEW_PC_SETUP_ZH.md)
 - [宝塔集中部署图文教程](docs/BAOTA_MULTI_SITE_DEPLOY_ZH.md)
 - [多站点配置目录说明](managed-sites/README.md)

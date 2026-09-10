@@ -892,7 +892,7 @@ export class NewsService {
     return await this.findOneById(id);
   }
 
-  async syncToPboot(id: number, options: SyncNewsDto = {}, beforeWrite?: () => Promise<void>) {
+  async syncToPboot(id: number, options: SyncNewsDto = {}, beforeWrite?: () => Promise<void>, preservePublicationDate = false) {
     const news = await this.findNewsEntity(id);
     await this.ensureTranslations(news);
     const translations = await this.translationRepo.find({ where: { newsId: id }, order: { id: 'ASC' } });
@@ -924,7 +924,7 @@ export class NewsService {
         if (!content.title.trim()) continue;
 
         const resolvedConfig = await this.resolvePbootConfigFromMenu(config, news.menuId);
-        const item = this.upsertPbootNews(db, news, content, lang, resolvedConfig, siteRoot);
+        const item = this.upsertPbootNews(db, news, content, lang, resolvedConfig, siteRoot, preservePublicationDate);
         synced.push(item);
       }
 
@@ -1499,6 +1499,7 @@ export class NewsService {
     lang: string,
     config: PbootLanguageConfig,
     siteRoot: string,
+    preservePublicationDate = false,
   ): PbootSyncItem {
     const now = this.formatPbootDate(new Date());
     const requestedFilename = this.normalizePbootFilename(content.urlName);
@@ -1508,6 +1509,12 @@ export class NewsService {
     const row = requestedFilename
       ? this.getPbootExistingRow(db, config.acode, filename)
       : this.getPbootExistingContentRow(db, config.acode, config.scode, content.title);
+    if (preservePublicationDate && row) {
+      const stored = this.queryOne(db, 'select scode from ay_content where id=?', [row.id]);
+      const count = this.queryOne(db, 'select count(*) as total from ay_content where acode=? and filename=?', [config.acode, filename]);
+      if (String(stored?.scode) !== String(config.scode) || Number(count?.total) !== 1)
+        throw new BadRequestException('旧文 URL 在 PB 中重复或属于其他栏目，已停止更新');
+    }
     const values = {
       acode: config.acode,
       scode: config.scode,
@@ -1519,7 +1526,7 @@ export class NewsService {
       author: '',
       source: '',
       outlink: '',
-      date: now,
+      date: preservePublicationDate ? this.formatPbootDate(news.createTime) : now,
       ico,
       pics: '',
       content: pbootContent,
@@ -1560,7 +1567,7 @@ export class NewsService {
         'status',
         'update_user',
         'update_time',
-      ];
+      ].filter(field => !preservePublicationDate || field !== 'date');
       this.runSql(
         db,
         `update ay_content set ${fields.map((field) => `${field}=?`).join(',')} where id=?`,
