@@ -39,5 +39,7 @@ for directory in backend frontend tools/seo_publish_tool tools/ftp_publish_tool;
 done
 pnpm --dir "$ROOT/backend" run build
 pnpm --dir "$ROOT/frontend" run build
+find "$ROOT/frontend/dist" -type d -exec chmod 0755 {} +
+find "$ROOT/frontend/dist" -type f -exec chmod 0644 {} +
 echo 'Build ready. Use the installed BaoTa PM2 manager to start deploy/baota.ecosystem.config.js.'
 echo 'No separate PM2 runtime, systemd unit, public listener or business site was created.'

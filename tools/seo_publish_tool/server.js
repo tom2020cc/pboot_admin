@@ -3921,13 +3921,21 @@ const server = http.createServer((req, res) => {
   });
 });
 
-if (require.main === module) server.listen(PORT, process.env.SEO_TOOL_HOST || '127.0.0.1', () => {
-  const config = readConfig();
+function startServer() {
+  return server.listen(PORT, process.env.SEO_TOOL_HOST || '127.0.0.1', () => {
   console.log(`SEO publish tool is running: http://localhost:${PORT}`);
+  if (!siteRuntime.currentSite()) {
+    console.log('No managed site configured; waiting for site setup.');
+    return;
+  }
+  const config = readConfig();
   console.log(`Project root: ${path.resolve(TOOL_ROOT, "..", "..")}`);
   console.log(`Site root   : ${resolveSiteRoot(config)}`);
   console.log(`Database    : ${findDatabase(config)}`);
   console.log(`Public site : ${config.siteBaseUrl}`);
-});
+  });
+}
 
-module.exports = { inspectSite, findLocalEditorRecord, buildVueEditorUrl, calculateSeoHealth, addCategorySeoIssues };
+if (require.main === module) startServer();
+
+module.exports = { inspectSite, findLocalEditorRecord, buildVueEditorUrl, calculateSeoHealth, addCategorySeoIssues, startServer };

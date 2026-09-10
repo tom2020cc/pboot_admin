@@ -764,12 +764,17 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, "127.0.0.1", () => {
+function startServer() {
+  return server.listen(PORT, "127.0.0.1", () => {
   const sites = siteRuntime.readManagedSites();
   if (sites.length) {
     for (const site of sites) siteRuntime.runForSite(site, scheduleSecurityMonitor);
   } else {
-    scheduleSecurityMonitor();
+    console.log('No managed site configured; scheduled monitoring is inactive.');
   }
   console.log(`FTP publish tool is running: http://localhost:${PORT}`);
-});
+  });
+}
+
+if (require.main === module) startServer();
+module.exports = { startServer };
