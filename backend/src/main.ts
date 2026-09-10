@@ -16,7 +16,8 @@ async function bootstrap() {
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
   const pbootSiteRoot = process.env.PBOOT_SITE_ROOT || join(process.cwd(), '..', '..');
   app.use('/pboot-static', express.static(join(pbootSiteRoot, 'static')));
-  app.enableCors();
+  const production = process.env.NODE_ENV === 'production';
+  app.enableCors({ origin: production ? (process.env.CORS_ORIGINS?.split(',').map(value => value.trim()).filter(Boolean) || false) : true });
   // 优雅关闭：Ctrl+C / 关闭窗口 / SIGTERM 时，先让 TypeORM 完成写盘再退出，
   // 避免 sqljs(autoSave) 写 dev.sqlite 中途被强杀导致文件损坏
   app.enableShutdownHooks();
@@ -28,12 +29,15 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api-docs', app, document);
+  if (!production || process.env.ENABLE_SWAGGER === 'true') {
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api-docs', app, document);
+  }
 
   const port = Number(process.env.BACKEND_PORT || 5108);
-  await app.listen(port);
-  console.log(`http://localhost:${port}/api-docs`);
+  const host = process.env.BACKEND_HOST || (production ? '127.0.0.1' : '0.0.0.0');
+  await app.listen(port, host);
+  console.log(`Backend listening on ${host}:${port}`);
 }
 
 bootstrap();

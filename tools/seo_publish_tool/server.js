@@ -3921,7 +3921,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
-if (require.main === module) server.listen(PORT, () => {
+if (require.main === module) server.listen(PORT, process.env.SEO_TOOL_HOST || '127.0.0.1', () => {
   const config = readConfig();
   console.log(`SEO publish tool is running: http://localhost:${PORT}`);
   console.log(`Project root: ${path.resolve(TOOL_ROOT, "..", "..")}`);

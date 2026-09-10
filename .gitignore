@@ -15,6 +15,9 @@ logs/
 # 密钥 / 敏感配置（严禁提交）
 .env
 .env.local
+.env.*.local
+.home/
+.pm2/
 seo.config.json
 ftp.config.json
 security-baseline.json

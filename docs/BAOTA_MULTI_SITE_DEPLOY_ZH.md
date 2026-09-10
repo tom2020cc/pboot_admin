@@ -3,7 +3,23 @@
 > 适用项目：`pboot_admin_center`  
 > 本地开发目录：`E:\phpstudy_pro\WWW\pboot_admin_center`  
 > 宝塔目标目录：`/www/wwwroot/pboot_admin_center`  
-> 文档更新：2026-09-02
+> 文档更新：2026-09-11
+
+## 本次全新安装入口
+
+使用宝塔已有的 **PM2 管理器**：先在“Node版本”安装 Node.js 22 LTS（至少 22.12.0），再把仓库克隆到下面的独立目录。`bash deploy/prepare-baota.sh` 只生成全新配置、安装依赖并构建，不另装 Node/PM2 守护、不创建 systemd 服务、不修改 Nginx 或业务网站。已有数据库时停止，不能用它覆盖旧部署。
+
+- 项目：`/www/wwwroot/pboot_admin_center`；运行时使用宝塔 PM2 管理器选定的 Node。
+- 新数据库：`data/pboot-admin.sqlite`，不迁移本地账号、内容或密钥。
+- 启动配置：`deploy/baota.ecosystem.cjs`，包括 API、SEO 工具、FTP 工具及 SEO worker。必须使用宝塔现有 PM2 的命令、用户和 PM2_HOME，不创建第二套进程列表。
+- 启动、停止和日志在宝塔 PM2 管理器中查看；运行用户应与目录及 `.env` 权限匹配。
+- API/工具仅监听回环地址。前端构建输出在 `frontend/dist`，域名确定后配置独立 Nginx 站点；不改已有网站的域名或 80/443 配置。
+- 首次安装只完成内部服务。管理员账号初始化、管理域名、HTTPS、工具域名和模型密钥另行配置；不应直接开放内部端口到公网。
+- 正式环境必须设置随机 `JWT_SECRET`，关闭公开注册和默认 Swagger；准备脚本生成独立密钥，不输出到日志，也不覆盖已有 `.env`。新建管理员需在服务器端初始化，或之后由已有管理员添加，不再通过公网注册。
+- PDF 导出还需安装服务器 Chromium 及其系统依赖，不能把 Windows 浏览器复制到 Linux。
+- SEO 全局默认暂停，无需搜索密钥也能安装启动。部署包应包含 `tools/seo-content-worker/skills/`。
+
+下面是手动部署参考；Node.js 应使用仍受支持的 LTS，项目最低要求 22.12.0。参考 [Node.js 官方版本与下载](https://nodejs.org/en/download)。
 
 本教程的目标是在宝塔服务器上只部署一套 Pboot Admin，通过一个管理后台选择并操作同一台服务器上的多个 PbootCMS 网站。
 
@@ -45,7 +61,7 @@
 |---|---|
 | 宝塔 Linux 面板 | 当前稳定版或正式版 |
 | Web 服务 | Nginx |
-| Node.js | 20 LTS 或 22 LTS |
+| Node.js | 22 LTS，至少 22.12.0 |
 | Node 项目管理 | 宝塔 Node.js 版本管理器 / PM2 |
 | PHP | 按现有 PbootCMS 网站要求安装 |
 | 数据库 | 本管理项目使用 SQLite 文件，不需要新建 MySQL |
@@ -60,7 +76,7 @@
 
 1. `软件商店`。
 2. 搜索并安装 `Node.js 版本管理器`。
-3. 安装 Node.js 20 LTS 或 22 LTS。
+3. 安装 Node.js 22 LTS，至少 22.12.0。
 4. 设置该版本为命令行版本。
 5. 确认 Nginx 正常运行。
 
@@ -186,7 +202,7 @@ cp /www/wwwroot/pboot_admin_center/backend/dev.sqlite \
    /www/wwwroot/pboot_admin_center/data/pboot-admin.sqlite
 ```
 
-全新部署、不保留本地管理数据时不要执行上面的 `cp`。只要 `data` 目录可写，后端首次启动会创建空数据库，随后在登录页注册第一个管理员。
+全新部署、不保留本地管理数据时不要执行上面的 `cp`。只要 `data` 目录可写，后端首次启动会创建空数据库。正式环境不开放匿名注册，管理员需通过服务器端初始化。
 
 复制环境变量模板：
 

@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Post, UseGuards, Request } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards, Request, ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CreateUserDto } from 'src/user/dto/create-user.dto';
-import { UserService } from 'src/user/user.service';
+import { CreateUserDto } from '../user/dto/create-user.dto';
+import { UserService } from '../user/user.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Public } from './public.decorator';
 
@@ -16,6 +16,9 @@ export class AuthController {
   @Public()
   @Post('/signup')
   create(@Body() postobj: CreateUserDto) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('生产环境不开放公开注册，请通过服务器初始化管理员或由现有管理员添加用户');
+    }
     return this.userService.create(postobj)
   }
   @ApiOperation({ summary: '用户登录', description: '用户登录获取token' })
