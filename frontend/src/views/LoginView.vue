@@ -14,7 +14,7 @@
           {{ isRegister ? "注册并登录" : "登录" }}
         </el-button>
       </el-form-item>
-      <el-button link type="primary" @click="isRegister = !isRegister">
+      <el-button v-if="canRegister" link type="primary" @click="isRegister = !isRegister">
         {{ isRegister ? "已有账号，去登录" : "没有账号，立即注册" }}
       </el-button>
     </el-form>
@@ -32,7 +32,8 @@ import { getErrorMessage } from "@/utils/request";
 
 const router = useRouter();
 const route = useRoute();
-const form = reactive<LoginInfo>({ email: "tom@qq.com", password: "tom1993" });
+const form = reactive<LoginInfo>({ email: "", password: "" });
+const canRegister = import.meta.env.DEV;
 const formRef = ref<FormInstance>();
 const isLoading = ref(false);
 const isRegister = ref(false);
@@ -55,7 +56,7 @@ const onSubmit = async () => {
 
   isLoading.value = true;
   try {
-    if (isRegister.value) {
+    if (isRegister.value && canRegister) {
       await signup(form);
     }
     const res = await login(form);
