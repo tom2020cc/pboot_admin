@@ -2,17 +2,18 @@
   <div class="quotation-tool">
     <header class="tool-header">
       <div class="tool-brand">
-        <div class="tool-mark">价</div>
+        <el-icon :size="26" color="#1677ff"><Document /></el-icon>
         <div>
-          <h1>PbootCMS 报价单生成工具</h1>
-          <p>中文产品报价与网页输出</p>
+          <h1>报价单生成</h1>
+          <p>{{ sites.activeSite?.name }}</p>
         </div>
       </div>
-      <div class="tool-state"><span />独立报价工作台</div>
+      <el-tag>{{ sites.activeSite?.name || '当前网站' }}</el-tag>
     </header>
     <ToolNav active-id="quotation" />
     <main class="tool-main">
-      <QuotationBuilder />
+      <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" />
+      <QuotationBuilder v-if="ready" :key="sites.activeSiteId" />
     </main>
   </div>
 </template>
@@ -20,6 +21,12 @@
 <script setup lang="ts">
 import ToolNav from "@/components/layout/ToolNav.vue";
 import QuotationBuilder from "./QuotationBuilder.vue";
+import { Document } from '@element-plus/icons-vue';
+import { onMounted, ref } from 'vue';
+import { useSitesStore } from '@/stores/sites';
+import { getErrorMessage } from '@/utils/request';
+const sites = useSitesStore(), ready = ref(false), loadError = ref('');
+onMounted(async () => { try { await sites.refresh(); ready.value = true; } catch(error) { loadError.value = getErrorMessage(error,'网站读取失败，请刷新'); } });
 </script>
 
 <style scoped>

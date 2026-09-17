@@ -1124,9 +1124,17 @@ export class MenuService {
       throw new BadRequestException(`请先同步「${menu.name}」的父栏目，或使用同步全部`);
     }
     const filename = /^https?:\/\//i.test(menu.href) ? menu.urlName : this.hrefToFilename(menu.href);
-    if (filename && this.queryOne(db,
-      'select id from ay_content_sort where lower(filename)=lower(?) and not (acode=? and scode=?)', [filename, key.acode, key.scode])) {
-      throw new BadRequestException(`栏目「${menu.name}」的 URL 已被 PB 其他栏目使用`);
+    if (!filename) return;
+    const current = existing && this.queryOne<{ filename: string }>(db,
+      'select filename from ay_content_sort where acode=? and scode=?', [key.acode, key.scode]);
+    // Imported language variants may already share a URL. Preserve that state only for unchanged paths.
+    const unchanged = current && current.filename === filename;
+    const collisions = this.queryAll<{ acode: string; scode: string; name: string }>(db,
+      'select acode,scode,name from ay_content_sort where lower(filename)=lower(?) and not (acode=? and scode=?)',
+      [filename, key.acode, key.scode]);
+    const conflict = collisions.find(row => !unchanged || row.acode === key.acode);
+    if (conflict) {
+      throw new BadRequestException(`栏目「${menu.name}」的 URL「/${filename}」已被 PB 栏目「${conflict.name}」使用（语言 ${conflict.acode}，编码 ${conflict.scode}），请核对后再同步`);
     }
   }
 

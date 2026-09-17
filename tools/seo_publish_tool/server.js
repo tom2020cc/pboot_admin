@@ -5,7 +5,10 @@ const crypto = require("crypto");
 const initSqlJs = require("sql.js");
 const cheerio = require("cheerio");
 const seoAi = require("./ai-seo");
+const googleScope = require("./google-scope");
 const siteRuntime = require("../site-runtime");
+const { buildPublicNavigation } = require("../public-navigation");
+const { createToolAuth, runWithToolIdentity, toolRequestHeaders } = require("../tool-auth");
 
 const TOOL_ROOT = __dirname;
 const PACKAGE_ROOT = path.resolve(TOOL_ROOT, "..", "..");
@@ -353,23 +356,14 @@ function getProjectSettings() {
     backendPort: Number(env.BACKEND_PORT || 5000),
     frontendPort: Number(env.FRONTEND_PORT || 5178),
     seoPort: PORT,
-    ftpPort: Number(ftp.localPort || 5189),
+    ftpPort: Number(process.env.FTP_TOOL_PORT || env.FTP_TOOL_PORT || ftp.localPort || 5189),
     localDatabasePath: path.resolve(PACKAGE_ROOT, "backend", env.DB_SQLJS_LOCATION || "dev.sqlite"),
   };
 }
 
 function buildNavigation(active = "seo") {
   const ports = getProjectSettings();
-  return [
-    { id: "admin", label: "管理后台", url: `http://localhost:${ports.frontendPort}/#/` },
-    { id: "backend", label: "后端接口", url: `http://localhost:${ports.backendPort}/api-docs` },
-    { id: "sites", label: "站点管理", url: `http://localhost:${ports.frontendPort}/#/sites` },
-    { id: "quotation", label: "报价单生成", url: `http://localhost:${ports.frontendPort}/#/quotations` },
-    { id: "seo", label: "SEO 检查", url: `http://localhost:${ports.seoPort}` },
-    { id: "models", label: "模型总览", url: `http://localhost:${ports.seoPort}/models.html` },
-    { id: "models-config", label: "模型配置", url: `http://localhost:${ports.seoPort}/models-config.html` },
-    { id: "ftp", label: "FTP 发布", url: `http://localhost:${ports.ftpPort}` },
-  ].map((item) => ({ ...item, url: siteRuntime.withSiteQuery(item.url), active: item.id === active }));
+  return buildPublicNavigation({ ...parseEnvFile(BACKEND_ENV_PATH), ...process.env }, ports, active, siteRuntime.withSiteQuery);
 }
 
 function readConfig() {
@@ -708,8 +702,9 @@ function findLocalEditorRecord(localDb, kind, record) {
 function buildVueEditorUrl(localDb, kind, record) {
   const localRecord = findLocalEditorRecord(localDb, kind, record);
   if (!localRecord) return "";
-  const frontendPort = getProjectSettings().frontendPort;
-  return siteRuntime.withSiteQuery(`http://localhost:${frontendPort}/#/${localRecord.route}/edit/${localRecord.id}`);
+  const url = new URL(buildNavigation().find(item => item.id === 'admin').url);
+  url.hash = `/${localRecord.route}/edit/${localRecord.id}`;
+  return url.toString();
 }
 
 function addIssue(issues, severity, type, title, detail, url, meta = {}) {
@@ -1238,13 +1233,13 @@ function getFtpToolInfo() {
   } catch (_error) {
     // The SEO tool remains usable even if the optional FTP tool is absent.
   }
-  const port = Number(config.localPort || 5189);
+  const port = getProjectSettings().ftpPort;
   return {
     toolRoot,
     configPath,
     port,
     baseUrl: `http://127.0.0.1:${port}`,
-    browserUrl: siteRuntime.withSiteQuery(`http://localhost:${port}`),
+    browserUrl: buildNavigation().find(item => item.id === 'ftp').url,
     configured: Boolean(config.host && config.user),
   };
 }
@@ -1256,8 +1251,10 @@ async function requestFtpTool(pathname, options = {}) {
     const siteId = siteRuntime.currentSite()?.id;
     const response = await fetch(`${info.baseUrl}${pathname}`, {
       ...fetchOptions,
+      redirect: 'error',
       headers: {
         ...(fetchOptions.headers || {}),
+        ...toolRequestHeaders(`${info.baseUrl}${pathname}`),
         ...(siteId ? { "X-Pboot-Site-Id": String(siteId) } : {}),
       },
       signal: AbortSignal.timeout(timeout),
@@ -2454,18 +2451,23 @@ async function checkGooglePublicFiles() {
   }
   const settings = getGoogleSearchConsoleSettings(config);
   if (!settings.sitemapUrlValid) throw new Error("Sitemap 线上地址格式不正确。");
+  googleScope.assertGoogleScope(config, getSearchConsoleConfig(config).siteUrl, settings.sitemapUrl);
   const robotsUrl = `${cleanBaseUrl(config.siteBaseUrl)}/${config.outputRobots || "robots.txt"}`;
   const [sitemap, robots] = await Promise.all([
     fetchPublicSeoFile(settings.sitemapUrl, "sitemap.xml"),
     fetchPublicSeoFile(robotsUrl, "robots.txt"),
   ]);
-  const sitemapType = /<sitemapindex(\s|>)/i.test(sitemap.text) ? "sitemapindex" : "urlset";
-  const urlCount = (sitemap.text.match(/<url(?:\s|>)/gi) || []).length;
-  const sitemapCount = (sitemap.text.match(/<sitemap(?:\s|>)/gi) || []).length;
-  const sitemapValid = /<(urlset|sitemapindex)(\s|>)/i.test(sitemap.text)
-    && (sitemapType === "sitemapindex" ? sitemapCount > 0 : urlCount > 0);
+  const xml = cheerio.load(sitemap.text, { xmlMode: true });
+  const sitemapType = xml('sitemapindex').length ? "sitemapindex" : "urlset";
+  const urlCount = xml('urlset > url > loc').length;
+  const sitemapCount = xml('sitemapindex > sitemap > loc').length;
+  const locations = xml(`${sitemapType} > ${sitemapType === 'urlset' ? 'url' : 'sitemap'} > loc`).toArray().map(el => xml(el).text().trim());
+  const sitemapValid = locations.length > 0 && locations.every(value => googleScope.belongsToSite(value, config));
   if (!sitemapValid) throw new Error("线上 sitemap 可以访问，但没有有效 URL，或不是有效的 urlset / sitemapindex XML。");
-  const robotsReferencesSitemap = robots.text.toLowerCase().includes(settings.sitemapUrl.toLowerCase());
+  const robotsReferencesSitemap = robots.text.split(/\r?\n/).some(line => {
+    const match = line.replace(/#.*$/, '').trim().match(/^sitemap\s*:\s*(.+)$/i);
+    return match && match[1].trim() === settings.sitemapUrl;
+  });
   return {
     ok: true,
     checkedAt: new Date().toISOString(),
@@ -2558,7 +2560,8 @@ function buildGoogleServiceAccountJwt(serviceAccount, scope) {
 const googleTokenCache = new Map();
 
 async function getGoogleAccessToken(serviceAccount, scope) {
-  const cached = googleTokenCache.get(scope);
+  const cacheKey = googleScope.tokenCacheKey(serviceAccount, scope, siteRuntime.currentSite()?.id);
+  const cached = googleTokenCache.get(cacheKey);
   if (cached && cached.expire > Date.now() + 60000) {
     return cached.token;
   }
@@ -2574,7 +2577,7 @@ async function getGoogleAccessToken(serviceAccount, scope) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.access_token) {
-    googleTokenCache.delete(scope);
+    googleTokenCache.delete(cacheKey);
     throw new Error(
       `Google 取 access_token 失败：${data.error_description || data.error || `HTTP ${response.status}`}`,
     );
@@ -2583,7 +2586,7 @@ async function getGoogleAccessToken(serviceAccount, scope) {
     token: data.access_token,
     expire: Date.now() + (Number(data.expires_in) || 3600) * 1000,
   };
-  googleTokenCache.set(scope, entry);
+  googleTokenCache.set(cacheKey, entry);
   return data.access_token;
 }
 
@@ -2654,7 +2657,7 @@ async function getGoogleIndexingMetadata(serviceAccount, url) {
       message: (parsed && parsed.error && parsed.error.message) || `HTTP ${response.status}`,
     };
   }
-  const metadata = (parsed && parsed.urlNotificationMetadata) || {};
+  const metadata = parsed || {};
   const update = metadata.latestUpdate;
   const remove = metadata.latestRemove;
   return {
@@ -2749,11 +2752,46 @@ function searchConsoleApiError(parsed, status) {
   return { reason: "google-error", message: rawMessage, detail: rawMessage };
 }
 
+async function testSearchConsoleProperty(siteUrl) {
+  const cfg = getSearchConsoleConfig();
+  googleScope.assertGoogleScope(readConfig(), siteUrl);
+  if (!cfg.enabled) return { ok: false, reason: 'not-configured', message: '请先保存 Google 服务账号 JSON。' };
+  const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
+  const response = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}`, {
+    headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) return { ok: false, siteUrl, ...searchConsoleApiError(data, response.status) };
+  const canSubmit = ['siteOwner', 'siteFullUser'].includes(data.permissionLevel);
+  const canRead = canSubmit || data.permissionLevel === 'siteRestrictedUser';
+  return { ok: canRead, canSubmit, siteUrl, clientEmail: cfg.clientEmail, permissionLevel: data.permissionLevel || '',
+    message: canSubmit ? `Search Console 属性权限正常（${data.permissionLevel}），可以提交 Sitemap 和查询收录。`
+      : '服务账号未取得完整权限，不能提交 Sitemap；请检查当前属性的用户和权限。' };
+}
+
+async function checkIndexingEligibility(url) {
+  if (!googleScope.belongsToSite(url, readConfig())) throw new Error('URL 不属于当前网站。');
+  const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(15000) });
+  if (!response.ok) { await response.body?.cancel(); throw new Error(`页面返回 HTTP ${response.status}，不能验证 Indexing API 适用性。`); }
+  const chunks = []; let bytes = 0;
+  for await (const chunk of response.body) {
+    bytes += chunk.length;
+    if (bytes > 2 * 1024 * 1024) throw new Error('页面过大，未执行 Indexing API 通知。');
+    chunks.push(chunk);
+  }
+  const type = googleScope.indexingPageType(Buffer.concat(chunks).toString('utf8'));
+  if (!type) throw new Error('普通产品/新闻页请提交 Sitemap；Indexing API 仅支持真实 JobPosting 或 VideoObject 中的 BroadcastEvent 页面。');
+  return type;
+}
+
 async function submitSearchConsoleSitemap(siteUrl, sitemapUrl) {
   const cfg = getSearchConsoleConfig();
+  googleScope.assertGoogleScope(readConfig(), siteUrl, sitemapUrl);
   if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
+  const access = await testSearchConsoleProperty(siteUrl);
+  if (!access.ok || !access.canSubmit) return { ...access, ok: false, message: access.message || "该属性没有提交权限。" };
   const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_SCOPE);
-  const url = `https://searchconsole.googleapis.com/v1/sites/${encodeURIComponent(siteUrl)}/sitemaps/${encodeURIComponent(sitemapUrl)}`;
+  const url = `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/sitemaps/${encodeURIComponent(sitemapUrl)}`;
   const response = await fetch(url, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },
@@ -2780,12 +2818,13 @@ async function submitSearchConsoleSitemap(siteUrl, sitemapUrl) {
     status: response.status,
     siteUrl,
     sitemapUrl,
-    message: `已把 sitemap 提交给 Google Search Console：${sitemapUrl}`,
+    message: `Google 已接收 Sitemap：${sitemapUrl}。提交成功不代表页面已收录。`,
   };
 }
 
 async function listSearchConsoleSitemaps(siteUrl) {
   const cfg = getSearchConsoleConfig();
+  googleScope.assertGoogleScope(readConfig(), siteUrl);
   if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
   const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
   const response = await fetch(
@@ -2866,7 +2905,7 @@ function diagnoseSearchConsoleInspection(result) {
   if (canonicalMismatch || /ALTERNATE|DUPLICATE|CANONICAL/i.test(coverage)) {
     return { state: "canonical", label: "规范网址不同", tone: "warning", indexed: false, nextAction: `检查 canonical、内链和 Sitemap 是否统一指向 ${googleCanonical || "首选网址"}。` };
   }
-  if (verdict === "PASS" || /SUBMITTED AND INDEXED|URL IS ON GOOGLE|INDEXED/i.test(coverage)) {
+  if (verdict === "PASS") {
     return { state: "indexed", label: "已收录", tone: "success", indexed: true, nextAction: "保持页面稳定，持续更新 Sitemap，无需重复请求收录。" };
   }
   if (/CRAWLED|DISCOVERED/.test(coverage.toUpperCase())) {
@@ -2877,6 +2916,7 @@ function diagnoseSearchConsoleInspection(result) {
 
 async function inspectSearchConsoleUrl(inspectionUrl, siteUrl) {
   const cfg = getSearchConsoleConfig();
+  googleScope.assertGoogleScope(readConfig(), siteUrl, inspectionUrl);
   if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
   const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
   const response = await fetch("https://searchconsole.googleapis.com/v1/urlInspection/index:inspect", {
@@ -2899,6 +2939,7 @@ async function inspectSearchConsoleUrl(inspectionUrl, siteUrl) {
     };
   }
   const result = (parsed && parsed.inspectionResult) || {};
+  if (!result.indexStatusResult?.verdict) return { ok: false, message: "Google 未返回有效收录诊断，请稍后重试。", inspectionUrl, siteUrl };
   const idx = result.indexStatusResult || {};
   const inspection = {
     ok: true,
@@ -2969,6 +3010,7 @@ function getSearchConsoleInspectionState(siteUrl) {
 
 async function querySearchConsolePerformance(siteUrl, days = 28, rowLimit = 250) {
   const cfg = getSearchConsoleConfig();
+  googleScope.assertGoogleScope(readConfig(), siteUrl);
   if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
   const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
   const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 28)));
@@ -3133,6 +3175,12 @@ function sendFile(res, filePath) {
 
 async function handleApi(req, res, pathname) {
   try {
+    const globalRoute = ['/api/ai/status', '/api/ai/config', '/api/ai/test'].includes(pathname)
+      || (req.method === 'GET' && pathname === '/api/config');
+    if (!siteRuntime.currentSite() && !globalRoute) {
+      sendJson(res, { message: "请先在管理后台添加网站。", setupRequired: true }, 400);
+      return;
+    }
     if (req.method === "GET" && pathname === "/api/config-backup/status") {
       const modelKeys = collectModelKeyConfig();
       sendJson(res, {
@@ -3283,6 +3331,11 @@ async function handleApi(req, res, pathname) {
       return;
     }
     if (req.method === "GET" && pathname === "/api/config") {
+      if (!siteRuntime.currentSite()) {
+        sendJson(res, { config: {}, navigation: buildNavigation(), site: null, setupRequired: true,
+          message: "请先在管理后台添加网站。", instance: {}, publicUrlWarning: false });
+        return;
+      }
       const config = readConfig();
       sendJson(res, {
         config,
@@ -3332,6 +3385,10 @@ async function handleApi(req, res, pathname) {
       }
       if (!/^https?:\/\//i.test(next.localTestBaseUrl)) {
         throw new Error("本地测试地址必须以 http:// 或 https:// 开头。");
+      }
+      if (body.gscSiteUrl || body.gscSitemapUrl) {
+        const gsc = getSearchConsoleConfig(next);
+        googleScope.assertGoogleScope(next, gsc.siteUrl, gsc.sitemapUrl);
       }
       writeJson(currentSeoConfigPath(), next);
       sendJson(res, { config: next, publicUrlWarning: isSuspiciousPublicUrl(next.siteBaseUrl) });
@@ -3452,6 +3509,10 @@ async function handleApi(req, res, pathname) {
 
       for (let index = 0; index < urls.length; index += 1) {
         const item = urls[index];
+        try { await checkIndexingEligibility(item); } catch (error) {
+          results.push({ ok: false, skipped: true, url: item, reason: 'not-eligible', message: error.message });
+          continue;
+        }
         if (!force && store.submitted[item]) {
           results.push({ ok: true, skipped: true, url: item, reason: "already-submitted", message: "此前已提交过，已自动跳过。" });
           continue;
@@ -3543,6 +3604,7 @@ async function handleApi(req, res, pathname) {
         sendJson(res, { ok: false, message: "请输入有效的公开 http(s) URL。" }, 400);
         return;
       }
+      if (!googleScope.belongsToSite(target, readConfig())) throw new Error('URL 不属于当前网站。');
       sendJson(res, await getGoogleIndexingMetadata(cfg.serviceAccount, target));
       return;
     }
@@ -3583,7 +3645,7 @@ async function handleApi(req, res, pathname) {
         sendJson(res, {
           ok: true,
           clientEmail: cfg.clientEmail,
-          message: `服务账号验证成功：已用 ${cfg.clientEmail} 取得 Indexing API 访问令牌，可以继续提交。`,
+          message: '已取得 Indexing API 令牌；这不代表站点授权或收录成功，普通产品/新闻请使用 Sitemap。',
         });
       } catch (error) {
         sendJson(res, {
@@ -3605,6 +3667,12 @@ async function handleApi(req, res, pathname) {
         apiEnableUrl: "https://console.cloud.google.com/apis/library/searchconsole.googleapis.com",
         note: "siteUrl 为 Search Console 属性：域名属性填 sc-domain:example.com，网址前缀属性填 https://example.com/（末尾带 /）。两种属性都支持 URL Inspection，待查 URL 必须属于该属性。",
       });
+      return;
+    }
+    if (req.method === 'POST' && pathname === '/api/search-console/test') {
+      const body = await readRequestBody(req);
+      const siteUrl = normalizeSearchConsoleSiteUrl(body.siteUrl || getSearchConsoleConfig().siteUrl);
+      sendJson(res, await testSearchConsoleProperty(siteUrl));
       return;
     }
     if (req.method === "POST" && pathname === "/api/search-console/sitemap") {
@@ -3886,8 +3954,10 @@ async function handleApi(req, res, pathname) {
   }
 }
 
-const server = http.createServer((req, res) => {
-  siteRuntime.runForRequest(req, res, () => {
+const authenticateTool = createToolAuth({ tool: 'seo', env: { ...parseEnvFile(BACKEND_ENV_PATH), ...process.env } });
+const server = http.createServer(async (req, res) => {
+  if (await authenticateTool(req, res)) return;
+  runWithToolIdentity(req, () => siteRuntime.runForRequest(req, res, () => {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     if (url.pathname.startsWith("/api/")) {
       handleApi(req, res, url.pathname);
@@ -3918,7 +3988,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     sendFile(res, resolvedPath);
-  });
+  }));
 });
 
 function startServer() {
@@ -3938,4 +4008,6 @@ function startServer() {
 
 if (require.main === module) startServer();
 
-module.exports = { inspectSite, findLocalEditorRecord, buildVueEditorUrl, calculateSeoHealth, addCategorySeoIssues, startServer };
+module.exports = { inspectSite, findLocalEditorRecord, buildVueEditorUrl, calculateSeoHealth, addCategorySeoIssues, startServer,
+  _googleTest: { getGoogleAccessToken, submitSearchConsoleSitemap, testSearchConsoleProperty, diagnoseSearchConsoleInspection,
+    getGoogleIndexingMetadata, checkIndexingEligibility, googleTokenCache, inspectSearchConsoleUrl } };

@@ -26,6 +26,17 @@ test('fresh installation serves tool pages without reading a missing site config
       const response = await fetch(`http://127.0.0.1:${address.port}/`);
       assert.equal(response.status, 200);
       assert.match(await response.text(), /<html/i);
+      const config = await fetch(`http://127.0.0.1:${address.port}/api/config`);
+      assert.equal(config.status, 200);
+      const shell = await config.json();
+      assert.equal(shell.setupRequired, true);
+      assert.equal(shell.site, null);
+      assert.ok(shell.navigation.some(item => item.id === 'sites'));
+      const mutation = await fetch(`http://127.0.0.1:${address.port}/api/config`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      assert.equal(mutation.status, 400);
+      assert.equal((await mutation.json()).setupRequired, true);
     } finally {
       await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
     }

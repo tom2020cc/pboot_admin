@@ -49,7 +49,7 @@ describe('site-scoped product brochures', () => {
     expect((await service.findOne(other.id)).title).toBe(payload().data.title);
     const results = await service.findAll('水井');
     expect(results).toHaveLength(1);
-    expect(results[0].data).toBeUndefined();
+    expect(results[0]).not.toHaveProperty('data');
     expect(await service.findAll("' OR 1=1 --")).toEqual([]);
   });
   it('rejects cross-site read, update, deletion and list leakage', async () => {
@@ -69,6 +69,28 @@ describe('site-scoped product brochures', () => {
     await expect(service.findOne(first.id)).rejects.toThrow();
     expect((await service.findOne(second.id)).id).toBe(second.id);
   });
+  it('keeps independent language copies and complete editable HTML without changing the original', async () => {
+    const original = await service.create(payload());
+    const english = payload(); english.data.language = 'en'; english.data.imageSize = 'large'; english.data.newProductPage = false;
+    english.data.items[0].detailsHtml = '<h2>Core rig</h2><p>Details</p><table><tr><td>1000 m</td></tr></table><img src="/static/01.jpg">';
+    english.data.items[0].detailsEnabled = false;
+    const saved = await service.create(english);
+    expect((await service.findOne(saved.id)).data).toEqual(english.data);
+    expect((await service.findAll('', 'en')).map(row => row.id)).toEqual([saved.id]);
+    expect((await service.findOne(original.id)).data.language).toBe('zh-CN');
+    siteId = 9;
+    expect(await service.findAll('', 'en')).toEqual([]);
+  });
+  it('round-trips document typography without modifying another document', async () => {
+    const original = await service.create(payload());
+    const body = payload();
+    Object.assign(body.data, { bodyFontSize: 12.5, headingFontSize: 18, lineHeight: 1.8, paragraphSpacing: 10, tableFontSize: 11.5, tableDensity: 'relaxed', tableStyle: 'minimal', pageWidthMm: 250, pageHeightMm: 400, pageMarginMm: 15, fontFamily: 'serif' });
+    const pipe = new ValidationPipe({ whitelist: true });
+    const clean = await pipe.transform(body, { type: 'body', metatype: SaveBrochureDto });
+    const saved = await service.create(clean);
+    expect((await service.findOne(saved.id)).data).toEqual(body.data);
+    expect((await service.findOne(original.id)).data.bodyFontSize).toBeUndefined();
+  });
 });
 
 describe('brochure request validation', () => {
@@ -79,6 +101,28 @@ describe('brochure request validation', () => {
     const clean = await check(body);
     expect(clean.siteId).toBeUndefined(); expect(clean.data.unknown).toBeUndefined(); expect(clean.data.items[0].price).toBeUndefined();
     expect(clean.data.items[0].specs).toEqual(payload().data.items[0].specs);
+  });
+  it.each(['zh-CN', 'en', 'es', 'fr', 'ru', 'ar', 'pt', 'id', 'tr', 'vi'])('accepts %s and editable content fields', async language => {
+    const body = payload(); body.data.language = language; body.data.imageSize = 'medium'; body.data.newProductPage = true;
+    body.data.items[0].detailsHtml = '<p>正文</p>'; body.data.items[0].detailsEnabled = true;
+    expect((await check(body)).data).toEqual(body.data);
+  });
+  it.each(['language', 'details', 'toggle', 'size'])('rejects invalid %s', async kind => {
+    const body: any = payload();
+    if (kind === 'language') body.data.language = 'xx';
+    if (kind === 'details') body.data.items[0].detailsHtml = 'a'.repeat(300001);
+    if (kind === 'toggle') body.data.items[0].detailsEnabled = 'false';
+    if (kind === 'size') body.data.imageSize = 'giant';
+    await expect(check(body)).rejects.toThrow();
+  });
+  it.each([
+    ['bodyFontSize', 8], ['bodyFontSize', 17], ['bodyFontSize', '12'], ['bodyFontSize', NaN],
+    ['headingFontSize', 25], ['headingFontSize', 11], ['lineHeight', 1], ['lineHeight', 3],
+    ['paragraphSpacing', -1], ['paragraphSpacing', 17], ['tableFontSize', 7], ['tableFontSize', Infinity],
+    ['tableStyle', 'injected'], ['tableDensity', 'giant'],
+  ])('rejects unsafe typography %s=%s', async (key, value) => {
+    const body = payload(); body.data[key] = value;
+    await expect(check(body)).rejects.toThrow();
   });
   it.each(['missing', 'blank-title', 'blank-product', 'null-item', 'invalid-spec', 'too-many-images', 'huge-value', 'too-many-products'])('rejects %s', async (kind) => {
     const body: any = payload();

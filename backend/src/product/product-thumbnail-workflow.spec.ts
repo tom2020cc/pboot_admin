@@ -5,7 +5,7 @@ const sharp: typeof import('sharp').default = require('sharp');
 import { ProductService } from './product.service';
 import { ProductController } from './product.controller';
 import { Test } from '@nestjs/testing';
-import { ValidationPipe } from '@nestjs/common';
+import { NotFoundException, ValidationPipe } from '@nestjs/common';
 import request = require('supertest');
 
 describe('product thumbnail import and upload workflows', () => {
@@ -30,6 +30,7 @@ describe('product thumbnail import and upload workflows', () => {
     } as any, {} as any, { protectBeforeDangerousSync: guard } as any, {
       getPbootSiteRoot: () => site,
       getPbootPublicBaseUrl: () => 'https://site.invalid',
+      getSiteById: (id: number) => { if (id !== 2) throw new NotFoundException('网站不可用'); return { id: 2, name: 'Current site', rootPath: site }; },
     } as any, { getImportDefinitions: async () => [], prepareFolderParameters: async () => ({}) } as any);
     (service as any).currentSiteId = async () => 2;
     create = jest.spyOn(service, 'create').mockImplementation(async (data: any) => ({ ...data, id: 77 }));
@@ -69,6 +70,44 @@ describe('product thumbnail import and upload workflows', () => {
     expect(await service.importProductFolders({ sourceDirectory: source, menuId: 5 })).toMatchObject({ skippedCount: 1, createdCount: 0 });
     expect(fs.existsSync(path.join(directory, '0.jpg'))).toBe(false);
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('passes custom sizes through scan and import, preserving an existing thumbnail', async () => {
+    const source = path.join(site, 'static');
+    const directory = setupModel(source);
+    const payload = { sourceDirectory: source, menuId: 5, thumbnailWidth: 800, thumbnailHeight: 600 };
+    expect((await service.scanProductFolderImport(payload)).thumbnailSize).toEqual({ width: 800, height: 600 });
+    expect(fs.existsSync(path.join(directory, '0.jpg'))).toBe(false);
+    expect(await service.importProductFolders(payload)).toMatchObject({ createdCount: 1 });
+    expect(await sharp(path.join(directory, '0.jpg')).metadata()).toMatchObject({ width: 800, height: 600 });
+    const original = fs.readFileSync(path.join(directory, '0.jpg'));
+    expect(await service.importProductFolders({ ...payload, thumbnailWidth: 1024 })).toMatchObject({ createdCount: 1 });
+    expect(fs.readFileSync(path.join(directory, '0.jpg'))).toEqual(original);
+  });
+
+  it('validates size before backups, writes or product creation', async () => {
+    await expect(service.importProductFolders({ sourceDirectory: site, menuId: 5, thumbnailWidth: 0 })).rejects.toThrow('64 到 4096');
+    expect(guard).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled();
+  });
+
+  it('browses the explicit site via the real controller and validates all request options', async () => {
+    const module = await Test.createTestingModule({ controllers: [ProductController], providers: [{ provide: ProductService, useValue: service }] }).compile();
+    const app = module.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+    await app.init();
+    try {
+      const response = await request(app.getHttpServer()).get('/products/folder-import/directories').query({ siteId: 2 }).expect(200);
+      expect(response.body).toMatchObject({ siteId: 2, rootPath: await fs.promises.realpath(site), parentPath: null });
+      await request(app.getHttpServer()).get('/products/folder-import/directories').expect(400);
+      await request(app.getHttpServer()).get('/products/folder-import/directories').query({ siteId: -1 }).expect(400);
+      await request(app.getHttpServer()).get('/products/folder-import/directories').query({ siteId: 999 }).expect(404);
+      await request(app.getHttpServer()).get('/products/folder-import/directories').query({ siteId: 2, directory: root }).expect(400);
+      const source = path.join(site, 'static'); const model = setupModel(source);
+      await request(app.getHttpServer()).post('/products/folder-import/scan').send({ sourceDirectory: source, menuId: 5, thumbnailWidth: 800, thumbnailHeight: 600 }).expect(201);
+      expect(fs.existsSync(path.join(model, '0.jpg'))).toBe(false);
+      for (const size of [63, 4097, 128.5, 'bad']) await request(app.getHttpServer()).post('/products/folder-import').send({ sourceDirectory: source, menuId: 5, thumbnailWidth: size }).expect(400);
+      expect(guard).not.toHaveBeenCalled();
+    } finally { await app.close(); }
   });
 
   it('reports a corrupt source instead of saving a broken thumbnail/product', async () => {

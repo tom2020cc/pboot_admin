@@ -60,6 +60,11 @@
     const result = await api("/api/config");
     const config = result.config || {};
     renderNavigation(result.navigation, "ftp");
+    if (result.setupRequired) {
+      setStatus(result.message);
+      document.querySelectorAll('main button, main input, main select').forEach(control => { control.disabled = true; });
+      return false;
+    }
     $("host").value = config.host || "";
     $("port").value = config.port || 21;
     $("user").value = config.user || "";
@@ -75,6 +80,7 @@
     $("backupBeforeOverwrite").checked = config.backupBeforeOverwrite !== false;
     $("backupMaxFileSizeMb").value = config.backupMaxFileSizeMb || 20;
     updateScopeNote();
+    return true;
   }
 
   async function saveConfig() {
@@ -205,8 +211,10 @@
   $("uploadBtn").onclick = () => startUpload().catch((error) => setStatus(error.message, true));
   $("uploadScope").onchange = updateScopeNote;
 
-  Promise.all([loadConfig(), refreshPlan(), refreshUploadStatus(), refreshSecurityBusy()])
-    .then(() => {
+  loadConfig()
+    .then(async (ready) => {
+      if (!ready) return;
+      await Promise.all([refreshPlan(), refreshUploadStatus(), refreshSecurityBusy()]);
       if (!uploadRunning && !securityRunning) setStatus("就绪");
       if (uploadRunning) scheduleUploadPoll(900);
       scheduleBusyPoll();

@@ -20,7 +20,7 @@
     },
     google: {
       title: "Google 收录与主动推进",
-      description: "管理 Search Console、Sitemap、URL Inspection 与 Indexing API 断点续传。",
+      description: "产品与新闻以 Sitemap、Search Console 属性权限、索引检查和搜索表现为主。提交不等于收录。",
       badge: "Google",
       documentTitle: "Google 收录 - PbootCMS",
     },

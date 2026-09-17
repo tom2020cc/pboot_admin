@@ -180,7 +180,7 @@ describe('template binding preview and update', () => {
     expect(() => templatePath(root, 'cn/../../data/pb.db')).toThrow('路径');
     const outside = path.join(parent, 'outside'); fs.mkdirSync(outside);
     fs.symlinkSync(outside, path.join(root, 'template/cn/linked'), 'junction');
-    expect(() => readBoundTemplates(root)).toThrow('链接'); fs.rmdirSync(path.join(root, 'template/cn/linked'));
+    expect(() => readBoundTemplates(root)).toThrow('链接'); fs.unlinkSync(path.join(root, 'template/cn/linked'));
     fs.writeFileSync(dbPath + '-wal', 'transaction');
     await expect(service.list()).rejects.toThrow('活动日志');
   });

@@ -11,7 +11,7 @@ const router = createRouter({
       path: "/brochures",
       name: "brochures",
       component: () => import("@/views/brochures/BrochureTool.vue"),
-      meta: { title: "产品介绍", requiresAuth: true },
+      meta: { title: "产品生成PDF", requiresAuth: true },
     },
     {
       path: "/quotations",
@@ -26,6 +26,7 @@ const router = createRouter({
       children: [
         { path: "", name: "dashboard", component: IndexView, meta: { title: "后台概览" } },
         { path: "sites", name: "sites", component: () => import("@/views/sites/SitesView.vue"), meta: { title: "站点管理" } },
+        { path: "deployment-tutorial", name: "deploymentTutorial", component: () => import("@/views/tutorials/DeploymentTutorial.vue"), meta: { title: "部署教程" } },
         { path: "site-resources", name: "siteResources", component: () => import("@/views/sites/SiteResourcesView.vue"), meta: { title: "网站资源检测" } },
         { path: "template-bindings", name: "templateBindings", component: () => import("@/views/sites/TemplateBindingsView.vue"), meta: { title: "模板栏目绑定" } },
         { path: "product-fields", name: "productFields", component: () => import("@/views/products/ProductFieldsView.vue"), meta: { title: "产品字段管理" } },

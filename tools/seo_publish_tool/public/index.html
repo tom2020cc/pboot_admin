@@ -624,7 +624,7 @@
         <div class="band-title">
           <div>
             <h2>Google 收录</h2>
-            <div class="note">先生成并检查 sitemap.xml、robots.txt；下方已配置的同一份服务账号继续负责 Search Console 数据、Sitemap API、URL Inspection 与 Indexing API。</div>
+            <div class="note">普通产品和新闻使用 Sitemap、Search Console 数据与 URL Inspection。提交成功不等于已收录；Indexing API 仅用于符合条件的招聘或直播页面。</div>
           </div>
           <a class="action-link" id="googleConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener">打开 Search Console</a>
         </div>
@@ -660,8 +660,8 @@
       <section class="band" id="google-indexing-workspace" data-seo-pages="google">
         <div class="band-title">
           <div>
-            <h2>Google Search Console 与 Indexing API</h2>
-            <div class="note">同一份服务账号同时用于 Search Console 的 Sitemap/收录查询，以及 Indexing API 的分批通知、每日配额和断点续传。</div>
+            <h2>Google 服务账号与属性权限</h2>
+            <div class="note">当前网站独立配置 Search Console，产品与新闻通过 Sitemap 提交。</div>
           </div>
           <span class="note" id="googleIndexingMeta">未配置</span>
         </div>
@@ -676,27 +676,29 @@
           <ol>
             <li>用拥有本网站 Search Console 权限的 Google 账号，打开 <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a>（console.cloud.google.com）。</li>
             <li>点页面顶部的项目选择器 →「新建项目」，名称随意（例如 shanbo-search-console），创建后切换到该项目。</li>
-            <li>左侧菜单「API 和服务」→「库」，分别启用 <b>Search Console API</b> 和 <b>Indexing API</b>。</li>
+            <li>左侧菜单「API 和服务」→「库」，启用 <b>Search Console API</b>。普通产品和新闻不需要 Indexing API。</li>
             <li>左侧菜单「IAM 和管理」→「服务账号」→「创建服务账号」。名称随意（例如 shanbocc），角色可以不选，一路「完成」。</li>
             <li>在服务账号列表中点进刚建的账号 →「密钥」标签页 →「添加密钥」→「创建新密钥」→ 类型选 <b>JSON</b> →「创建」。浏览器会自动下载一个 .json 文件，这就是服务账号 JSON。</li>
             <li>打开 <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Search Console</a>，把 JSON 里的 <b>client_email</b> 加入当前属性。Search Console 数据至少需要完整权限；Google 的 Indexing API 官方流程要求该服务账号成为站点所有者。<b>漏掉授权或选错属性通常会报 403。</b></li>
-            <li>用记事本打开下载的 JSON 文件，全选、复制，粘贴到上方输入框，点「保存并验证服务账号」。看到取得 Indexing API 访问令牌即配置成功。</li>
+            <li>打开 JSON 文件，粘贴到上方并保存。选择本网站的 Search Console 属性，点击测试，确认属性权限正常；只有取得令牌不代表有站点权限。</li>
           </ol>
           <div class="note">密钥只保存在本工具目录的 seo.config.json 里，不要提交到代码仓库或发给他人；若怀疑泄露，回到 Google Cloud 服务账号的「密钥」页删除该密钥再重新创建即可。当前账号：<span id="giStepsAccount">-</span></div>
         </details>
         <div class="google-actions">
           <button class="primary" id="saveGoogleServiceAccountBtn">保存并验证服务账号</button>
-          <button id="testGoogleIndexingBtn">测试 Indexing API 连接</button>
+          <button id="testGoogleIndexingBtn">测试 Search Console 属性权限</button>
           <button class="warn" id="clearGoogleServiceAccountBtn">清除服务账号</button>
           <a class="action-link" id="googleIndexingHelpLink" href="https://developers.google.com/search/apis/indexing-api/v3/using-api" target="_blank" rel="noopener">Indexing API 文档</a>
           <a class="action-link" id="googleIndexingConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener">打开 Search Console</a>
         </div>
         <div class="gi-policy-note">
           <strong>使用范围提示</strong>
-          <span>Google 官方当前说明 Indexing API 主要用于带 JobPosting 或直播 BroadcastEvent 结构化数据的页面。工具按你的需求恢复完整提交能力，但普通产品和新闻页仍应同时维护 Sitemap。</span>
+          <span>普通产品和新闻使用下方 Sitemap 提交与收录诊断。Indexing API 仅限真实招聘或直播页面，HTTP 200 不代表已收录。</span>
         </div>
+        <details class="gsc-advanced">
+          <summary>特殊页面通知：Indexing API（招聘 / 直播）</summary>
         <div class="google-actions gi-controls">
-          <button class="success" id="googleIndexingSubmitAllBtn">继续提交待处理 URL</button>
+          <button id="googleIndexingSubmitAllBtn">检查适用页面并通知</button>
           <button class="warn" id="googleIndexingStopBtn" style="display: none;">停止提交</button>
           <button id="googleIndexingReloadBtn">刷新提交状态</button>
           <button id="googleIndexingClearBtn">清除提交记录</button>
@@ -718,13 +720,14 @@
           <div class="gi-progress-bar"><div class="gi-progress-fill" id="googleIndexingProgressFill"></div></div>
         </div>
         <div class="google-actions">
-          <label class="inspect-field"><span>手动提交单个 URL（不必在 sitemap 列表中）</span><input id="googleIndexingManualUrl" placeholder="https://shanbo.cc/your-page/" /></label>
+          <label class="inspect-field"><span>当前网站的招聘 / 直播页面 URL</span><input id="googleIndexingManualUrl" placeholder="https://example.com/jobs/example/" /></label>
           <button id="googleIndexingManualSubmitBtn">提交该 URL</button>
-          <button id="googleIndexingManualMetaBtn">查询该 URL 状态</button>
+          <button id="googleIndexingManualMetaBtn">查询通知记录（非收录）</button>
         </div>
         <details class="gi-url-panel" open>
           <summary>URL 提交明细 <span id="giUrlSummary"></span></summary>
           <div id="googleIndexingUrlList" class="gi-list"></div>
+        </details>
         </details>
         <div id="googleIndexingResult" class="google-result"></div>
       </section>
@@ -961,7 +964,7 @@
 
       <section class="band tutorial-section google-tutorial" data-seo-pages="google">
         <div class="tutorial-heading">
-          <div><span class="tutorial-kicker">Google 完整配置教程</span><h2>一份服务账号，连接 Search Console 与 Indexing API</h2><p>功能逻辑保持不变：Sitemap、URL Inspection、搜索表现、分批通知、每日配额和断点续传仍使用当前同一份服务账号。</p></div>
+          <div><span class="tutorial-kicker">Google 完整配置教程</span><h2>产品与新闻：配置 Search Console 和 Sitemap</h2><p>先验证网站属性，再配置服务账号权限。普通产品和新闻不需要 Indexing API；URL Inspection 只查询 Google 已知的索引状态，不提交收录请求。</p></div>
           <div class="guide-actions">
             <a class="action-link" id="googleSitemapHelpLink" href="https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap" target="_blank" rel="noopener">Google Sitemap 文档</a>
             <a class="action-link" id="googleInspectionHelpLink" href="https://support.google.com/webmasters/answer/9012289" target="_blank" rel="noopener">网址检查说明</a>
@@ -969,9 +972,9 @@
         </div>
         <div class="tutorial-rail" aria-label="Google 配置步骤">
           <div><b>1</b><span>创建 Cloud 项目</span></div><i></i>
-          <div><b>2</b><span>启用两个 API</span></div><i></i>
+          <div><b>2</b><span>启用 Search Console API</span></div><i></i>
           <div><b>3</b><span>创建服务账号 JSON</span></div><i></i>
-          <div><b>4</b><span>授予站点所有者权限</span></div><i></i>
+          <div><b>4</b><span>授予网站完整权限</span></div><i></i>
           <div><b>5</b><span>导入并测试</span></div>
         </div>
         <section class="google-official-panel" aria-labelledby="googleOfficialHeading">
@@ -979,53 +982,52 @@
             <div>
               <span class="tutorial-kicker">按顺序打开</span>
               <h3 id="googleOfficialHeading">Google 官方配置页面快捷入口</h3>
-              <p>Cloud Console 页面会使用当前选中的项目。每次打开后先核对页面顶部项目名称，保证两个 API、服务账号和配额都属于同一项目。</p>
+              <p>Cloud Console 页面会使用当前选中的项目。核对 Search Console API 与服务账号属于同一项目；各网站分别核对属性和 Sitemap，避免串站。</p>
             </div>
             <span class="google-project-warning">先确认 Cloud 项目，再开始配置</span>
           </div>
           <div class="google-link-grid">
             <a class="google-link-card tone-blue" href="https://console.cloud.google.com/projectselector2/home/dashboard" target="_blank" rel="noopener"><span>01</span><strong>选择或创建 Cloud 项目</strong><small>所有 API、凭据与配额的归属项目</small><code>console.cloud.google.com/projectselector2</code></a>
             <a class="google-link-card tone-blue" href="https://console.cloud.google.com/apis/library/searchconsole.googleapis.com" target="_blank" rel="noopener"><span>02</span><strong>启用 Search Console API</strong><small>Sitemap、网址检查和搜索表现所需</small><code>searchconsole.googleapis.com</code></a>
-            <a class="google-link-card tone-red" href="https://console.cloud.google.com/apis/library/indexing.googleapis.com" target="_blank" rel="noopener"><span>03</span><strong>启用 Web Search Indexing API</strong><small>分批通知、配额统计和断点续传所需</small><code>indexing.googleapis.com</code></a>
+            <a class="google-link-card tone-red" href="https://console.cloud.google.com/apis/library/indexing.googleapis.com" target="_blank" rel="noopener"><span>可选</span><strong>招聘 / 直播：Indexing API</strong><small>普通产品与新闻不启用此接口</small><code>indexing.googleapis.com</code></a>
             <a class="google-link-card tone-green" href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener"><span>04</span><strong>创建并管理服务账号</strong><small>创建账号后进入“密钥”生成 JSON</small><code>console.cloud.google.com/iam-admin</code></a>
             <a class="google-link-card tone-green" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener"><span>05</span><strong>查看 API 凭据</strong><small>核对服务账号与当前项目是否一致</small><code>console.cloud.google.com/apis/credentials</code></a>
             <a class="google-link-card tone-yellow" id="googleTutorialConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener"><span>06</span><strong>打开 Search Console</strong><small>选择站点属性，添加 JSON 中的 client_email</small><code>search.google.com/search-console</code></a>
-            <a class="google-link-card tone-red" href="https://console.cloud.google.com/apis/api/indexing.googleapis.com/quotas" target="_blank" rel="noopener"><span>07</span><strong>查看 Indexing API 配额</strong><small>核对每日发布量与每分钟请求限制</small><code>indexing.googleapis.com/quotas</code></a>
-            <a class="google-link-card tone-yellow" href="https://developers.google.com/search/apis/indexing-api/v3/prereqs" target="_blank" rel="noopener"><span>08</span><strong>阅读 Google 官方前置条件</strong><small>项目、服务账号、站点所有者和授权说明</small><code>developers.google.com/search/apis</code></a>
+            <a class="google-link-card tone-red" href="https://console.cloud.google.com/apis/api/indexing.googleapis.com/quotas" target="_blank" rel="noopener"><span>可选</span><strong>招聘 / 直播通知配额</strong><small>仅适用于已启用的 Indexing API</small><code>indexing.googleapis.com/quotas</code></a>
+            <a class="google-link-card tone-yellow" href="https://developers.google.com/search/docs/crawling-indexing/ask-google-to-recrawl" target="_blank" rel="noopener"><span>07</span><strong>普通页面的重新抓取</strong><small>Sitemap 与 Search Console 手动请求</small><code>developers.google.com/search/docs</code></a>
           </div>
         </section>
         <div class="google-subheading google-visual-heading">
-          <div><span class="tutorial-kicker">图解操作</span><h3>照着四张图完成整条授权链路</h3><p>每张图对应一个实际配置阶段。图中绿色状态表示可以继续，红色提示表示当前步骤尚未完成。</p></div>
+          <div><span class="tutorial-kicker">图解操作</span><h3>配置流程与服务账号授权</h3><p>下图为操作示意，不代表当前网站已经授权或收录。实际结果以上方属性权限测试为准。</p></div>
         </div>
         <div class="google-svg-grid">
-          <figure class="google-guide-visual"><img src="/tutorials/google-cloud-project-api.svg" alt="选择 Google Cloud 项目并启用两个 API 的步骤图" /><figcaption><strong>1. 项目与 API</strong><span>先选定项目，再分别启用 Search Console API 和 Web Search Indexing API。</span></figcaption></figure>
+          <figure class="google-guide-visual"><img src="/tutorials/google-sitemap-workflow.svg" alt="Search Console 授权、Sitemap 提交和收录检查流程图" /><figcaption><strong>1. 普通产品与新闻的流程</strong><span>只需 Search Console API；Sitemap 收到、通知收到和网页已收录是不同状态。</span></figcaption></figure>
           <figure class="google-guide-visual"><img src="/tutorials/google-service-account-key.svg" alt="创建 Google 服务账号并下载 JSON 密钥的步骤图" /><figcaption><strong>2. 服务账号与 JSON</strong><span>项目角色可以跳过；密钥类型选择 JSON，并妥善保存唯一下载文件。</span></figcaption></figure>
           <figure class="google-guide-visual"><img src="/tutorials/google-search-console-owner.svg" alt="在 Google Search Console 中给服务账号授予站点权限的步骤图" /><figcaption><strong>3. Search Console 站点权限</strong><span>复制 JSON 的 client_email，添加到目标属性的用户和权限中。</span></figcaption></figure>
-          <figure class="google-guide-visual"><img src="/tutorials/google-tool-connection.svg" alt="在本工具导入服务账号并测试 Google API 的步骤图" /><figcaption><strong>4. 导入、验证与继续任务</strong><span>保存 JSON 后按顺序测试连接、读取 Sitemap，再继续未完成队列。</span></figcaption></figure>
         </div>
         <div class="google-subheading google-screenshot-heading">
-          <div><span class="tutorial-kicker">真实页面核对</span><h3>配置完成后，页面状态应与下图一致</h3></div>
+          <div><span class="tutorial-kicker">历史界面参考</span><h3>API 与属性配置页面示例</h3></div>
         </div>
         <div class="tutorial-image-grid">
-          <figure class="tutorial-shot"><img src="/tutorials/google-enable-search-console-api.png" alt="Google Cloud 中 Search Console API 已启用的页面" /><figcaption><strong>图 1：确认 Search Console API 已启用</strong><span>页面顶部应显示“停用 API”，这表示当前项目已经启用。Indexing API 也要用同样方式启用。</span></figcaption></figure>
+          <figure class="tutorial-shot"><img src="/tutorials/google-enable-search-console-api.png" alt="Google Cloud 中 Search Console API 已启用的页面" /><figcaption><strong>图 1：确认 Search Console API 已启用</strong><span>页面显示“停用 API”表示当前项目已启用。普通产品和新闻不需要另启用 Indexing API。</span></figcaption></figure>
           <figure class="tutorial-shot"><img src="/tutorials/google-search-console-workspace.png" alt="本工具 Google Search Console 收录中心页面" /><figcaption><strong>图 2：回到本工具验证完整链路</strong><span>保存服务账号后先测试连接，再读取 Sitemap 或执行少量 URL Inspection，确认权限与属性匹配。</span></figcaption></figure>
         </div>
         <div class="tutorial-steps-grid google-steps">
           <article><span>01</span><h3>创建或选择 Cloud 项目</h3><p>用拥有网站 Search Console 权限的 Google 账号登录 Cloud Console。新建项目后切换到该项目，后续服务账号、API 和配额都必须在同一项目内。</p></article>
-          <article><span>02</span><h3>启用两个 API</h3><p>打开上方两个 API 直达页，确认项目名正确后点击“启用”。配置完成时页面按钮会变成“管理”或“停用 API”；只启用其中一个会导致部分按钮返回 403。</p></article>
+          <article><span>02</span><h3>启用 Search Console API</h3><p>打开 Search Console API 官方入口，核对项目名后点击“启用”。页面显示“管理”或“停用 API”即已启用。钻机、挖掘机产品及一般新闻不需要 Indexing API。</p></article>
           <article><span>03</span><h3>创建服务账号与 JSON</h3><p>进入“服务账号”，点击“创建服务账号”。项目角色可以跳过；创建后依次进入“密钥 → 添加密钥 → 创建新密钥 → JSON”，密钥文件只会下载一次。</p></article>
-          <article><span>04</span><h3>给站点授予权限</h3><p>打开 Search Console 并选中目标属性，进入“设置 → 用户和权限”，添加 JSON 中的 <b>client_email</b>。若 Indexing API 仍返回 403，再核对该账号的所有者状态。</p></article>
+          <article><span>04</span><h3>给站点授予权限</h3><p>网站所有者先在 Search Console 验证目标属性，再到“设置 → 用户和权限”添加 JSON 的 <b>client_email</b> 并授予完整权限。受限用户只能读取部分信息，不能提交 Sitemap。</p></article>
           <article><span>05</span><h3>导入 JSON 并验证</h3><p>用记事本打开 JSON，全选复制到上方服务账号输入框，点击“保存并验证服务账号”。成功后账号邮箱会显示在页面右侧，输入框会自动清空。</p></article>
           <article><span>06</span><h3>配置 Search Console 属性</h3><p>域名属性填写 <b>sc-domain:example.com</b>；网址前缀属性必须包含协议和末尾斜杠。Sitemap 地址必须属于同一属性，保存后先读取 Sitemap 状态。</p></article>
           <article><span>07</span><h3>按正确方式推进收录</h3><p>普通产品页以 Sitemap、内部链接和 Search Console 手动请求为主。Indexing API 官方仅支持含 JobPosting，或 VideoObject 中 BroadcastEvent 的页面，不应把普通产品页当作批量强推接口。</p></article>
-          <article><span>08</span><h3>配额与断点续传</h3><p>Indexing API 初始默认发布配额为 200 次/项目/天，并在太平洋时间零点重置。本工具会记录成功 URL 和今日用量，恢复网络或配额后只处理剩余列表。</p></article>
+          <article><span>08</span><h3>验证结果与日常优化</h3><p>检查线上 Sitemap 和 robots，提交 Sitemap 后读取处理状态，再抽查重要 URL 的索引状态。优先修复 noindex、重复 canonical、失效链接和语言对应关系；增加真实产品信息，不堆砌关键词。</p></article>
         </div>
         <div class="tutorial-troubleshoot">
           <strong>常见问题快速判断</strong>
-          <div><b>API 未启用</b><span>回到当前 Cloud 项目确认两个 API 都显示已启用，启用后等待几分钟再试。</span></div>
+          <div><b>API 未启用</b><span>确认服务账号所在 Cloud 项目已启用 Search Console API，启用后稍候再试。普通网页无需开启 Indexing API。</span></div>
           <div><b>403 / 权限不足</b><span>检查服务账号邮箱是否被添加到当前 Search Console 属性，并具有所有者或完整权限。</span></div>
           <div><b>属性不匹配</b><span>域名属性使用 sc-domain:，网址前缀属性要严格匹配协议、子域名和末尾斜杠。</span></div>
-          <div><b>达到配额或断网</b><span>停止后不要清除提交记录；恢复网络或配额后点击“继续提交待处理 URL”即可。</span></div>
+          <div><b>达到配额或断网</b><span>保留已有检查记录，等待配额恢复后继续诊断。提交 Sitemap 没有“立即收录”保证，不要用重复通知代替内容与可抓取性优化。</span></div>
         </div>
       </section>
 
@@ -1468,9 +1470,16 @@
         $("siteBaseUrlInput").value = config.siteBaseUrl || "";
         $("runtime").textContent = `${config.siteName || "-"} · 端口 ${instance.port || location.port} · ${instance.databasePath || ""}`;
         renderNavigation(result.navigation || []);
+        if (result.setupRequired) {
+          renderWarning(result.message);
+          setStatus(result.message);
+          document.querySelectorAll('main button, main input, main select, main textarea').forEach(control => { control.disabled = true; });
+          return false;
+        }
         document.title = `${config.siteName || "PbootCMS"} · ${$("workspaceTitle")?.textContent || "SEO 检查"}`;
         renderWarning(result.publicUrlWarning ? "真实线上地址看起来仍是本地/测试域名，已禁止向搜索引擎提交。" : "");
         renderProjectIdentity();
+        return true;
       }
 
       function projectIdentityRows(identity = googleStatus.projectIdentity || {}) {
@@ -3424,14 +3433,16 @@
         });
         $("googleServiceAccountInput").value = "";
         await loadGoogleIndexingStatus();
-        showGoogleIndexingResult(result.message, ["正在验证 Indexing API 连通性..."], "info");
-        setStatus("已保存，正在验证 Indexing API...");
-        const testResult = await api("/api/google-indexing/test", { method: "POST" });
+        showGoogleIndexingResult(result.message, ["正在验证当前 Search Console 属性权限..."], "info");
+        setStatus("已保存，正在验证属性权限...");
+        const testResult = await api("/api/search-console/test", { method: "POST", headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: $("gscSiteUrlInput").value.trim() }) });
         showGoogleIndexingResult(testResult.message, [], testResult.ok ? "success" : "warning");
         setStatus(testResult.message);
       });
       $("testGoogleIndexingBtn").onclick = () => runAction(async () => {
-        const result = await api("/api/google-indexing/test", { method: "POST" });
+        const result = await api("/api/search-console/test", { method: "POST", headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: $("gscSiteUrlInput").value.trim() }) });
         showGoogleIndexingResult(result.message, [], result.ok ? "success" : "warning");
         setStatus(result.message);
       });
@@ -3824,12 +3835,13 @@
           setStatus("模型连接测试通过");
         });
 
-      Promise.allSettled([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus(), loadBaiduStatus(), loadChineseEngines(), loadOverview(), loadIndexCoverage(), loadConfigBackupStatus()]).then((results) => {
+      loadConfig().then(async (ready) => {
+        if (!ready) return;
+        const results = await Promise.allSettled([loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus(), loadBaiduStatus(), loadChineseEngines(), loadOverview(), loadIndexCoverage(), loadConfigBackupStatus(), refresh()]);
         const failed = results.filter(result => result.status === 'rejected');
         $("serviceStatus").hidden = !failed.length;
         $("serviceStatus").textContent = failed.length ? `${failed.length} 项辅助服务状态未加载` : '';
-      });
-      refresh().catch((error) => {
+      }).catch((error) => {
         setStatus(error.message || String(error), true);
       });
       loadAiStatus();

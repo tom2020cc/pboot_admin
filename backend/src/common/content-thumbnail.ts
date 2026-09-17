@@ -24,7 +24,18 @@ function writeNewFile(filename: string, bytes: Buffer) {
   fs.closeSync(fd);
 }
 
-export async function createContentThumbnail(buffer: Buffer) {
+export type ThumbnailSize = { width?: number; height?: number };
+
+export function thumbnailSize(options: ThumbnailSize = {}) {
+  const width = options.width ?? 500, height = options.height ?? 400;
+  if (![width, height].every(value => Number.isInteger(value) && value >= 64 && value <= 4096)) {
+    throw new BadRequestException('缩略图宽高必须为 64 到 4096 之间的整数像素');
+  }
+  return { width, height };
+}
+
+export async function createContentThumbnail(buffer: Buffer, options: ThumbnailSize = {}) {
+  const { width, height } = thumbnailSize(options);
   if (!buffer?.length || buffer.length > MAX_SOURCE_BYTES) throw new BadRequestException('缩略图源文件为空或超过 30MB');
   // Only raster formats; never pass SVG or other documents to an image renderer.
   const raster = buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))
@@ -35,7 +46,7 @@ export async function createContentThumbnail(buffer: Buffer) {
   try {
     return await sharp(buffer, { limitInputPixels: 40_000_000, failOn: 'error', pages: 1 })
       .rotate().flatten({ background: '#ffffff' })
-      .resize(500, 400, { fit: 'contain', background: '#ffffff' })
+      .resize(width, height, { fit: 'contain', background: '#ffffff' })
       .jpeg({ quality: 90 }).toBuffer();
   } catch {
     throw new BadRequestException('图片损坏、尺寸过大或无法解码，缩略图未生成');
@@ -50,7 +61,7 @@ function zeroJpeg(directory: string) {
   return name;
 }
 
-export async function ensureFolderThumbnail(directory: string, sourceFile: string) {
+export async function ensureFolderThumbnail(directory: string, sourceFile: string, options: ThumbnailSize = {}) {
   const existing = zeroJpeg(directory);
   if (existing) return existing;
   if (!sourceFile) return '';
@@ -58,7 +69,7 @@ export async function ensureFolderThumbnail(directory: string, sourceFile: strin
   const source = path.join(directory, sourceFile);
   const stat = fs.lstatSync(source);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_SOURCE_BYTES) throw new BadRequestException('缩略图源文件无效或超过 30MB');
-  const bytes = await createContentThumbnail(fs.readFileSync(source));
+  const bytes = await createContentThumbnail(fs.readFileSync(source), options);
   // Another import may have produced 0.jpg while the image was being decoded.
   const concurrent = zeroJpeg(directory);
   if (concurrent) return concurrent;

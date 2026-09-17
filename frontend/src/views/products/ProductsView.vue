@@ -6,10 +6,10 @@
         <p>维护产品栏目、标题、缩略图、轮播多图、多语言内容、状态和排序。</p>
       </div>
       <div class="page-actions">
-        <el-button type="success" :icon="Upload" :disabled="importing || pullingScope || pushingScope || syncingId !== null" @click="showScopeSync = true">
+        <el-button type="success" :icon="Upload" :disabled="batchBusy || importing || pullingScope || pushingScope || syncingId !== null" @click="showScopeSync = true">
           一键同步到 PB
         </el-button>
-        <el-button type="warning" plain :loading="importing" @click="handleImportFromPboot">
+        <el-button type="warning" plain :disabled="batchBusy" :loading="importing" @click="handleImportFromPboot">
           {{ importing ? "正在重建..." : "全站从 PB 重建" }}
         </el-button>
         <el-button type="primary" @click="router.push('/products/create')">
@@ -20,19 +20,21 @@
     </div>
 
     <div class="filter-row">
-      <el-select v-model="filterMenuId" clearable placeholder="按栏目筛选" class="filter-select" @change="loadProducts">
+      <el-select v-model="filterMenuId" :disabled="batchBusy" clearable placeholder="按栏目筛选" class="filter-select" @change="loadProducts">
         <el-option v-for="item in menuOptions" :key="item.id" :label="item.optionLabel" :value="Number(item.id)" />
       </el-select>
-      <el-select v-model="currentLang" class="lang-select" @change="handleLangChange">
+      <el-select v-model="currentLang" :disabled="batchBusy" class="lang-select" @change="handleLangChange">
         <el-option v-for="item in availableLanguages" :key="item.code" :label="item.name" :value="item.code" />
       </el-select>
-      <el-select v-model="translationFilter" class="progress-select" aria-label="翻译状态筛选">
+      <el-select v-model="translationFilter" :disabled="batchBusy" class="progress-select" aria-label="翻译状态筛选">
         <el-option label="全部翻译状态" value="all" />
         <el-option label="未完成翻译" value="incomplete" />
         <el-option label="已全部翻译" value="complete" />
         <el-option label="未翻译" value="untranslated" />
       </el-select>
-      <el-button @click="loadProducts">刷新</el-button>
+      <el-input v-model="searchText" :disabled="batchBusy" :prefix-icon="Search" clearable placeholder="搜索产品标题或 ID" class="search-input" aria-label="搜索产品标题或 ID" />
+      <el-select v-model="visibilityFilter" :disabled="batchBusy" class="status-select" aria-label="显示状态筛选"><el-option label="全部显示状态" value="all" /><el-option label="显示" value="shown" /><el-option label="隐藏" value="hidden" /></el-select>
+      <el-button :icon="Refresh" :disabled="batchBusy" @click="loadProducts">刷新</el-button>
     </div>
 
     <div class="scope-sync-panel">
@@ -42,10 +44,10 @@
         <span v-else>先选择具体栏目，再获取或覆盖该栏目及其子栏目。</span>
       </div>
       <div class="scope-sync-actions">
-        <el-button :disabled="!filterMenuId" :loading="pullingScope" @click="handlePullScope">
+        <el-button :disabled="batchBusy || !filterMenuId" :loading="pullingScope" @click="handlePullScope">
           从 PB 获取当前范围
         </el-button>
-        <el-button type="success" plain :disabled="!filterMenuId" :loading="pushingScope" @click="handlePushScope">
+        <el-button type="success" plain :disabled="batchBusy || !filterMenuId" :loading="pushingScope" @click="handlePushScope">
           覆盖 PB 当前范围
         </el-button>
       </div>
@@ -64,7 +66,7 @@
         <el-button
           type="primary"
           :loading="isTranslationRunning"
-          :disabled="!canTranslateCurrentMenu"
+          :disabled="batchBusy || !canTranslateCurrentMenu"
           @click="handleTranslateCurrentMenu"
         >
           翻译当前栏目为 {{ getLanguageName(currentLang) }}
@@ -114,17 +116,20 @@
       </el-tag>
     </div>
 
-    <el-table v-loading="loading" :data="filteredProducts" border stripe class="data-table">
-      <el-table-column prop="id" label="ID" width="90" align="center" />
-      <el-table-column type="index" label="序号" width="70" align="center" />
-      <el-table-column label="缩略图" width="120" align="center">
+    <div class="list-count"><span>筛选结果 {{ filteredProducts.length }} 项</span><el-button link type="primary" :disabled="operationBlocked || batchBusy || !filteredProducts.length" @click="selectFiltered">选择全部筛选结果</el-button><el-tag v-if="dirtyOrders.length" type="warning">{{ dirtyOrders.length }} 项排序未保存</el-tag><el-button v-if="dirtyOrders.length" link :disabled="batchBusy" @click="orderDrafts = {}">撤销排序修改</el-button></div>
+    <ProductBatchActions ref="batchActions" :selected="selectedProducts" :products="productList" :menus="menus" :lang="currentLang" :dirty-orders="dirtyOrders" :blocked="operationBlocked" @clear="clearSelection" @changed="loadProducts" @busy="batchBusy = $event" />
+    <el-table ref="productTable" v-loading="loading" :data="pagedProducts" row-key="id" border stripe class="data-table" @selection-change="onSelectionChange">
+      <el-table-column type="selection" :reserve-selection="true" :selectable="() => !batchBusy && !operationBlocked" width="48" fixed="left" />
+      <el-table-column prop="id" label="ID" width="60" align="center" />
+      <el-table-column type="index" :index="(index:number) => (pageNumber - 1) * pageSize + index + 1" label="序号" width="55" align="center" />
+      <el-table-column label="缩略图" width="95" align="center">
         <template #default="{ row }">
           <el-image v-if="row.thumbnail" :src="getUploadUrl(row.thumbnail)" fit="cover" class="thumb" />
           <el-text v-else type="info">未上传</el-text>
         </template>
       </el-table-column>
-      <el-table-column prop="title" label="产品标题" min-width="240" />
-      <el-table-column label="翻译进度" width="180" align="center">
+      <el-table-column prop="title" label="产品标题" min-width="150" show-overflow-tooltip />
+      <el-table-column label="翻译进度" width="140" align="center">
         <template #default="{ row }">
           <el-tooltip v-if="row.translationProgress" placement="top" :disabled="!row.translationProgress.missing.length">
             <template #content>
@@ -142,39 +147,44 @@
           <el-text v-else type="info">待检查</el-text>
         </template>
       </el-table-column>
-      <el-table-column label="内容栏目" min-width="180">
+      <el-table-column label="内容栏目" min-width="150">
         <template #default="{ row }">{{ getMenuName(row.menuId) }}</template>
       </el-table-column>
-      <el-table-column label="语言" width="90" align="center">
+      <el-table-column label="语言" width="80" align="center">
         <template #default="{ row }">{{ getLanguageName(row.lang || currentLang) }}</template>
       </el-table-column>
-      <el-table-column label="轮播图" width="100" align="center">
+      <el-table-column label="轮播图" width="80" align="center">
         <template #default="{ row }">{{ row.carouselImages?.length || 0 }} 张</template>
       </el-table-column>
-      <el-table-column label="状态" width="90" align="center">
+      <el-table-column label="状态" width="80" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.show ? 'success' : 'info'">{{ row.show ? "显示" : "隐藏" }}</el-tag>
+          <el-switch :model-value="row.show" :disabled="batchBusy || operationBlocked" :aria-label="`产品 ${row.id} 显示状态`" @change="batchActions?.editFlag(row, 'show', Boolean($event))" />
         </template>
       </el-table-column>
-      <el-table-column prop="orderNum" label="排序" width="80" align="center" />
-      <el-table-column label="操作" fixed="right" width="280" align="center">
+      <el-table-column label="置顶" width="80" align="center"><template #default="{row}"><el-tooltip :content="row.isTop == null ? '未设置；同步时保留 PB 原状态' : '产品级置顶，所有语言共用'"><el-switch :model-value="Boolean(row.isTop)" :disabled="batchBusy || operationBlocked" :aria-label="`产品 ${row.id} 置顶`" @change="batchActions?.editFlag(row, 'top', Boolean($event))" /></el-tooltip></template></el-table-column>
+      <el-table-column label="推荐" width="80" align="center"><template #default="{row}"><el-tooltip :content="row.isRecommend == null ? '未设置；同步时保留 PB 原状态' : '产品级推荐，所有语言共用'"><el-switch :model-value="Boolean(row.isRecommend)" :disabled="batchBusy || operationBlocked" :aria-label="`产品 ${row.id} 推荐`" @change="batchActions?.editFlag(row, 'recommend', Boolean($event))" /></el-tooltip></template></el-table-column>
+      <el-table-column label="排序" width="130" align="center"><template #default="{row}"><el-input-number :model-value="orderDrafts[row.id] ?? row.orderNum" :min="0" :max="999999" :precision="0" :disabled="batchBusy || operationBlocked" controls-position="right" class="order-input" :aria-label="`产品 ${row.id} 排序`" @update:model-value="updateOrder(row, $event)" /></template></el-table-column>
+      <el-table-column prop="createTime" label="创建时间" width="175"><template #default="{row}">{{ row.createTime ? new Date(row.createTime).toLocaleString() : '-' }}</template></el-table-column>
+      <el-table-column label="操作" fixed="right" width="245" align="center">
         <template #default="{ row }">
           <el-button type="info" link @click="router.push({ name: 'productDetail', params: { id: row.id }, query: { lang: currentLang } })">查看</el-button>
-          <el-button type="success" link :loading="syncingId === row.id" @click="handleSync(row.id)">同步网站</el-button>
-          <el-button type="primary" link @click="router.push({ name: 'editProduct', params: { id: row.id } })">编辑</el-button>
-          <el-button type="danger" link @click="handleDelete(row.id)">删除</el-button>
+          <el-button type="success" link :disabled="batchBusy" :loading="syncingId === row.id" @click="handleSync(row.id)">同步网站</el-button>
+          <el-button type="primary" link :disabled="batchBusy" @click="router.push({ name: 'editProduct', params: { id: row.id } })">编辑</el-button>
+          <el-button type="danger" link :disabled="batchBusy" @click="handleDelete(row.id)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination v-model:current-page="pageNumber" v-model:page-size="pageSize" :page-sizes="[20,50,100]" :total="filteredProducts.length" :disabled="batchBusy" layout="total, sizes, prev, pager, next" class="product-pagination" />
     <ProductScopeSyncDialog v-model="showScopeSync" :menus="menus" :initial-menu-id="sourceChineseMenu ? Number(sourceChineseMenu.id) : undefined" @synced="loadProducts" />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Plus, Upload } from "@element-plus/icons-vue";
+import { Plus, Refresh, Search, Upload } from "@element-plus/icons-vue";
+import ProductBatchActions from './ProductBatchActions.vue';
 import { getAll, type MenuItem } from "@/api/menus";
 import {
   DEFAULT_PRODUCT_LANG,
@@ -214,11 +224,35 @@ const syncingId = ref<number | null>(null);
 const productList = ref<ProductItem[]>([]);
 const showScopeSync = ref(false);
 const translationFilter = ref('all');
+const searchText = ref(''), visibilityFilter = ref('all');
+const batchBusy = ref(false), pageNumber = ref(1), pageSize = ref(20), selectedIds = ref<number[]>([]);
+const orderDrafts = ref<Record<number,number>>({});
+const productTable = ref<{clearSelection:()=>void;toggleRowSelection:(row:ProductItem,selected:boolean)=>void}>();
+const batchActions = ref<InstanceType<typeof ProductBatchActions>>();
+const selectedProducts = computed(() => filteredProducts.value.filter(item=>selectedIds.value.includes(item.id)));
+const dirtyOrders = computed(() => Object.entries(orderDrafts.value).map(([id,orderNum])=>({id:Number(id),orderNum})));
+const operationBlocked = computed(() => loading.value || importing.value || pullingScope.value || pushingScope.value || syncingId.value !== null || isTranslationRunning.value);
 const filteredProducts = computed(() => productList.value.filter(item => {
+  const query = searchText.value.trim().toLocaleLowerCase();
+  if (query && !item.title.toLocaleLowerCase().includes(query) && !String(item.id).includes(query.replace(/^#/,''))) return false;
+  if (visibilityFilter.value !== 'all' && Boolean(item.show) !== (visibilityFilter.value === 'shown')) return false;
   const status = item.translationProgress?.status;
   return translationFilter.value === 'all' || (translationFilter.value === 'incomplete'
     ? status === 'partial' || status === 'untranslated' : status === translationFilter.value);
 }));
+const pagedProducts = computed(() => filteredProducts.value.slice((pageNumber.value-1)*pageSize.value, pageNumber.value*pageSize.value));
+function clearSelection() { selectedIds.value=[];productTable.value?.clearSelection(); }
+function onSelectionChange(rows:ProductItem[]) { selectedIds.value=rows.map(item=>item.id); }
+async function selectFiltered() {
+  if (filteredProducts.value.length > 100) { ElMessage.warning('单次最多选择 100 项，请缩小筛选范围'); return; }
+  clearSelection(); await nextTick(); filteredProducts.value.forEach(row=>productTable.value?.toggleRowSelection(row,true));
+}
+function updateOrder(row:ProductItem, value:number|undefined) {
+  if (value == null || value === row.orderNum) { delete orderDrafts.value[row.id]; return; }
+  orderDrafts.value[row.id] = value;
+}
+watch([searchText, translationFilter, visibilityFilter], ()=>{clearSelection();pageNumber.value=1;});
+watch(pageSize, ()=>{pageNumber.value=1;});
 const translationStatusLabel = (status: string) => ({
   complete: '已全部翻译', partial: '部分未翻译', untranslated: '未翻译', 'not-required': '无需翻译',
 }[status] || '待检查');
@@ -318,19 +352,24 @@ const loadTranslationModels = async () => {
 
 watch(translationModel, (value) => savePreferredTranslationModel(value));
 
+let productLoadVersion = 0;
 const loadProducts = async () => {
+  const version = ++productLoadVersion;
+  clearSelection();orderDrafts.value={};pageNumber.value=1;
+  productList.value = []; stats.value = null;
   loading.value = true;
   try {
     const [res, statsRes] = await Promise.all([
       getProductList(filterMenuId.value, currentLang.value),
       getProductPbootStats(filterMenuId.value, currentLang.value),
     ]);
+    if (version !== productLoadVersion) return;
     productList.value = res.data;
     stats.value = statsRes.data;
   } catch (e) {
-    ElMessage.error(getErrorMessage(e, "获取产品列表失败"));
+    if (version === productLoadVersion) ElMessage.error(getErrorMessage(e, "获取产品列表失败"));
   } finally {
-    loading.value = false;
+    if (version === productLoadVersion) loading.value = false;
   }
 };
 
@@ -570,13 +609,14 @@ onMounted(async () => {
   }
 });
 
-onBeforeUnmount(stopTranslationPolling);
+onBeforeUnmount(() => { productLoadVersion++; stopTranslationPolling(); });
 </script>
 
 <style scoped>
 .page {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   gap: 16px;
 }
 
@@ -751,6 +791,18 @@ onBeforeUnmount(stopTranslationPolling);
   height: 46px;
   border: 1px solid var(--el-border-color);
   border-radius: 6px;
+}
+.search-input { width:240px; }
+.status-select { width:150px; }
+.list-count { display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:13px; }
+.order-input { width:105px; }
+.product-pagination { justify-content:flex-end;max-width:100%;overflow:auto;padding-block:8px; }
+.data-table :deep(.el-table__cell) { font-size:13px; }
+.data-table :deep(.el-button + .el-button) { margin-left:8px; }
+:global(.product-batch-dialog) { max-width:calc(100vw - 24px); }
+@media (max-width: 650px) {
+  .data-table :deep(.el-table__cell.el-table-fixed-column--right) { position:static !important;right:auto !important; }
+  .filter-select, .lang-select, .progress-select, .search-input, .status-select { max-width:100%; }
 }
 
 @media (max-width: 900px) {

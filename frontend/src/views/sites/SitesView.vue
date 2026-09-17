@@ -160,10 +160,10 @@
           </el-form-item>
         </div>
         <el-form-item label="PbootCMS 网站根目录" prop="rootPath">
-          <el-input v-model="form.rootPath" placeholder="E:/phpstudy_pro/WWW/example.com" />
+          <el-input v-model="form.rootPath" :placeholder="form.environment === 'phpstudy' ? 'E:/phpstudy_pro/WWW/example.com' : '/www/wwwroot/example.com'" />
         </el-form-item>
         <el-form-item label="PbootCMS 数据库文件" prop="dbPath">
-          <el-input v-model="form.dbPath" placeholder="E:/phpstudy_pro/WWW/example.com/data/xxx.db" />
+          <el-input v-model="form.dbPath" :placeholder="form.environment === 'phpstudy' ? 'E:/phpstudy_pro/WWW/example.com/data/xxx.db' : '/www/wwwroot/example.com/data/xxx.db'" />
         </el-form-item>
         <el-form-item label="本站 YouTube 频道 ID">
           <el-input v-model="form.youtubeChannelId" placeholder="UC 开头的频道 ID；没有可留空" />
@@ -237,6 +237,7 @@ import {
   createSite,
   discoverSites,
   getSharedSiteSettings,
+  getSiteRuntimeDefaults,
   removeSite,
   setDefaultSite,
   saveSharedSiteSettings,
@@ -347,10 +348,15 @@ const toSaveSite = (site: ManagedSite): SaveManagedSite => ({
 
 const resetForm = (values: SaveManagedSite = emptyForm()) => Object.assign(form, values);
 
-const openCreate = () => {
-  editingId.value = 0;
-  resetForm({ ...emptyForm(), environment: sites.value[0]?.environment || "phpstudy" });
-  dialogVisible.value = true;
+const openCreate = async () => {
+  try {
+    const defaults = (await getSiteRuntimeDefaults()).data;
+    editingId.value = 0;
+    resetForm({ ...emptyForm(), environment: store.activeSite?.environment || defaults.environment });
+    dialogVisible.value = true;
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, "读取服务器运行环境失败"));
+  }
 };
 
 const openEdit = (site: ManagedSite) => {
@@ -489,12 +495,17 @@ const parentPathOf = (value: string) => {
   return index > 0 ? normalized.slice(0, index) : "";
 };
 
-const openScanner = () => {
-  scanner.parentPath = parentPathOf(sites.value[0]?.rootPath || "") || "E:/phpstudy_pro/WWW";
-  scanner.environment = sites.value[0]?.environment || "phpstudy";
-  scanCandidates.value = [];
-  scanSelection.value = [];
-  scannerVisible.value = true;
+const openScanner = async () => {
+  try {
+    const defaults = (await getSiteRuntimeDefaults()).data;
+    scanner.parentPath = parentPathOf(store.activeSite?.rootPath || "") || defaults.parentPath;
+    scanner.environment = store.activeSite?.environment || defaults.environment;
+    scanCandidates.value = [];
+    scanSelection.value = [];
+    scannerVisible.value = true;
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, "读取服务器运行环境失败"));
+  }
 };
 
 const runScanner = async () => {

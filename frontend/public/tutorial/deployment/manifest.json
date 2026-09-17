@@ -1,0 +1,608 @@
+[
+  {
+    "id": "deepseek-verified",
+    "file": "179-deepseek-json-success.jpg",
+    "kind": "screenshot",
+    "sha256": "9015309b12bc1460aef751cadbbe3d66daff9f2a62a4b0d3d20539d5661e8b70"
+  },
+  {
+    "id": "google-refinement-release",
+    "file": "182-google-refinement-release.jpg",
+    "kind": "screenshot",
+    "sha256": "cd233f8bca496f867ac405cfa1d2497a82186a33c358530b14dca79bd4d887f2"
+  },
+  {
+    "id": "google-public-verified",
+    "file": "185-google-public-files.jpg",
+    "kind": "screenshot",
+    "sha256": "d581991152117dd571ef4f6edb189d66c8494d7a26f7ee297f939ad1919d383d"
+  },
+  {
+    "id": "seo-audit-verified",
+    "file": "186-seo-homepage-audit.jpg",
+    "kind": "screenshot",
+    "sha256": "20c76bb4508345d07ad449582cdcd967b9cb370692fe044947b62074bcb0858e"
+  },
+  {
+    "id": "server-scan-verified",
+    "file": "183-server-scan-refined.jpg",
+    "kind": "screenshot",
+    "sha256": "b1c50c746646ef3e542413b89b2c332629ec2aa7faeec2827a63bd62191f65a3"
+  },
+  {
+    "id": "server-scan-details",
+    "file": "184-server-scan-details.jpg",
+    "kind": "screenshot",
+    "sha256": "c6a0c54a0b216d685fcc05fa4e4be3ae9cd0f70a2dbe34f52ff682a11d2bc55a"
+  },
+  {
+    "id": "google-seo-flow",
+    "file": "google-seo-normal-pages.svg",
+    "kind": "diagram",
+    "sha256": "d862f6b083a07034f54109927c2950b21d098cd7ff2fe8d6f2a93aefdcc7308f"
+  },
+  {
+    "id": "folder-hierarchy",
+    "file": "173-folder-hierarchy-and-parameters.jpg",
+    "kind": "screenshot",
+    "sha256": "e77108be283371e93c9a346b3319a9385cce45e07322633d5cbe618fb3a18293"
+  },
+  {
+    "id": "folder-unit-variant",
+    "file": "174-folder-independent-unit.jpg",
+    "kind": "screenshot",
+    "sha256": "4b04bf6e3588dad7fe0cc42da82af3cefbe36ed5cf669987186b7fd671c9b1f3"
+  },
+  {
+    "id": "folder-variants-release",
+    "file": "172-folder-variants-release.jpg",
+    "kind": "screenshot",
+    "sha256": "56268d8034f5ee0863cec3a33e159d2f08ba548aa8c6a94886c9d09ba2a08835"
+  },
+  {
+    "id": "folder-server-root",
+    "file": "167-folder-server-root.jpg",
+    "kind": "screenshot",
+    "sha256": "50545c6729d9693c76b9e6af2d33a0ce89600b1af7a93c1ba13dade3b2b6ef81"
+  },
+  {
+    "id": "folder-subdirectories",
+    "file": "168-folder-subdirectories.jpg",
+    "kind": "screenshot",
+    "sha256": "5cad3e6a7f824b1be9c747fbd83c32e37b98b63dfee46be5cfe0cce20686dd93"
+  },
+  {
+    "id": "folder-thumbnail-size",
+    "file": "169-folder-thumbnail-size.jpg",
+    "kind": "screenshot",
+    "sha256": "dd5ac1e3018f3c022e4833b7e73625be1bc07e13e2d6e9c80b0cb513d0e300b3"
+  },
+  {
+    "id": "folder-directory-release",
+    "file": "166-folder-directory-release.jpg",
+    "kind": "screenshot",
+    "sha256": "5f70b35ce17f73b4e075df889a80814edae0fc52c305e24c3d3f707c70df556d"
+  },
+  {
+    "id": "quotation-language",
+    "file": "161-quotation-language.jpg",
+    "kind": "screenshot",
+    "sha256": "ff6a433108769622a90221d10fcfcb79d7910ae570150805ccd314bd0073e123"
+  },
+  {
+    "id": "quotation-workspace",
+    "file": "159-quotation-workspace.jpg",
+    "kind": "screenshot",
+    "sha256": "b3565d10681f8f3802ba379a5a9b23fada8d23ab52b8171dfcec36261ed43f99"
+  },
+  {
+    "id": "quotation-pdf-response",
+    "file": "160-quotation-pdf-response.jpg",
+    "kind": "screenshot",
+    "sha256": "ad9666c9e9f77f7b4242d27c8b7fed556754668674dcbac00d0c8bb19fa64825"
+  },
+  {
+    "id": "quotation-pdf-last",
+    "file": "162-quotation-pdf-last.jpg",
+    "kind": "screenshot",
+    "sha256": "ec47c8156285626e5cdf87362940dd562bf7aa3998a23060f73c2ffca725d275"
+  },
+  {
+    "id": "quotation-version-flow",
+    "file": "quotation-version-flow.svg",
+    "kind": "diagram",
+    "sha256": "0c5b728aed2ce447dbf0ead66f090506878fb91921f977666b2d42a36bc916b1"
+  },
+  {
+    "id": "pdf-gallery-mobile",
+    "file": "153-pdf-gallery-mobile.jpg",
+    "kind": "screenshot",
+    "sha256": "5ba87eb798ef04994160f583cf2c25681b124f448df6d723d03e73453a262e76"
+  },
+  {
+    "id": "pdf-gallery-upload",
+    "file": "148-pdf-gallery-upload.jpg",
+    "kind": "screenshot",
+    "sha256": "8b990463797fcc098017e95aa0663ffdcb1b91387e74d69d917a542c73b17b66"
+  },
+  {
+    "id": "pdf-gallery-release",
+    "file": "149-pdf-gallery-release.jpg",
+    "kind": "screenshot",
+    "sha256": "0a2be64bbfe86933958ce41125f87e76b989a826ec6f3de17cbf048f7a5af1ab"
+  },
+  {
+    "id": "pdf-full-width",
+    "file": "150-pdf-full-width.jpg",
+    "kind": "screenshot",
+    "sha256": "eff94d8908b66b15d60918f6fd8de5c59dec9ab78f779051c9d7d84edb02a346"
+  },
+  {
+    "id": "pdf-gallery-pairs",
+    "file": "151-pdf-gallery-pairs.jpg",
+    "kind": "screenshot",
+    "sha256": "493278352a5413240baadaaeef64c7821f5ff9a6490ea218e0ba2695676c277c"
+  },
+  {
+    "id": "pdf-gallery-single",
+    "file": "152-pdf-gallery-single.jpg",
+    "kind": "screenshot",
+    "sha256": "07e3a55b0da85d2f968c7a1276bb656ce7f984e07972aefbee68907cf7f12504"
+  },
+  {
+    "id": "pdf-recovery-upload",
+    "file": "139-pdf-recovery-upload.jpg",
+    "kind": "screenshot",
+    "sha256": "83b752c5b780ad8ddd5d8710c554730f2b6050bc9214baa33b0bc3c066db9da8"
+  },
+  {
+    "id": "pdf-recovery-release",
+    "file": "140-pdf-recovery-release.jpg",
+    "kind": "screenshot",
+    "sha256": "867fb127fa1c82a7922989cdb3359e0d9c8f58255cbe098eec0eae74a78a79d8"
+  },
+  {
+    "id": "pdf-recovery-ready",
+    "file": "141-pdf-preview-recovered.jpg",
+    "kind": "screenshot",
+    "sha256": "485884992e9d812e1bed22724e8931cd2a510624bbee7335177d13cbc3c2f2d6"
+  },
+  {
+    "id": "folder-parameters-upload",
+    "file": "142-product-parameters-upload.jpg",
+    "kind": "screenshot",
+    "sha256": "3b26f80e99dec25ecd9be4eee740eb1410e9b220f5fae3748c4902edf93268dd"
+  },
+  {
+    "id": "folder-parameters-release",
+    "file": "143-product-parameters-release.jpg",
+    "kind": "screenshot",
+    "sha256": "46b958f7429eea9bd04596d427860379f5319e337ba3ec989c7c96b08282ce20"
+  },
+  {
+    "id": "folder-parameters-entry",
+    "file": "144-product-folder-import-ready.jpg",
+    "kind": "screenshot",
+    "sha256": "3219b4d116ff28ec43161bb7be3c2a208ca825ff073f50f5f5e7eda4347f286c"
+  },
+  {
+    "id": "folder-parameters-flow",
+    "file": "folder-three-parameters.svg",
+    "kind": "diagram",
+    "sha256": "53ce947e06323b8dc11bcfd3912fcfd5a8326a15dc1050ca8e1b1ee13b92eb3f"
+  },
+  {
+    "id": "pdf-web-table-reference",
+    "file": "131-product-web-table-reference.jpg",
+    "kind": "screenshot",
+    "sha256": "dddba9a2af8b00a1e5c6c1d8b97dbfbdf2256f545c987a54c29229bd1875aa38"
+  },
+  {
+    "id": "pdf-typography-upload",
+    "file": "132-typography-upload-success.jpg",
+    "kind": "screenshot",
+    "sha256": "f50294c48eba40275d2e82b8b83a0a0999ef8b125374483844c5abb156aebd44"
+  },
+  {
+    "id": "pdf-typography-release-ready",
+    "file": "133-typography-release-ready.jpg",
+    "kind": "screenshot",
+    "sha256": "d15307d12a40742fa7880c49002c73bf867aa85206390211e9ccdd0e7bca232d"
+  },
+  {
+    "id": "pdf-typography-controls",
+    "file": "134-pdf-typography-controls.jpg",
+    "kind": "screenshot",
+    "sha256": "c465e0e5c1b78153f6ba013685a42f9ff1727c25526fa75b8d6e9e8a53bf6029"
+  },
+  {
+    "id": "pdf-backup",
+    "file": "117-pdf-backup-fonts.jpg",
+    "kind": "screenshot",
+    "sha256": "40de570d732b83224cd0b4c119418cc3d4f62f0944e1fc7b5ab92fab95fafda9"
+  },
+  {
+    "id": "pdf-upload",
+    "file": "118-pdf-upload-package.jpg",
+    "kind": "screenshot",
+    "sha256": "29fd2b384aac076569bc6f02ba22857eeb7a51811886eee250d6a7ad5dfb6409"
+  },
+  {
+    "id": "pdf-registry",
+    "file": "119-pdf-registry-recovery.jpg",
+    "kind": "screenshot",
+    "sha256": "23990efd3a097aadc84b134286943d9f9da679aa24c4cd2b76ef4f651ef65a08"
+  },
+  {
+    "id": "pdf-release-ready",
+    "file": "120-pdf-release-ready.jpg",
+    "kind": "screenshot",
+    "sha256": "2ddb3d4e3ddb8f1f40f83dbd41d6b4cc0984df554a8df7a4cbf0827b429c8849"
+  },
+  {
+    "id": "pdf-language-options",
+    "file": "121-pdf-language-options.jpg",
+    "kind": "screenshot",
+    "sha256": "a2930ba20d341850a8f9328517beee5dd5d3c415b1a65e0286ce4abee814b625"
+  },
+  {
+    "id": "pdf-language-selected",
+    "file": "122-pdf-english-import.jpg",
+    "kind": "screenshot",
+    "sha256": "e39050c8939614c53edeaf2cd39ff9fcf35457a1bad6df7b23fc6e994fee6b63"
+  },
+  {
+    "id": "pdf-detail-editor",
+    "file": "123-pdf-full-detail-editor.jpg",
+    "kind": "screenshot",
+    "sha256": "0505438cc6dce29fd1bf3d66d4ad45922e5f0ad26bcea5aa6001cdfc22c35cfe"
+  },
+  {
+    "id": "pdf-sandbox-ready",
+    "file": "124-pdf-sandbox-probe.jpg",
+    "kind": "screenshot",
+    "sha256": "81af50b84e0b68a00115d0c2d8a3a06eae194a01c501f38e4d2745a57c935857"
+  },
+  {
+    "id": "pdf-emoji-fonts",
+    "file": "125-pdf-emoji-fonts.jpg",
+    "kind": "screenshot",
+    "sha256": "41c9f49a71da55f458932ec8e4d42beec97f2a980f473f22a03ce6d08d643786"
+  },
+  {
+    "id": "tools-proxy-now",
+    "file": "100-tools-proxy-targets.jpg",
+    "kind": "screenshot",
+    "sha256": "56ab156e1adeb84920962397cc920b9a3894fffd2dfc4a9e8d08336c8b1d478b"
+  },
+  {
+    "id": "tools-basic-before",
+    "file": "101-tools-basic-auth-setting.jpg",
+    "kind": "screenshot",
+    "sha256": "8d37604cbb8b656b64480d2e2992ef6c2a8e35f2d5427ec478b17b00971bcedf"
+  },
+  {
+    "id": "seo-basic-replaced",
+    "file": "103-seo-basic-replaced.jpg",
+    "kind": "screenshot",
+    "sha256": "16eff8adc476542571ce0db8380b4f13176f3044ee391cb202622d47b82c7bfd"
+  },
+  {
+    "id": "ftp-basic-replaced",
+    "file": "104-ftp-basic-replaced.jpg",
+    "kind": "screenshot",
+    "sha256": "6473ca4b547209648a58af45d4031758e0e8c7107d99817dba9205eabac3300f"
+  },
+  {
+    "id": "seo-visible-login",
+    "file": "105-seo-browser-login.jpg",
+    "kind": "screenshot",
+    "sha256": "23563be745672f5abdca45acf5ec917c831f61d652558d724ee1885834518201"
+  },
+  {
+    "id": "ftp-visible-login",
+    "file": "106-ftp-browser-login.jpg",
+    "kind": "screenshot",
+    "sha256": "ebdf02b73f37caf3756fb59f223a35f6753aa63758be6783786663825cf3ad0d"
+  },
+  {
+    "id": "seo-browser-ready",
+    "file": "107-seo-browser-ready.jpg",
+    "kind": "screenshot",
+    "sha256": "2ef754d23012b9fe7a407503ae6897b331b99cd490c7d2b3a7413bdd5ea553d1"
+  },
+  {
+    "id": "ftp-browser-ready",
+    "file": "108-ftp-browser-ready.jpg",
+    "kind": "screenshot",
+    "sha256": "069f6639db944a21effccfb0dab73c8e078b31c8bbc04c35422ef32b6ed555e4"
+  },
+  {
+    "id": "models-browser-ready",
+    "file": "110-models-browser-ready.jpg",
+    "kind": "screenshot",
+    "sha256": "20731dde8cd2126854d63af1f1c9bada5ed56588af33b57be77b7de1d82f8a66"
+  },
+  {
+    "id": "model-config-browser-ready",
+    "file": "111-model-config-browser-ready.jpg",
+    "kind": "screenshot",
+    "sha256": "984b7e7a65331135fac962d0faab85139733c118e851b604330209d9ad029c3e"
+  },
+  {
+    "id": "tools-final-check",
+    "file": "112-tools-final-verification.jpg",
+    "kind": "screenshot",
+    "sha256": "1e7fc118fe1869ec4791a08ee623d0d4bbe851fe1535ebce6f049010f74c48af"
+  },
+  {
+    "id": "tool-session-flow",
+    "file": "tool-session-flow.svg",
+    "kind": "diagram",
+    "sha256": "b535c5d0a5012030669998b9603ae3e2f61440db23d7f48dd78b559c63a8c088"
+  },
+  {
+    "id": "nginx-language-bindings",
+    "file": "84-pboot-language-domain-bindings.jpg",
+    "kind": "screenshot",
+    "sha256": "276159da50eee5dc16e51ec1f9fa33c36352e8523895b8043aca4813cf4bd504"
+  },
+  {
+    "id": "nginx-language-root",
+    "file": "85-pboot-document-root.jpg",
+    "kind": "screenshot",
+    "sha256": "c3a7783bb6ac9c54ef7f354255b5ed5e77f7c5825f4c713c513834b2e25618c2"
+  },
+  {
+    "id": "nginx-language-backup",
+    "file": "87-nginx-backup.jpg",
+    "kind": "screenshot",
+    "sha256": "4c1cc4eba89c042ce50ffdab65e755bbc8f9f8ebd1b9d9e416015168c3479556"
+  },
+  {
+    "id": "nginx-rewrite-empty",
+    "file": "86-pboot-rewrite-empty.jpg",
+    "kind": "screenshot",
+    "sha256": "12d62d6f2f35a88c601ae7cf02e59fab24fca42ed08d3286bac103c574887ab1"
+  },
+  {
+    "id": "nginx-rewrite-saved",
+    "file": "88-pboot-rewrite-saved.jpg",
+    "kind": "screenshot",
+    "sha256": "19433a672aaaabc4834ab628149db5c145901f24a76bc54430029bf5407c7aa4"
+  },
+  {
+    "id": "nginx-test-before-license",
+    "file": "89-nginx-test-after-rewrite.jpg",
+    "kind": "screenshot",
+    "sha256": "dad5a50f5ba1dc686a34a127be4a6ae486469b448dfd93e7793072a39ea2de0e"
+  },
+  {
+    "id": "nginx-cn-license-message",
+    "file": "90-cn-application-error.jpg",
+    "kind": "screenshot",
+    "sha256": "7d31888664c8d5b647c5c3d6c76356da4feafc19bdb36e713f792a72a3e01a5d"
+  },
+  {
+    "id": "cn-home-restored",
+    "file": "91-cn-home-restored.jpg",
+    "kind": "screenshot",
+    "sha256": "3a109b49bd7663dada82c6d94c9b5755ea6eec94fc1a22b28d1e9543029df076"
+  },
+  {
+    "id": "cn-clean-product-list",
+    "file": "92-cn-clean-product-list.jpg",
+    "kind": "screenshot",
+    "sha256": "ccf9e0751a953cd760ae50a6194653e3c8f416f8bdac44422dd42ff338f1870c"
+  },
+  {
+    "id": "cn-clean-product-detail",
+    "file": "93-cn-clean-product-detail.jpg",
+    "kind": "screenshot",
+    "sha256": "d82afb70e2ba391bdb35679768fd35133245270d3bf14599b6040f44834eb290"
+  },
+  {
+    "id": "cn-nginx-verification",
+    "file": "94-cn-nginx-verification.jpg",
+    "kind": "screenshot",
+    "sha256": "9c354cb1cc6249ff10725280aed26b113acd1c5cc41f74f046a164250b32d3f4"
+  },
+  {
+    "id": "language-domain-checklist",
+    "file": "language-domain-checklist.svg",
+    "kind": "diagram",
+    "sha256": "aa53cd03f1129e7d7520af48ba67e704d0c72839f22d00c8436b00763d93e8dc"
+  },
+  {
+    "id": "cn-license-error",
+    "file": "69-cn-domain-license-diagnosis.jpg",
+    "kind": "screenshot",
+    "sha256": "3a5748a378b92ddfba04953fa1033c72bcd27d62a9b8530e31314ba21b278b73"
+  },
+  {
+    "id": "language-license",
+    "file": "language-license.svg",
+    "kind": "diagram",
+    "sha256": "3c2c068f95f5ae532823f4a3192086977da5dbcb2dd88cc2f7b7215808dbea0e"
+  },
+  {
+    "id": "admin-proxy",
+    "file": "01-domain-reverse-proxy.jpg",
+    "kind": "screenshot",
+    "sha256": "a7e0bc1fe3cc24440b95821d23a99949262d5fa675a9ec19e663afc0f4b63a30"
+  },
+  {
+    "id": "ssl",
+    "file": "03-ssl-application.jpg",
+    "kind": "screenshot",
+    "sha256": "3c842da5efae4dc64454ed9bdbd4e06fe36871e472358f07a11f29bd760ac942"
+  },
+  {
+    "id": "bootstrap",
+    "file": "06-admin-initialization.jpg",
+    "kind": "screenshot",
+    "sha256": "0ffc11437b9f18981e12037777296b813d55432ca596028ece7350a192e22eac"
+  },
+  {
+    "id": "basic-auth",
+    "file": "22-ftp-http-auth-form.jpg",
+    "kind": "screenshot",
+    "sha256": "e8d47a0713f9956167815154a7fe9a0ce922a3534b7d1103b1b9dc5740dd5396"
+  },
+  {
+    "id": "seo-target",
+    "file": "15-seo-proxy-target.jpg",
+    "kind": "screenshot",
+    "sha256": "4b42929f3684bb0102ce8c4b155b5022e5db8bfc7918373082fbd4e416bee2a2"
+  },
+  {
+    "id": "ftp-target",
+    "file": "24-ftp-proxy-target.jpg",
+    "kind": "screenshot",
+    "sha256": "e2fa544959e9d69ce3e917fd0b94e6fcdd7b23848fbd7c659bd8410582b42d68"
+  },
+  {
+    "id": "https-projects",
+    "file": "28-three-https-projects.jpg",
+    "kind": "screenshot",
+    "sha256": "ba646a8fa221dc7dacd92be852f338a6e97524fef290372460b482cc6fba0a29"
+  },
+  {
+    "id": "pm2",
+    "file": "33-baota-pm2-four-projects.jpg",
+    "kind": "screenshot",
+    "sha256": "f256d48b0c75e18012410b1517fe9a3ade6cf128db2f4820e174ec5f0446666b"
+  },
+  {
+    "id": "startup",
+    "file": "37-pm2-system-service-ready.jpg",
+    "kind": "screenshot",
+    "sha256": "f640b934cf61a19f00b4178b9040431b2edc2cb5ac93ab2086f1f1bc621cfa5f"
+  },
+  {
+    "id": "php-project",
+    "file": "42-shanbo-rig-php-project.jpg",
+    "kind": "screenshot",
+    "sha256": "aaf0889460c4ce39d3fa634cde6bbe3d2773034996a56e7fc928907f5ee333d7"
+  },
+  {
+    "id": "site-form",
+    "file": "47-configure-shanbo-rig-site.jpg",
+    "kind": "screenshot",
+    "sha256": "f318e2acd831c64a33201046fd9333b2655f124fac110acb219c46457b9abb3a"
+  },
+  {
+    "id": "site-check",
+    "file": "48-site-link-check-passed.jpg",
+    "kind": "screenshot",
+    "sha256": "1c77fb74e8eed2ce370da4ba5315da515da61b04e01df05fbb971e8ce86cec79"
+  },
+  {
+    "id": "menu-import",
+    "file": "49-pull-pb-menus-confirm.jpg",
+    "kind": "screenshot",
+    "sha256": "709b627073e51373d1092820bbcb035876e27b0341977c3014a8ed9711486165"
+  },
+  {
+    "id": "products",
+    "file": "52-products-imported.jpg",
+    "kind": "screenshot",
+    "sha256": "a0886fa1859a0f7ded88a9ba31b293c6087126305e5a71521c2d17e4f04eb74d"
+  },
+  {
+    "id": "news",
+    "file": "53-news-imported.jpg",
+    "kind": "screenshot",
+    "sha256": "a05191b9ae44ce3800b1041ad2619eb94550e22a54ff0e9386ba21e9aa015e72"
+  },
+  {
+    "id": "pages",
+    "file": "54-pages-imported.jpg",
+    "kind": "screenshot",
+    "sha256": "6a3c2d50877524f68d811c2dffe4e49848988f422542a9431f02afcd052affb5"
+  },
+  {
+    "id": "videos",
+    "file": "55-video-channel-unconfigured.jpg",
+    "kind": "screenshot",
+    "sha256": "99a409983bbc81c545ff31ab4e444fd2a5977967b168103154164b71eacee5e3"
+  },
+  {
+    "id": "data-guard",
+    "file": "56-nginx-database-archive-protected.jpg",
+    "kind": "screenshot",
+    "sha256": "12fc1c49d19a0a31559a45f78049587700b8241dfcd6f48413318898f4709b80"
+  },
+  {
+    "id": "product-media",
+    "file": "58-product-edit-media-verified.jpg",
+    "kind": "screenshot",
+    "sha256": "02c694a5b9f0c2a1bd9971c6423804ce355b58dcfb8d08d35842703cbda0b60f"
+  },
+  {
+    "id": "fields",
+    "file": "59-existing-product-fields-linked.jpg",
+    "kind": "screenshot",
+    "sha256": "1cefb76069fe8f8cc413d517d2c27e32c0b5985b768b4eaaf9dcf2ada9672ffd"
+  },
+  {
+    "id": "bindings",
+    "file": "61-template-preview-no-changes.jpg",
+    "kind": "screenshot",
+    "sha256": "1c07f3e5066f6c90141fb891c012925dd3f0fcb712b6ae707ce3997604b5b964"
+  },
+  {
+    "id": "scan-defaults",
+    "file": "62-baota-scan-defaults-verified.jpg",
+    "kind": "screenshot",
+    "sha256": "7b9041aeb997624d83204e104b08456c71cae68cd089fbdee74c033a20ca1f06"
+  },
+  {
+    "id": "architecture",
+    "file": "architecture.svg",
+    "kind": "diagram",
+    "sha256": "bb29d5b5be09b0a42612043e122144b9769da4521158d1536839a1708ed6df21"
+  },
+  {
+    "id": "directories",
+    "file": "directories.svg",
+    "kind": "diagram",
+    "sha256": "f62e8c574e44535e788e3e9dffa14ddc33ea9c4da6a2c94e25e7854d2a91ca8c"
+  },
+  {
+    "id": "data-boundary",
+    "file": "data-boundary.svg",
+    "kind": "diagram",
+    "sha256": "a11c88df9a1739362fd832ff6f14370ea5c3c5b8e2fd3a813a5dc7e6ce89cc2c"
+  },
+  {
+    "id": "routing",
+    "file": "routing.svg",
+    "kind": "diagram",
+    "sha256": "236c17d51ba23ad6b1bdb546c2f2cc9a57398bf6bcacfa05f82943b4cefbca91"
+  },
+  {
+    "id": "auth-flow",
+    "file": "auth-flow.svg",
+    "kind": "diagram",
+    "sha256": "09ffad1be00db2fc8055aac011234ed7af3d7a7bb7a8a10d47859103c04d2362"
+  },
+  {
+    "id": "sync-flow",
+    "file": "sync-flow.svg",
+    "kind": "diagram",
+    "sha256": "ca1ca98f51bd271758f5f1bf852f532e3f7f17b195a22e967c8ce0c727e7d6fd"
+  },
+  {
+    "id": "pdf-flow",
+    "file": "pdf-flow.svg",
+    "kind": "diagram",
+    "sha256": "a7860557c9028e9367810e15511feb682278ddd9d230e68eeda6ad5d3cc76743"
+  },
+  {
+    "id": "rollback",
+    "file": "rollback.svg",
+    "kind": "diagram",
+    "sha256": "e01fa951236fd2fae9b9f13bfde8c6e2d1d853a7ebd7585c5daf6e677ff05103"
+  }
+]

@@ -74,6 +74,23 @@ describe('product thumbnails', () => {
     expect(fs.readdirSync(model).sort()).toEqual(['0.jpg', '1.jpg']);
   });
 
+  it.each([[800, 600], [320, 640], [64, 64]])('uses custom %sx%s dimensions only for missing 0.jpg', async (width, height) => {
+    const source = await raster();
+    fs.writeFileSync(path.join(model, '1.jpg'), source);
+    expect(await ensureFolderThumbnail(model, '1.jpg', { width, height })).toBe('0.jpg');
+    expect(await sharp(path.join(model, '0.jpg')).metadata()).toMatchObject({ width, height });
+    const existing = fs.readFileSync(path.join(model, '0.jpg'));
+    const modified = fs.statSync(path.join(model, '0.jpg')).mtimeMs;
+    await ensureFolderThumbnail(model, '1.jpg', { width: 1024, height: 768 });
+    expect(fs.readFileSync(path.join(model, '0.jpg'))).toEqual(existing);
+    expect(fs.statSync(path.join(model, '0.jpg')).mtimeMs).toBe(modified);
+    expect(fs.readFileSync(path.join(model, '1.jpg'))).toEqual(source);
+  });
+
+  it.each([0, 63, 4097, -1, 500.5, NaN, Infinity])('rejects unsafe requested dimensions: %s', async width => {
+    await expect(createProductThumbnail(await raster(), { width })).rejects.toThrow('64 到 4096');
+  });
+
   it('supports numbered PNG input and leaves missing source alone', async () => {
     expect(await ensureFolderThumbnail(model, '')).toBe('');
     fs.writeFileSync(path.join(model, '1.PNG'), await sharp(await raster()).png().toBuffer());

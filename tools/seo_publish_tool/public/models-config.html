@@ -180,10 +180,10 @@
           btn.disabled = true; btn.textContent = "测试中...";
           try {
             const res = await fetch("/api/ai/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: model.value }) });
-            const data = await res.json().catch(() => ({}));
+            const data = await res.json().catch(() => ({ message: `测试接口返回异常（HTTP ${res.status}），请刷新页面或检查服务状态。` }));
             if (!res.ok || !data.ok) throw new Error(data.message || ("HTTP " + res.status));
             msg.className = "msg ok";
-            msg.textContent = `${model.label} 连接正常${data.elapsedMs ? `，耗时 ${(data.elapsedMs / 1000).toFixed(1)} 秒` : ""}。`;
+            msg.textContent = `${model.label} 连接及 JSON 校验正常${data.elapsedMs ? `，耗时 ${(data.elapsedMs / 1000).toFixed(1)} 秒` : ""}${data.attempts > 1 ? "（自动重试后恢复）" : ""}。`;
           } catch (err) {
             msg.className = "msg err";
             msg.textContent = err.message || String(err);

@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const ftp = require("basic-ftp");
 const siteRuntime = require("../site-runtime");
+const { buildPublicNavigation } = require("../public-navigation");
 const { readConfig, writeConfig, collectFiles, formatBytes, uploadFiles } = require("./upload-to-ftp");
 const {
   appendHistory,
@@ -79,6 +80,7 @@ const securityState = {
 };
 
 const monitorTimers = new Map();
+const serverSecurity = require('./server-security').createServerSecurity({ busy: () => uploadState.running || securityState.running });
 
 function readSecurityCheckpoint() {
   try {
@@ -219,18 +221,9 @@ function buildNavigation() {
   }
   const backendPort = Number(env.BACKEND_PORT || 5000);
   const frontendPort = Number(env.FRONTEND_PORT || 5178);
-  const seoPort = Number(seo.localPort || 5188);
-  return [
-    { id: "admin", label: "管理后台", url: `http://localhost:${frontendPort}/#/` },
-    { id: "backend", label: "后端接口", url: `http://localhost:${backendPort}/api-docs` },
-    { id: "sites", label: "站点管理", url: `http://localhost:${frontendPort}/#/sites` },
-    { id: "quotation", label: "报价单生成", url: `http://localhost:${frontendPort}/#/quotations` },
-    { id: "seo", label: "SEO 检查", url: `http://localhost:${seoPort}` },
-    { id: "models", label: "模型总览", url: `http://localhost:${seoPort}/models.html` },
-    { id: "models-config", label: "模型配置", url: `http://localhost:${seoPort}/models-config.html` },
-    { id: "ftp", label: "FTP 发布", url: `http://localhost:${PORT}/` },
-    { id: "ftp-security", label: "FTP 安全巡检", url: `http://localhost:${PORT}/security.html` },
-  ].map((item) => ({ ...item, url: siteRuntime.withSiteQuery(item.url) }));
+  const seoPort = Number(process.env.SEO_TOOL_PORT || env.SEO_TOOL_PORT || seo.localPort || 5188);
+  return buildPublicNavigation({ ...env, ...process.env },
+    { backendPort, frontendPort, seoPort, ftpPort: PORT }, "ftp", siteRuntime.withSiteQuery);
 }
 
 function normalizeConfigInput(body, current) {
@@ -324,6 +317,7 @@ async function testFtpConnection(config) {
 }
 
 function startUpload(scopeOverride = "") {
+  if (serverSecurity.isRunning()) throw new Error('宝塔服务器巡检正在运行，请先停止巡检。');
   if (uploadState.running) throw new Error("Upload is already running.");
   if (securityState.running) throw new Error("安全巡检正在运行，请等待扫描完成后再发布。");
   const savedConfig = readConfig();
@@ -432,6 +426,7 @@ function securityStatus() {
 }
 
 function startSecurityScan({ mode = "scan", scanType = "incremental", allowFindings = false, reason = "manual", resume = false } = {}) {
+  if (serverSecurity.isRunning()) throw new Error('宝塔服务器巡检正在运行，请先停止巡检。');
   if (securityState.running) throw new Error("安全巡检已经在运行。");
   if (uploadState.running) throw new Error("FTP 发布正在运行，请等待发布完成后再扫描。");
   const config = readConfig();
@@ -610,7 +605,44 @@ function sendFile(res, filePath) {
 
 async function handleApi(req, res, pathname) {
   try {
+    if (!siteRuntime.currentSite() && !(req.method === 'GET' && pathname === '/api/config')) {
+      sendJson(res, { message: "请先在管理后台添加网站。", setupRequired: true }, 400);
+      return;
+    }
+    if (pathname.startsWith('/api/server-security/')) {
+      const site = siteRuntime.currentSite();
+      if (req.method === 'POST' && ['/api/server-security/read', '/api/server-security/trust', '/api/server-security/untrust',
+        '/api/server-security/quarantine', '/api/server-security/restore'].includes(pathname)) {
+        const body = await readBody(req);
+        const actor = require('node:crypto').createHash('sha256').update(req.headers.cookie || req.headers.authorization || '').digest('hex');
+        res.setHeader('Cache-Control', 'no-store');
+        const kind = pathname.split('/').pop();
+        sendJson(res, kind === 'read' ? serverSecurity.inspect(site, body, actor) : serverSecurity.fileAction(site, kind, body, actor)); return;
+      }
+      if (req.method === 'GET' && pathname === '/api/server-security/status') {
+        sendJson(res, { ...serverSecurity.status(site), navigation: buildNavigation() }); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/server-security/scan') {
+        serverSecurity.start(site); sendJson(res, { ok: true }, 202); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/server-security/stop') {
+        serverSecurity.stop(site); sendJson(res, { ok: true }); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/server-security/settings') {
+        const settings = serverSecurity.configure(site, await readBody(req)); sendJson(res, { ok: true, settings }); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/server-security/baseline') {
+        const body = await readBody(req);
+        if (body.confirm !== true) throw new Error('请确认当前扫描结果可信后再采用基线。');
+        serverSecurity.adopt(site, body.reportId); sendJson(res, { ok: true }); return;
+      }
+    }
     if (req.method === "GET" && pathname === "/api/config") {
+      if (!siteRuntime.currentSite()) {
+        sendJson(res, { config: {}, navigation: buildNavigation(), site: null, setupRequired: true,
+          message: "请先在管理后台添加网站。" });
+        return;
+      }
       sendJson(res, {
         config: publicConfig(readConfig()),
         navigation: buildNavigation(),
@@ -742,7 +774,9 @@ async function handleApi(req, res, pathname) {
   }
 }
 
-const server = http.createServer((req, res) => {
+const authenticateTool = require('../tool-auth').createToolAuth({ tool: 'ftp', env: { ...parseEnvFile(BACKEND_ENV_PATH), ...process.env } });
+const server = http.createServer(async (req, res) => {
+  if (await authenticateTool(req, res)) return;
   siteRuntime.runForRequest(req, res, () => {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     if (url.pathname.startsWith("/api/")) {
@@ -765,6 +799,10 @@ const server = http.createServer((req, res) => {
 });
 
 function startServer() {
+  const serverMonitorTimer = setInterval(() => serverSecurity.tick(), 60000);
+  serverMonitorTimer.unref();
+  server.once('close', () => clearInterval(serverMonitorTimer));
+  serverSecurity.tick();
   return server.listen(PORT, "127.0.0.1", () => {
   const sites = siteRuntime.readManagedSites();
   if (sites.length) {

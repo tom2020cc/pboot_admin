@@ -5,7 +5,7 @@ import { SaveBrochureDto } from './brochure.dto';
 import { BrochureService } from './brochure.service';
 import { BrochurePdfService, MAX_BROCHURE_HTML_BYTES } from './brochure-pdf.service';
 
-@ApiTags('产品介绍')
+@ApiTags('产品生成PDF')
 @Controller('brochures')
 export class BrochureController {
   constructor(private readonly service: BrochureService, private readonly pdf: BrochurePdfService) {}
@@ -18,7 +18,7 @@ export class BrochureController {
       type: 'application/pdf', disposition: 'attachment; filename="product-introduction.pdf"',
     });
   }
-  @Get() findAll(@Query('search') search?: string) { return this.service.findAll(search); }
+  @Get() findAll(@Query('search') search?: string, @Query('language') language?: string) { return this.service.findAll(search, language); }
   @Get(':id') findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
   @Post() create(@Body() body: SaveBrochureDto) { return this.service.create(body); }
   @Patch(':id') update(@Param('id', ParseIntPipe) id: number, @Body() body: SaveBrochureDto) { return this.service.update(id, body); }

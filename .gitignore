@@ -16,6 +16,7 @@ logs/
 .env
 .env.local
 .env.*.local
+.env*.before-public-urls
 .home/
 .pm2/
 seo.config.json
@@ -38,6 +39,7 @@ uploads/
 backups/
 tmp/
 artifacts/
+docs/tutorial-assets/**/*.png
 coverage/
 
 # 每个受管网站的运行配置、凭据、状态与备份

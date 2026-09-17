@@ -13,8 +13,8 @@ const request = axios.create({
 
 export const getErrorMessage = (error: unknown, fallback = "请求失败") => {
   if (axios.isAxiosError(error)) {
-    if (error.code === "ECONNABORTED" || error.message.includes("timeout")) {
-      return "请求超时：后台已停止当前语言处理，之前完成的语言不受影响；再次点击一键翻译会从断点继续。";
+    if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT" || /timeout/i.test(error.message || "")) {
+      return "请求超时，暂未收到服务器响应。当前编辑内容仍保留；若刚才正在保存，请先查看已保存记录，确认结果后再操作。";
     }
     const message = error.response?.data?.message;
     if (Array.isArray(message)) return message.join("，");

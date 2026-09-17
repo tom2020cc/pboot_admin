@@ -1,648 +1,2000 @@
-# Pboot Admin 宝塔集中部署图文教程
+> 本文由 frontend/src/content/deployment-guide.json 生成，与后台“部署教程”同源。截图编号及箭头图例可在网页放大查看。修改源数据后运行 node deploy/build-tutorial-assets.cjs。
 
-> 适用项目：`pboot_admin_center`  
-> 本地开发目录：`E:\phpstudy_pro\WWW\pboot_admin_center`  
-> 宝塔目标目录：`/www/wwwroot/pboot_admin_center`  
-> 文档更新：2026-09-11
+# 宝塔部署教程
 
-## 本次全新安装入口
+pboot_admin_center 集中管理后台 · 全新安装、业务站接入、问题排查与更新回退
 
-使用宝塔已有的 **PM2 管理器**：先在“Node版本”安装 Node.js 22 LTS（至少 22.12.0），再把仓库克隆到下面的独立目录。`bash deploy/prepare-baota.sh` 只生成全新配置、安装依赖并构建，不另装 Node/PM2 守护、不创建 systemd 服务、不修改 Nginx 或业务网站。已有数据库时停止，不能用它覆盖旧部署。
+版本：2026-09-14；实操记录：2026-09-11
 
-- 项目：`/www/wwwroot/pboot_admin_center`；运行时使用宝塔 PM2 管理器选定的 Node。
-- 新数据库：`data/pboot-admin.sqlite`，不迁移本地账号、内容或密钥。
-- 启动配置：`deploy/baota.ecosystem.config.js`，包括 API、SEO 工具、FTP 工具及 SEO worker。必须使用宝塔现有 PM2 的命令、用户和 PM2_HOME，不创建第二套进程列表。
-- 启动、停止和日志在宝塔 PM2 管理器中查看；运行用户应与目录及 `.env` 权限匹配。
-- 宝塔旧版 PM2 5.6 插件若未列出命令行启动的项目，可运行 `node deploy/register-baota-pm2.cjs`，只登记本项目四个进程，不覆盖已有登记，不重启进程。此入口对应本次 root 部署，其他运行用户需同步调整权限和登记信息。
-- API/工具仅监听回环地址。前端构建输出在 `frontend/dist`，域名确定后配置独立 Nginx 站点；不改已有网站的域名或 80/443 配置。
-- 域名未配置时，可把 `deploy/nginx/pboot-admin-loopback.conf` 安装到宝塔 Nginx 的独立 vhost 配置，先执行 `nginx -t` 再 reload。仅监听 `127.0.0.1:5278`，可在服务器测试首页及 `/api/project-identity`，不可从公网访问。
-- 首次安装只完成内部服务。管理员账号初始化、管理域名、HTTPS、工具域名和模型密钥另行配置；不应直接开放内部端口到公网。
-- 正式环境必须设置随机 `JWT_SECRET`，关闭公开注册和默认 Swagger；准备脚本生成独立密钥，不输出到日志，也不覆盖已有 `.env`。新建管理员需在服务器端初始化，或之后由已有管理员添加，不再通过公网注册。
-- PDF 导出还需安装服务器 Chromium 及其系统依赖，不能把 Windows 浏览器复制到 Linux。
-- OpenCloudOS 9 本次使用 `pnpm --dir backend exec playwright install chromium`；根据 `ldd` 的缺失库补装 `mesa-libgbm`、`alsa-lib`。该系统不在 Playwright 官方支持列表内，安装后须实际渲染验证，并补齐中文字体。
-- 中文字体使用 `dnf install google-noto-sans-cjk-sc-fonts`，`fc-match :lang=zh-cn` 应返回 Noto Sans CJK SC。修改 PM2 运行用户时，还需以对应用户重新安装浏览器或配置共享浏览器目录。
-- SEO 全局默认暂停，无需搜索密钥也能安装启动。部署包应包含 `tools/seo-content-worker/skills/`。
+命令以 /www/wwwroot/pboot_admin_center、宝塔现有 root PM2 环境为例。截图是部署当天的记录，IP、版本、数量和状态不是当前服务器的实时监控。换服务器时先替换域名、目录和运行用户。2026-09-13 起按项目要求，不自动备份代码或上传 GitHub；下文旧备份记录仅为历史实录，备份命令须用户明确要求后才执行。
 
-### 2026-09-11 安装验证
+## 1. Google SEO 与 DeepSeek 排障实录
 
-- Node.js 22.23.2、pnpm 9.15.9、PM2 6.0.14；服务器完成前后端构建。
-- 宝塔 PM2 5.6 面板已列出四个进程；PM2 使用 `/root/.pm2`，标准 `pm2-root` 开机恢复已启用。未重启整台服务器进行验证。
-- 内部前端 `127.0.0.1:5278`、SEO 工具 `5388`、FTP 工具 `5389` 返回 HTTP 200；前端 `/api/project-identity` 正确转发到 `5108`。
-- SEO worker 的只读检查通过，协议版本 2，全局暂停，未调用模型、采集或发布内容。
-- Chromium 英文与中文 PDF 内存渲染通过；尚未完成真实产品介绍的用户流程测试。
-- 修复了全新安装无站点时两个工具因空配置路径反复退出的问题；未迁移本地数据库或修改业务网站。
-- 待配置：初始管理员、管理域名及 HTTPS、工具访问保护、站点档案和模型密钥。当前回环地址不能直接从公网访问。
+2026-09-14 已上线并实测：DeepSeek JSON 探测、Google 属性隔离、Sitemap 接口和公开文件检查。尚未配置 Google 服务账号，不把代码测试等同于真实提交或收录。
 
-下面是手动部署参考；Node.js 应使用仍受支持的 LTS，项目最低要求 22.12.0。参考 [Node.js 官方版本与下载](https://nodejs.org/en/download)。
+### DeepSeek 已配置却提示 JSON 格式错误
 
-本教程的目标是在宝塔服务器上只部署一套 Pboot Admin，通过一个管理后台选择并操作同一台服务器上的多个 PbootCMS 网站。
+入口：SEO 检查 → 模型配置 → DeepSeek → 测试连接。本次 Unexpected token 并不代表 Key 一定失效，原探测只给 64 token，未开启 JSON 输出模式，模型返回异常片段后触发解析错误。
 
-![宝塔集中部署架构](./baota-assets/01-architecture.svg)
+修复仅作用于连接探测：启用 JSON object 模式、关闭思考输出，首轮 256 token，格式异常重试一次，第二轮 512 token；总计最多约 45 秒。401/402/429 仍按账号、余额或限流提示，不以格式重试掩盖。批量 SEO 写作需要数组，不强制套用对象输出模式。
 
-## 一、先确认部署范围
+更新后服务端实际探测 605ms 一次成功；浏览器约 0.3 秒，显示连接及 JSON 校验正常。测试没有生成文章或写入产品。若还失败，先核对 HTTP 状态、额度和模型实际返回，不要在截图里展示 Key。
 
-建议准备三个仅供管理使用的域名：
+![线上 DeepSeek 测试显示连接及 JSON 校验正常，约 0.3 秒；没有生成文章。](../frontend/public/tutorial/deployment/179-deepseek-json-success.jpg)
 
-| 用途 | 示例域名 | 内部服务 |
-|---|---|---|
-| 管理后台 | `admin.example.com` | 前端静态文件 + `127.0.0.1:5108` |
-| SEO 工具 | `seo-admin.example.com` | `127.0.0.1:5388` |
-| FTP 与巡检 | `ftp-admin.example.com` | `127.0.0.1:5389` |
+1. 模型配置页的测试连接入口。
+2. 必须同时通过连接与 JSON 校验。
 
-请把教程中的 `example.com` 替换为自己的真实管理域名。三个域名都解析到同一台宝塔服务器。
+- [ ] 模型测试有明确成功或分类错误，不把任意文本当成 JSON 成功。
 
-当前版本已经实现：
+### 先分清普通页面与 Indexing API
 
-- 站点档案和顶部站点切换。
-- 菜单、新闻、产品、单页、视频同步按所选站点访问 PbootCMS 数据库。
-- PbootCMS 数据库路径和 `static` 图片按站点解析。
-- 同步前验证数据库必须位于所选网站的 `data` 目录。
+钻机、挖掘机产品和一般新闻使用 Sitemap、站内链接、Search Console 搜索表现与索引查询。普通页面不存在可以保证批量立即收录的 Google API。
 
-当前仍在继续完善：
+Indexing API 仅适用于真实 JobPosting，或 VideoObject 中包含 BroadcastEvent 的页面。本轮将其折叠为招聘/直播专用入口，提交前检查页面 JSON-LD；普通产品会跳过，不能伪造类型。
 
-- 辅助库中的新闻、产品、报价单等数据需要进一步按站点完全隔离。
-- SEO、Google、Bing、百度、Yandex、FTP 配置需要进一步与站点档案统一。
+URL Inspection API 查询 Google 已知的索引状态，不等于请求收录；少量重要页面可以到 Google 官方网址检查界面手动请求。Sitemap 已收到、页面已发现、已抓取、已收录必须分开理解。
 
-因此第一次部署时建议先接入一个正式网站，确认所有读写流程正常后，再批量添加其他网站。
+![普通产品与新闻的 Google SEO 工作流 · SVG 示意，不是授权成功截图。](../frontend/public/tutorial/deployment/google-seo-normal-pages.svg)
 
-当前管理后台、SEO 工具和 FTP 工具在生产环境使用三个独立域名。构建前在前端生产配置设置 `VITE_API_BASE_URL=/api`、`VITE_SEO_TOOL_URL=https://seo-admin.example.com`、`VITE_FTP_TOOL_URL=https://ftp-admin.example.com`，替换为自己的域名。顶部导航跟随这些地址，不再使用写死的 localhost。修改后需重新构建前端。
 
-## 二、宝塔需要安装什么
+- [ ] 普通产品与新闻按 Search Console + Sitemap 路径操作，不误用招聘/直播通知。
 
-推荐环境：
+### 配置 Google 服务账号和当前网站属性
 
-| 组件 | 建议 |
-|---|---|
-| 宝塔 Linux 面板 | 当前稳定版或正式版 |
-| Web 服务 | Nginx |
-| Node.js | 22 LTS，至少 22.12.0 |
-| Node 项目管理 | 宝塔 Node.js 版本管理器 / PM2 |
-| PHP | 按现有 PbootCMS 网站要求安装 |
-| 数据库 | 本管理项目使用 SQLite 文件，不需要新建 MySQL |
+网站所有者先在 Search Console 添加并验证网站。域名属性可覆盖语言子域名，例如 sc-domain:shanbo-rig.com；网址前缀属性如 https://cn.shanbo-rig.com/ 只覆盖对应协议、主机和路径。其他独立网站必须配置自己的属性。
 
-宝塔官方参考：
+进入 Google Cloud，选定同一项目并启用 Search Console API；创建服务账号，在密钥页下载 JSON。项目角色不需要为本功能授予管理员权限。JSON 是私钥文件，不上传 GitHub，不放网站公开目录，也不贴进教程。
 
-- [宝塔官方 Node.js PM2 部署教程](https://docs.bt.cn/practical-tutorials/nodejs-pm2-deployment)
-- [宝塔官方反向代理配置指南](https://docs.bt.cn/user-guide/site/php/site-config/reverse-proxy)
-- [宝塔面板新手安装指引](https://docs.bt.cn/landing/getting-started/)
+在 Search Console 目标属性的设置 → 用户和权限中，由所有者给 JSON 内的 client_email 完整权限。只有受限权限的账号不能提交 Sitemap。不同网站不能仅复制属性名称而不授权。
 
-在宝塔进入：
+回到当前网站的 SEO → Google，核对站点，填写服务账号 JSON，保存并验证，再测试 Search Console 属性权限。配置网站属性和 Sitemap 后先读取状态。当前服务器尚未保存该账号，因此本轮没有执行真实的 Google Sitemap 提交。
 
-1. `软件商店`。
-2. 搜索并安装 `Node.js 版本管理器`。
-3. 安装 Node.js 22 LTS，至少 22.12.0。
-4. 设置该版本为命令行版本。
-5. 确认 Nginx 正常运行。
+> 注意：授权必须由拥有网站的 Google 账号完成。不要将私钥、访问令牌或完整 JSON 截图保存。
 
-在宝塔终端检查：
+- [ ] 账号获目标网站权限，测试返回真实权限结果；未配置时明确显示尚未配置。
 
-```bash
+### 在宝塔补齐 robots 的 Sitemap 声明
+
+本次入口：宝塔 → 文件 → /www/wwwroot/shanbo-rig.com → robots.txt。原文件只有 User-agent、Allow 和 Disallow，线上 Sitemap 可访问但没有声明地址。
+
+核对现有规则后，仅追加 Sitemap: https://shanbo-rig.com/sitemap.xml，保留原有 Disallow: /ad*。没有重新生成全站 Sitemap、覆盖内容或修改 PB 数据库。其他域名照做时替换成该网站真实地址。
+
+回到 SEO → Google → 检查线上 sitemap / robots，实测两者均为 HTTP 200，Sitemap 为 urlset、44 条记录、7893 字节，robots 已声明地址。44 是当前公开文件中的记录数，不是全站数据库 435 条候选 URL 的数量，也不代表全部 URL 已被 Google 收录。
+
+多语言站上线后逐个检查语言域名、证书、内容、canonical 与对应关系，再有计划地更新 Sitemap。不能把尚未部署的语言域名当作已经验证通过。
+
+本次追加的一行，已有声明时不要重复添加
+
+```sh
+Sitemap: https://shanbo-rig.com/sitemap.xml
+```
+
+![线上 Sitemap 和 robots 检查通过：44 条公开记录；服务账号仍未配置，不能当作已提交 Google。](../frontend/public/tutorial/deployment/185-google-public-files.jpg)
+
+1. 先进行只读的线上文件检查。
+2. 核对 HTTP 200、记录数和 robots 声明。
+3. 服务账号未配置，与公开文件通过分开显示。
+
+- [ ] 公开文件返回 200、声明匹配当前网站，提交数量与公开记录数不混淆。
+
+### 提交接口、站点隔离与错误排查
+
+Sitemap 提交已改用官方 webmasters/v3/sites/{siteUrl}/sitemaps/{feedpath} PUT，正确接受空响应正文。提交前检查网站范围和账号权限，拒绝其他网站或管理工具子域名的 URL。
+
+Google access token 按网站 ID、服务账号身份、私钥指纹和 scope 缓存，不再仅以 scope 共享。URL 前缀按主机及路径边界匹配，防止多个网站拿错属性或账号。
+
+已修复将 not indexed 文本误判为 indexed 的问题。查询结果无有效结构时返回错误，不保存为成功诊断。Indexing notification metadata 只代表通知记录，不代表网页已收录。
+
+403 先检查 API 是否启用、client_email 是否授权到正确属性、是否只有受限权限。429 等待配额恢复，保留已有记录。错误站点在发出 Google 请求前拒绝；不要通过更换别站账号绕过。
+
+- [ ] 接口通过权限、错误属性和响应结构测试，真实提交仍以 Google 返回结果为准。
+
+### 回归实际页面体检与内容报告
+
+入口：SEO → 页面体检与优化，选择真实线上页面并输入 https://shanbo-rig.com，再点击开始体检。此操作读取网页，不是下方会落库的开始/继续直接修复。
+
+本次首页响应 HTTP 200，约 162ms，检查器得分 76，12 项通过、2 项失败：未发现 H1，22 张图片中 8 张没有有效 ALT。标题、描述、canonical、noindex、viewport 和结构化数据检查通过。评分属于本工具规则，不是 Google 官方评分或排名预测。
+
+数据库报告检查 425 条栏目/内容记录，列出 435 条 URL 和 1024 项内容问题：高 4、中 300、提示 720。高等级的 4 条来自中英文 About Us、Contact Us 单页缺少 URL 名称，其余大量是描述等信息缺失。没有自动改写旧数据。
+
+后续先逐页检查重要产品与新闻，再按需补标题、描述、H1 和非装饰性图片 ALT。改已有 URL 前必须制定重定向和内链更新，不能为了清除评分提示直接批量改链接。
+
+![英文首页实际技术体检：HTTP 200、得分 76，缺少 H1 和 8 张图片 ALT；下方全站 24 分是另一套内容报告。](../frontend/public/tutorial/deployment/186-seo-homepage-audit.jpg)
+
+1. 首页 H1 待完善，未自动修改模板或数据。
+2. 8 张图片缺少有效 ALT，按实际图片用途补充。
+3. 全站内容得分不等于单页技术 SEO 得分。
+
+- [ ] 能区分只读体检和写入修复，也能区分页面技术得分与全站内容得分。
+
+### 宝塔增量发布与验收边界
+
+本轮使用宝塔文件上传增量包与 LF 启动脚本，核对 SHA-256 和线上文件指纹；先检查没有运行中的 SEO/FTP 任务，测试通过后只重启相关工具。最新修正 66 项测试通过，主 API 和 SEO 内容 worker 未重启。
+
+宝塔浏览器终端输入长命令曾截断。解决办法是先上传脚本，等新终端出现 shell 提示符，再输入短命令执行；必须看到完成标记并回到提示符。已完成的发布包不重复执行。
+
+本轮没有代码备份、GitHub 提交或推送，没有迁移数据库、导入产品或生成新闻。Google 真实提交等待服务账号配置，ClamAV 未安装，不能把这些未验证内容写成已完成。
+
+![宝塔执行增量修正，66 项测试通过，追加 robots Sitemap 声明；没有代码备份或 GitHub 上传。](../frontend/public/tutorial/deployment/182-google-refinement-release.jpg)
+
+1. 66 项通过，失败 0。
+2. 看到完成标记并返回 shell 提示符。
+
+- [ ] 测试、线上结果、待授权项目分别记录，发布日志不包含任何凭据。
+
+## 2. 宝塔服务器文件安全巡检
+
+在 FTP 工具保留发布与远程巡检，新增直接读取宝塔网站根目录的只读巡检，不要求配置 FTP 账号。规则检测不能替代专业杀毒软件。
+
+### 核对网站与服务器目录后开始扫描
+
+打开 FTP 发布 → 宝塔服务器巡检。页面显示受管网站名称、真实域名和完整 rootPath。本次为山博钻机，/www/wwwroot/shanbo-rig.com，不是管理后台目录，也不是本机 E 盘。
+
+扫描范围由当前网站配置决定，不提供任意系统目录输入。拒绝系统根目录和不安全的根路径，报告存放在网站公开目录之外。每个网站分别保存设置、结果和指纹。
+
+点击扫描当前网站后可停止扫描。FTP 发布、远程巡检和服务器巡检互斥，避免同时争用资源。过程只读，不删除、隔离或修复网站文件。
+
+![正式服务器复扫 1191 个文件，高风险 0，需关注 1、未读取 1；定时开关仍关闭。](../frontend/public/tutorial/deployment/183-server-scan-refined.jpg)
+
+1. 先核对业务网站的服务器根目录。
+2. 扫描只读取当前站，不通过 FTP 上传。
+3. 未读取文件必须保留提示，不能视为完整安全。
+4. 按网站独立设置，默认不开启定时。
+
+- [ ] 扫描前确认网站、域名及 rootPath 三者一致，没有扫描无关服务器目录。
+
+### 按网站开启定时和设置资源上限
+
+当前网站定时巡检默认关闭，本次上线仍保持关闭。需要时由负责人勾选开关，设置间隔后保存；关闭时停止该网站定时巡检。运行依赖 pboot-ftp-tool 进程在线，而非电脑浏览器保持打开。
+
+默认间隔 360 分钟，最多 30000 条目录/文件条目，单文件最多 8MB。可设间隔 15 分钟至 7 天、条目 100 至 100000、单文件 1 至 64MB。扫描另有限定总读取量、总耗时及目录深度，避免拖慢业务。
+
+超过限制、无法读取、符号链接或硬链接会明确记为未完成；.git、.svn、node_modules 为预先排除范围。不要为了看到绿色结果隐藏跳过项。多个独立网站分别配置，不能假定一个开关覆盖全部网站。
+
+- [ ] 定时开关与上限按当前网站保存，页面能显示下一次计划或未开启状态。
+
+### 阅读风险、跳过项和历史报告
+
+检查高风险、需关注、变化记录；可按路径或问题搜索并下载 JSON 报告。报告不附带原文件内容、私钥或模型 Key，最近保留 20 次历史。
+
+本次复扫读取 1191 个文件，高风险 0、需关注 1、未完成读取 1。core/basic/Kernel.php 命中长编码载荷规则，可能是程序本身编码，仍需与相同版本的可信来源核对，不能直接断言为病毒。
+
+shanbo-rig.c.zip 超过 8MB，未读取其内容。当前引擎不解压检查压缩包，即使提高大小上限也不等于扫描了内部文件。应另外使用可信杀毒引擎检查，确认用途及访问保护；本轮没有删除该压缩包。
+
+初次扫描曾把 12 张 JPEG 的随机二进制 <?= 片段认成 PHP，复查实际字节后收紧为可读完整脚本片段，真实注入回归样例仍可检出。保留第一次历史结果用于排障，第二次高风险数降为 0，不代表整站已获得病毒安全认证。
+
+> 注意：规则提示需要人工复核；未读取的文件、压缩包内部和专业病毒库扫描不在本次通过范围内。
+
+![剩余 Kernel.php 编码提示与超限 ZIP 的真实报告；没有删除文件或建立基线。截图时搜索框宽度问题随后已修正。](../frontend/public/tutorial/deployment/184-server-scan-details.jpg)
+
+1. 规则命中待人工核对，不直接判定为病毒。
+2. ZIP 超限未读，当前引擎不扫描压缩包内部。
+3. 不完整或有需关注项时，禁止采用指纹基线。
+
+- [ ] 每条告警与跳过原因可追踪，不将误报删除或超限跳过说成查杀完成。
+
+### 确认可信后建立文件指纹基线
+
+基线仅保存 SHA-256 等文件指纹，不是代码备份，不复制网站文件。以后对比新增、修改、缺失文件，帮助发现异常变化。网站根目录或实际目录身份改变时旧基线不再适用。
+
+必须是完整、近期且无高/中风险的扫描，用户再次确认后才可采用。取消、超限、跳过或仍有需关注项时按钮禁用；本次基线没有建立，定时也没有打开。
+
+普通更新也会导致文件变化，需先核对发布日期和源码，再决定是否更新基线。不要自动把刚被篡改的状态设为可信。需要更完整的病毒检测时再接入 ClamAV 等引擎，并同时显示安装状态与病毒库更新时间。
+
+- [ ] 只有人工确认的完整可信扫描才能采用基线，当前待核对项没有被忽略。
+
+## 3. 部署范围与架构
+
+一套管理后台管理多个独立 PbootCMS 网站。管理系统不是 PHP 网站模板，也不需要每个网站安装一套。
+
+### 先确定全新安装还是迁移
+
+本次选择全新安装：不搬本地账号、数据库、模型 Key、FTP 配置。已有 PB 网站先独立运行，再由管理后台关联。
+
+如果需要保留本地后台数据，先单独制定停机备份与迁移方案，不执行本教程的首次账号初始化，也不要用空库覆盖旧库。
+
+只操作本项目和明确接入的业务站；同机其他网站、数据库、证书、Nginx 配置保持原样。
+
+- [ ] 已确认安装类型及操作范围，已有站点资料已有独立备份。
+
+### 分清三个管理入口与业务网站
+
+admin 子域名提供 Vue 后台；seo-admin 提供 SEO 检查、模型总览与配置；ftp-admin 提供 FTP 发布及巡检。
+
+业务网站仍由 Nginx + PHP 提供服务。管理系统直接读取同机业务站的 SQLite 和 static 文件，不需要为了同机接入再传一遍 FTP。
+
+共享管理员、模型 Key 和程序进程；站点路径、内容、SEO 计划、FTP 配置通过 siteId 区分。操作前始终核对顶部站点名称。
+
+![集中管理架构 · SVG 示意，不是实操截图](../frontend/public/tutorial/deployment/architecture.svg)
+
+
+- [ ] 能区分管理入口、业务站域名及各自的数据目录。
+
+### 记录本次验证环境，不盲目照抄版本
+
+本次环境：OpenCloudOS 9、宝塔腾讯云专享版、Nginx、PHP 8.2、Node 22.23.2、pnpm 9.15.9。Node 最低要求由项目安装脚本检查：22.12.0。
+
+宝塔 PM2 插件版本与 pm2 命令行版本不是同一个数字。本次插件 5.6、命令行 PM2 6.0.14，复用已有进程管理环境。
+
+服务器更换 Node 版本后，要核对 PM2 interpreter、启动服务 PATH、浏览器安装目录，不能只看面板版本已切换。
+
+- [ ] 已记录系统、Node、包管理器、PM2 用户和 PM2_HOME。
+
+## 4. 备份与上传目录
+
+源码、运行数据和网站文件分开放。先备份，再上传；不要让部署压缩包成为公开下载。
+
+### 列出必须保留的文件
+
+升级已有后台时，保留 data/、backend/.env、frontend/.env.production.local、managed-sites/、backups/ 以及站点配置引用的证书、服务账号文件。中央库和每个 PB 网站的 data/static/template 要分别备份。
+
+SQL.js API 会把内存数据写回文件。需要直接复制中央数据库时，先暂停 API 和 worker，确认写入停止后复制，再恢复原来的进程状态。
+
+备份放在 /www/backup 或其他非公开位置，目录限制访问。不要上传运行配置、数据库、密码或私钥到公开仓库。
+
+> 注意：不要直接复制正在写入的中央库；不要把备份放到可下载的网站根目录。
+
+![两套数据库的备份边界 · SVG 示意](../frontend/public/tutorial/deployment/data-boundary.svg)
+
+
+- [ ] 已明确备份位置、恢复对象及停写方式。
+
+### 准备源码包，不带依赖与本地运行数据
+
+保留 backend/、frontend/、tools/、deploy/、配置示例、各部分锁文件和 tools/seo-content-worker/skills/。教程截图使用 frontend/public/tutorial/ 内经过审核的素材。
+
+排除 node_modules、.git、dist、日志、缓存、旧数据库、运行 .env、managed-sites 和历史备份。全新安装包不夹带本地账号或模型 Key。
+
+有已授权的私有仓库可以拉取指定版本；没有就通过宝塔文件管理上传源码包。本次按用户要求没有提交或推送 GitHub。
+
+- [ ] 包内包含源码与锁文件，不含依赖、密钥、旧库及不必要备份。
+
+### 在宝塔文件管理上传并解压
+
+进入宝塔 → 文件 → /www/wwwroot，新建独立 pboot_admin_center 目录，上传并解压到该目录。
+
+检查 backend/package.json、frontend/package.json、deploy/prepare-baota.sh 是否直接位于预期路径。不要多出 pboot_admin_center/pboot_admin_center 一层。
+
+部署包验证完成后移到非公开的备份位置；业务站目录与管理项目平级，不要把管理系统塞进某个 PB 网站。
+
+确认目录结构（只读）
+
+```sh
+cd /www/wwwroot/pboot_admin_center
+pwd
+ls backend/package.json frontend/package.json deploy/prepare-baota.sh
+```
+
+![部署目录关系 · SVG 示意](../frontend/public/tutorial/deployment/directories.svg)
+
+
+- [ ] 项目根目录正确，能找到三个核对文件。
+
+## 5. Node、依赖与首次构建
+
+使用宝塔已有 PM2 环境。准备脚本只用于全新安装，不是通用升级脚本。
+
+### 安装 Node 并核对终端环境
+
+宝塔 → 软件商店 → PM2 管理器 → Node 版本，安装兼容的 Node 22 版本，并设置命令行使用该版本。不要启动第二套 PM2 守护。
+
+本次 Node 位于 /www/server/nvm/versions/node/v22.23.2/bin，实际服务器路径以面板为准。若 node 或 pm2 找不到，先修复当前终端 PATH。
+
+版本与运行环境（只读）
+
+```sh
 node --version
 npm --version
+pm2 --version
+command -v node
+command -v pm2
+whoami
+printf '%s\n' "${PM2_HOME:-默认用户目录/.pm2}"
 ```
 
-## 三、推荐目录结构
+![宝塔 PM2 管理器显示四个项目](../frontend/public/tutorial/deployment/33-baota-pm2-four-projects.jpg)
 
-管理系统不要塞进某一个 PbootCMS 网站内部。它应与各业务网站平级放置：
+1. 第四项是 SEO worker，不是多余进程
+2. 核对各进程运行状态和端口
 
-![宝塔目录结构](./baota-assets/02-directory-layout.svg)
+- [ ] Node 至少 22.12.0，终端与宝塔使用同一个 PM2 用户和目录。
 
-```text
-/www/wwwroot/
-  pboot_admin_center/
-  shanbo.cc/
-  site-b.com/
-  site-c.com/
-```
+### 运行全新安装准备脚本
 
-这样升级管理系统不会覆盖业务网站，也不需要每个网站复制一份管理项目。
+在 /www/wwwroot/pboot_admin_center 的 root 终端执行。脚本拒绝其他根目录、非 root 用户以及已存在的 data/pboot-admin.sqlite。
 
-## 四、在本地准备上传包
+脚本生成随机 JWT_SECRET 与 worker 令牌，写入受限的环境文件，保留已有 .env；安装四部分锁定依赖并构建前后端。
 
-上传前先在本地完成：
+脚本不创建公网域名、不替换 Nginx、不启动第二套 PM2、不创建系统服务。已有库提示不是报错绕过理由，应改走更新章节。
 
-1. 在项目配置页导出完整配置备份。
-2. 额外导出一份“仅模型 Key”备份。
-3. 备份 `backend/dev.sqlite`。
-4. 备份 Google 服务账号 JSON、SEO 配置和 FTP 配置。
-5. 给项目制作 ZIP 包。
+> 注意：已有数据库时不要删除数据库来让脚本通过，也不要重复执行初始化。
 
-ZIP 包不需要包含：
+仅限已确认的全新目录
 
-```text
-.git/
-node_modules/
-backend/dist/
-frontend/dist/
-logs/
-tmp/
-backups/
-```
-
-必须包含源码、锁文件、`.env.example`、配置导出文件和需要迁移的后台 SQLite 数据库。
-
-## 五、上传并解压
-
-在宝塔进入 `文件`，打开：
-
-```text
-/www/wwwroot
-```
-
-上传 ZIP 并解压，最终必须得到：
-
-```text
-/www/wwwroot/pboot_admin_center/backend/package.json
-/www/wwwroot/pboot_admin_center/frontend/package.json
-/www/wwwroot/pboot_admin_center/tools/seo_publish_tool/server.js
-/www/wwwroot/pboot_admin_center/tools/ftp_publish_tool/server.js
-```
-
-不要多解压一层。例如下面这种路径是错误的：
-
-```text
-/www/wwwroot/pboot_admin_center/pboot_admin_center/backend
-```
-
-## 六、安装 pnpm 和项目依赖
-
-在宝塔终端执行：
-
-```bash
+```sh
 cd /www/wwwroot/pboot_admin_center
-corepack enable
-corepack prepare pnpm@latest --activate
-pnpm --version
+bash deploy/prepare-baota.sh
 ```
 
-如果系统没有 `corepack`，使用：
+- [ ] 依赖安装和两端构建成功，环境文件已生成且未泄露。
 
-```bash
-npm install -g pnpm
-```
+### 核对构建产物和权限
 
-安装四部分依赖：
+Linux 的文件名大小写敏感，源码引用与文件名必须一致。Windows 的 node_modules、Chromium 不能直接复制到服务器使用。
 
-```bash
-cd /www/wwwroot/pboot_admin_center/backend
-pnpm install --frozen-lockfile
+静态前端目录要允许 Nginx 读取；.env 只给实际运行用户读取。需要写入的 data、managed-sites 和备份目录必须归实际 API 用户可用。
 
-cd /www/wwwroot/pboot_admin_center/frontend
-pnpm install --frozen-lockfile
+本次复用 root PM2。更换为 www 用户属于独立迁移，需要同步改服务、文件权限和浏览器路径，不要随手全站递归 chown 或 chmod 777。
 
-cd /www/wwwroot/pboot_admin_center/tools/seo_publish_tool
-pnpm install --frozen-lockfile
+核对产物（只读）
 
-cd /www/wwwroot/pboot_admin_center/tools/ftp_publish_tool
-pnpm install --frozen-lockfile
-```
-
-不要混用 `npm install` 和 `pnpm install`。
-
-## 七、配置后台数据库和 Linux 路径
-
-先建立集中后台的数据及备份目录：
-
-```bash
-mkdir -p /www/wwwroot/pboot_admin_center/data
-mkdir -p /www/wwwroot/pboot_admin_center/backups/backend_database
-mkdir -p /www/wwwroot/pboot_admin_center/managed-sites
-```
-
-如果需要保留本地管理后台中的账号、报价单和内容数据，把本地 `backend/dev.sqlite` 上传后复制为：
-
-```bash
-cp /www/wwwroot/pboot_admin_center/backend/dev.sqlite \
-   /www/wwwroot/pboot_admin_center/data/pboot-admin.sqlite
-```
-
-全新部署、不保留本地管理数据时不要执行上面的 `cp`。只要 `data` 目录可写，后端首次启动会创建空数据库。正式环境不开放匿名注册，管理员需通过服务器端初始化。
-
-复制环境变量模板：
-
-```bash
-cp /www/wwwroot/pboot_admin_center/backend/.env.example \
-   /www/wwwroot/pboot_admin_center/backend/.env
-```
-
-在宝塔文件编辑器打开 `backend/.env`，参考以下内容：
-
-```dotenv
-DB_TYPE=sqljs
-DB_SQLJS_LOCATION=/www/wwwroot/pboot_admin_center/data/pboot-admin.sqlite
-
-BACKEND_PORT=5108
-FRONTEND_PORT=5278
-REQUEST_BODY_LIMIT=20mb
-SEO_TOOL_PORT=5388
-FTP_TOOL_PORT=5389
-
-PBOOT_SITE_ROOT=/www/wwwroot/shanbo.cc
-PBOOT_DB_PATH=/www/wwwroot/shanbo.cc/data/请替换成真实数据库文件.db
-PBOOT_PUBLIC_BASE_URL=https://shanbo.cc
-
-BACKEND_DB_BACKUP_DIR=/www/wwwroot/pboot_admin_center/backups/backend_database
-
-OPENAI_API_KEY=
-ZHIPU_API_KEY=
-DEEPSEEK_API_KEY=
-DASHSCOPE_API_KEY=
-
-YOUTUBE_API_KEY=
-```
-
-![生产环境配置关系](./baota-assets/07-production-config.svg)
-
-注意：
-
-- 不能把 `E:\phpstudy_pro\...` 这种 Windows 路径带到宝塔。
-- `PBOOT_DB_PATH` 必须位于所选站点的 `data` 目录。
-- 不要把 PbootCMS 数据库复制到管理系统目录，系统应直接操作网站原数据库。
-- `YOUTUBE_API_KEY` 是全站共用 Key，也可在“站点管理”中保存；每个网站的频道 ID 在站点编辑页单独填写。
-- Key 可以从本地导出的配置备份中恢复，不要写进教程或 Git。
-
-## 八、配置并构建前端
-
-复制项目附带的生产环境模板：
-
-```bash
-cp /www/wwwroot/pboot_admin_center/deploy/frontend.env.production.example \
-   /www/wwwroot/pboot_admin_center/frontend/.env.production
-```
-
-其中最重要的是：
-
-```dotenv
-VITE_API_BASE_URL=/api
-```
-
-生产环境不能继续使用 `http://localhost:5108`。外部用户浏览器中的 `localhost` 指向用户自己的电脑，不是宝塔服务器。
-
-开始构建：
-
-```bash
-cd /www/wwwroot/pboot_admin_center/backend
-pnpm run build
-
-cd /www/wwwroot/pboot_admin_center/frontend
-pnpm run build
-```
-
-构建完成后检查：
-
-```bash
-test -f /www/wwwroot/pboot_admin_center/backend/dist/main.js && echo backend-ok
-test -f /www/wwwroot/pboot_admin_center/frontend/dist/index.html && echo frontend-ok
-```
-
-## 九、设置文件权限
-
-宝塔 Node 项目建议使用 `www` 用户运行。集中数据库、备份目录和各 PbootCMS 网站的 `data/static/runtime` 必须允许同一个用户读写。
-
-```bash
-chown -R www:www /www/wwwroot/pboot_admin_center
-
-chown -R www:www /www/wwwroot/shanbo.cc/data
-chown -R www:www /www/wwwroot/shanbo.cc/static
-chown -R www:www /www/wwwroot/shanbo.cc/runtime
-```
-
-确认关键目录：
-
-```bash
-ls -ld /www/wwwroot/pboot_admin_center/data
-ls -ld /www/wwwroot/pboot_admin_center/backups/backend_database
-ls -ld /www/wwwroot/shanbo.cc/data
-```
-
-![宝塔 Linux 权限边界](./baota-assets/08-permissions.svg)
-
-不要使用 `chmod -R 777`。如果出现写入失败，先检查 PM2 实际运行用户和目录所有者。
-
-## 十、在宝塔添加三个 Node 项目
-
-宝塔官方 Node 项目管理默认使用 PM2 守护进程。进入 `网站 → Node 项目 → 添加 Node 项目`。
-
-![宝塔 Node 项目配置](./baota-assets/03-node-projects.svg)
-
-### 1. 管理后台 API
-
-| 配置项 | 填写内容 |
-|---|---|
-| 项目名称 | `pboot-admin-api` |
-| 项目目录 | `/www/wwwroot/pboot_admin_center/backend` |
-| 启动文件 | `dist/main.js` |
-| 端口 | `5108` |
-| Node 版本 | 20 LTS 或 22 LTS |
-| 运行用户 | `www` |
-
-### 2. SEO 工具
-
-| 配置项 | 填写内容 |
-|---|---|
-| 项目名称 | `pboot-seo-tool` |
-| 项目目录 | `/www/wwwroot/pboot_admin_center/tools/seo_publish_tool` |
-| 启动文件 | `server.js` |
-| 端口 | `5388` |
-| 环境变量 | `SEO_TOOL_PORT=5388` |
-
-### 3. FTP 与安全巡检工具
-
-| 配置项 | 填写内容 |
-|---|---|
-| 项目名称 | `pboot-ftp-tool` |
-| 项目目录 | `/www/wwwroot/pboot_admin_center/tools/ftp_publish_tool` |
-| 启动文件 | `server.js` |
-| 端口 | `5389` |
-| 环境变量 | `FTP_TOOL_PORT=5389` |
-
-三个项目都开启：
-
-- 开机启动。
-- 异常自动重启。
-- 单实例运行。
-
-后台使用 SQL.js 自动保存，`pboot-admin-api` 不要开启 PM2 集群模式，也不要启动多个实例同时写同一个 SQLite 文件。
-
-### 使用项目附带的 PM2 文件
-
-如果更习惯终端，可以直接使用：
-
-```bash
+```sh
 cd /www/wwwroot/pboot_admin_center
-pm2 start deploy/ecosystem.config.cjs
+ls -l backend/dist/main.js frontend/dist/index.html
+ls -ld data managed-sites backups
+ls -l backend/.env
+```
+
+- [ ] 构建文件存在，Nginx 能读前端，API 能写自己的运行目录。
+
+## 6. 四个 PM2 进程与自启
+
+API、SEO、FTP、SEO worker 共四个进程。Vue 前端由 Nginx 直接提供，不是第五个 Node 进程。
+
+### 启动项目附带的宝塔进程配置
+
+先看 pm2 list。如果本项目已经存在，核对 cwd 和启动文件后按更新流程重启，不再重复添加。
+
+新版 SEO/FTP 在 production 下强制网页登录。首次启动前先用 configure-public-urls.cjs 配置已确定的三个 HTTPS 根域名并重建前端；没有域名时先完成域名规划，不要启动无认证的公网工具。DNS 和证书在后面的上线章节核对。
+
+deploy/baota.ecosystem.config.js 指定单实例 fork。API 5108，SEO 5388，FTP 5389，worker 不提供浏览器端口。
+
+API 使用 SQL.js，不能多实例同时写同一份库。不要同时用另一份 ecosystem 文件和面板再启动相同服务。
+
+> 注意：只有确认本项目尚未启动，才执行 pm2 start。
+
+全新项目首次启动
+
+```sh
+cd /www/wwwroot/pboot_admin_center
+node deploy/configure-public-urls.cjs https://admin.example.com https://seo-admin.example.com https://ftp-admin.example.com
+pnpm --dir frontend build
+pm2 list
+pm2 start deploy/baota.ecosystem.config.js
 pm2 save
-pm2 status
 ```
 
-宝塔界面添加和 `ecosystem.config.cjs` 二选一，不要重复启动同一服务。
+![宝塔 PM2 管理器显示四个项目](../frontend/public/tutorial/deployment/33-baota-pm2-four-projects.jpg)
 
-## 十一、先检查本机服务
+1. 第四项是 SEO worker，不是多余进程
+2. 核对各进程运行状态和端口
 
-```bash
-curl -I http://127.0.0.1:5108/api-docs
+- [ ] 四个进程 online，没有不断增加的重启次数。
+
+### 命令行存在，宝塔列表却是空的
+
+先检查宝塔使用的用户、Node 和 PM2_HOME。不要因为面板空白就再启动一套 API。
+
+本次旧版 PM2 5.6 插件未显示已启动项目，使用 register-baota-pm2.cjs 登记四个现有项目，不重启、不覆盖其他登记。仅适用于本项目 root 宝塔部署。
+
+旧插件登记，使用前先核对 pm2 list
+
+```sh
+cd /www/wwwroot/pboot_admin_center
+node deploy/register-baota-pm2.cjs
+```
+
+- [ ] 宝塔列表与命令行展示同一套项目和运行状态。
+
+### 确认已保存进程且自启服务 active
+
+pm2 save 保存当前列表；enabled 只表示设置了开机启动，不代表 systemd 服务已运行。
+
+本次 pm2-root 原先 enabled 但 inactive。核对 unit 中 Node PATH 和 PM2_HOME 后启动既有 unit，再确认 active + enabled。
+
+若没有 unit，按 PM2 startup 给出的本机命令创建；非 root 用户不能直接照抄 pm2-root。升级 Node 后也要更新 unit 路径。没有为验证自启而重启整台服务器。
+
+检查 root 部署的既有自启服务
+
+```sh
+pm2 save
+systemctl cat pm2-root
+systemctl is-enabled pm2-root
+systemctl is-active pm2-root
+```
+
+仅在既有 unit 正确且 inactive 时
+
+```sh
+systemctl start pm2-root
+systemctl is-active pm2-root
+pm2 list
+```
+
+![systemd 自启 active + enabled，未重启整台服务器](../frontend/public/tutorial/deployment/37-pm2-system-service-ready.jpg)
+
+1. active 与 enabled 两个状态都要确认
+2. 四个服务均在线
+
+- [ ] 进程列表已保存，自启 unit 的用户、路径正确且 active + enabled。
+
+## 7. 内部服务与初始账号
+
+先让回环服务工作，再开放域名。管理员只能在空用户库初始化一次。
+
+### 安装内部前端 Nginx 配置
+
+检查 deploy/nginx/pboot-admin-loopback.conf，确认 root 指向本项目 frontend/dist；只监听 127.0.0.1:5278。
+
+在宝塔 Nginx 独立 vhost 中安装该配置，不覆盖任何已有站点配置。确认没有同端口同名配置后，nginx -t 成功才 reload。
+
+浏览器不能访问服务器的 127.0.0.1。内部测试通过不代表公网已经配置好。
+
+配置校验及回环接口检查
+
+```sh
+nginx -t
+curl -I http://127.0.0.1:5278/
+curl http://127.0.0.1:5278/api/project-identity
 curl -I http://127.0.0.1:5388/
 curl -I http://127.0.0.1:5389/
 ```
 
-也可以运行项目附带的检查脚本：
+![DNS、HTTPS 与回环代理 · SVG 示意](../frontend/public/tutorial/deployment/routing.svg)
 
-```bash
+
+- [ ] 前端首页及 project-identity 正常，两个工具回环服务可用。
+
+### 暂停写库进程并创建首个管理员
+
+先启动 API 完成空数据库结构初始化，然后暂停 API 和 worker，再运行初始化脚本。脚本会检查后端已停、数据库路径正确、用户表为空。
+
+脚本先备份数据库，再生成随机账号密码，保存在 /root/pboot-admin-initial-login.json，权限 600。文件或用户已存在会拒绝覆盖。
+
+在宝塔私有文件查看账号并交接。不要截图密码，不放在网站根目录，不提交 Git。公开注册与生产 Swagger 默认关闭。
+
+> 注意：这不是重置密码命令。中间任何一步失败先排错，再恢复原有进程；不要删除用户或凭据文件重试。
+
+仅首次空库初始化，邮箱改为自己的管理员邮箱
+
+```sh
 cd /www/wwwroot/pboot_admin_center
-bash deploy/baota-health-check.sh
+pm2 stop pboot-admin-api pboot-seo-content-worker
+node deploy/bootstrap-admin.cjs admin@example.com
+pm2 restart pboot-admin-api pboot-seo-content-worker
+pm2 save
 ```
 
-只有三个本机地址都能返回 HTTP 状态码，才继续配置 Nginx。
+![首次初始化完成，不展示密码文件内容](../frontend/public/tutorial/deployment/06-admin-initialization.jpg)
 
-## 十二、在宝塔添加三个网站和 SSL
+1. 只输出私有凭据文件位置，没有输出密码
+2. 初始化后恢复本项目进程
+3. 保存当前 PM2 列表
 
-在宝塔 `网站` 页面添加：
+- [ ] 首个管理员已创建，API 和 worker 已恢复，密码只在私有位置交接。
 
-```text
-admin.example.com
-seo-admin.example.com
-ftp-admin.example.com
+## 8. 域名、反向代理与 HTTPS
+
+采用本次已跑通的方案：三个宝塔反向代理项目，转到三个本机入口。
+
+### 添加三个管理子域名 A 记录
+
+在域名解析中添加 admin、seo-admin、ftp-admin，均指向这台服务器的公网 IP。不要误改业务网站的根域名或其他网站记录。
+
+等待解析生效，再核对每个域名。宝塔侧栏显示的旧 IP 不一定是当前服务器公网 IP，不能仅凭侧栏抄写。
+
+本次管理入口为 admin.shanbo-rig.com、seo-admin.shanbo-rig.com、ftp-admin.shanbo-rig.com；下次替换成自己的域名。
+
+![DNS、HTTPS 与回环代理 · SVG 示意](../frontend/public/tutorial/deployment/routing.svg)
+
+
+- [ ] 三个管理域名都解析到预期服务器，80/443 可达。
+
+### 建立主后台反向代理
+
+宝塔 → 网站 → 反向代理 → 添加反代。域名填 admin 子域名；目标选 URL 地址，填 http://127.0.0.1:5278；发送域名填 $http_host。
+
+此处 5278 是 Nginx 的内部前端入口，它再把 /api/ 转给 API 5108。不要把公开管理域名直接指到 PB 网站目录。
+
+先检查未占用域名与端口，保存后确认目标和备注。不要重新创建现有同名项目。
+
+![主后台反代填写示例](../frontend/public/tutorial/deployment/01-domain-reverse-proxy.jpg)
+
+1. 填写自己的 admin 子域名
+2. 目标为内部前端 http://127.0.0.1:5278
+3. 发送域名使用 $http_host
+
+- [ ] 主后台反代目标为内部前端入口，域名没有绑定到其他项目。
+
+### 为每个入口签发并部署对应证书
+
+项目设置 → SSL → 免费证书，选 Let's Encrypt、文件验证，勾选当前管理域名，申请证书。
+
+签发后在证书列表选择域名匹配的证书部署。确认 HTTPS 可用后开启强制 HTTPS，逐个完成三个管理入口。
+
+文件验证要允许 ACME 验证路径访问。证书签发不等于已部署；不要选择别的业务站证书。DNS 未生效或挑战失败时，先修正原因再申请，避免反复提交。
+
+本次三个管理证书有效期到 2026-12-10，这是历史验收信息；下次以面板实际有效期和自动续签结果为准。
+
+![SSL 文件验证申请，证书应匹配当前域名](../frontend/public/tutorial/deployment/03-ssl-application.jpg)
+
+1. 选择 Let's Encrypt
+2. 本次使用文件验证
+3. 勾选正确域名，签发后还要部署证书
+
+![三个管理项目与证书的历史验收画面](../frontend/public/tutorial/deployment/28-three-https-projects.jpg)
+
+1. 三个入口的回环目标分别核对
+2. SSL 列应有有效期；下次以当前状态为准
+
+- [ ] 各域名证书匹配，HTTP 跳转 HTTPS，HTTPS 无证书警告。
+
+## 9. SEO、模型、FTP 访问认证
+
+2026-09-12 已改为可见的网页登录：使用主后台账号，SEO 与 FTP 各自保存会话，内部浏览器也可用。先部署并验证应用认证，再移除旧 Basic 弹窗规则。
+
+### 历史方案：宝塔 Basic 弹窗及本次问题
+
+初次部署时，两个工具未接主后台认证，所以曾在宝塔 → 网站 → 反向代理 → 项目 → 全局配置 → http 认证，用 PbootTools、路径 / 保护它们。以下旧截图仅保留迁移背景，不是新安装的必做步骤。
+
+内部浏览器无法显示这层原生账号弹窗，出现 ERR_INVALID_AUTH_CREDENTIALS。两项本机服务实际正常，重复安装 Node、改 PHP 伪静态或换网站根目录不能解决这个认证问题。
+
+旧面板表单的短密码限制不适用于新网页登录。当前方案直接校验主后台完整邮箱和密码，不再使用旧工具短密码，也不把密码写进网址。
+
+![历史 Basic 方案的宝塔认证表单，密码为空；当前已替换为网页登录。](../frontend/public/tutorial/deployment/22-ftp-http-auth-form.jpg)
+
+1. 保护路径为 /，覆盖整个工具
+2. 历史独立工具用户名；当前网页登录改用主后台邮箱。
+3. 密码单独设置和交接，不放在教程里
+
+![SEO 实际目标端口 5388](../frontend/public/tutorial/deployment/15-seo-proxy-target.jpg)
+
+1. 必须先有访问保护再接真实服务；新版由应用登录网关保护。
+
+![FTP 实际目标端口 5389](../frontend/public/tutorial/deployment/24-ftp-proxy-target.jpg)
+
+1. FTP 使用自己的内部端口，不是 API 5108
+
+- [ ] 理解旧规则作用；旧代码仍在运行时，不能直接删除保护。
+
+### 先区分认证失败与反向代理故障
+
+401 + WWW-Authenticate: Basic 说明仍被旧宝塔规则拦截。当前新版本匿名打开网页应 303 跳转登录表单，表单 200；匿名访问 /api/config 返回 401 JSON 是正常保护。模型总览和配置共用 SEO 域名。
+
+宝塔 → 网站 → 反向代理：SEO 目标 http://127.0.0.1:5388，FTP 目标 http://127.0.0.1:5389。确认对应域名、开启状态、SSL 和目标端口，不修改主后台 5278 或业务站 PHP 配置。
+
+502 时检查 PM2、启动日志与回环端口。域名解析错误、证书错误及连接关闭要先检查 DNS、TLS 和监听，不要把所有打不开都当作 401。端口只监听回环，不开放 5388/5389 到公网。
+
+只读诊断，替换域名；不要输出密码或配置正文
+
+```sh
+curl -I https://seo-admin.example.com/
+curl -I https://ftp-admin.example.com/
+pm2 status
+curl -s -o /dev/null -w 'SEO login: %{http_code}\n' http://127.0.0.1:5388/_tool-auth/login
+curl -s -o /dev/null -w 'FTP login: %{http_code}\n' http://127.0.0.1:5389/_tool-auth/login
 ```
 
-不需要为这三个管理域名新建 MySQL 数据库。给三个域名分别申请 SSL 证书，并开启强制 HTTPS。
+![本次宝塔反代列表：SEO 5388、FTP 5389，三个管理域名均有 HTTPS 证书。](../frontend/public/tutorial/deployment/100-tools-proxy-targets.jpg)
 
-![Nginx 路由关系](./baota-assets/04-nginx-routing.svg)
+1. FTP 仅代理本机 5389，不能指向 PHP 网站目录。
+2. SEO 与模型页面共用本机 5388。
 
-### 管理后台域名
+![修改前：全局配置 → http认证中的 PbootTools / 规则触发浏览器原生认证。](../frontend/public/tutorial/deployment/101-tools-basic-auth-setting.jpg)
 
-网站根目录设置为：
+1. 在当前反代项目的 http认证标签查看规则。
+2. 新应用认证通过检查后，才删除这条旧规则。
 
-```text
-/www/wwwroot/pboot_admin_center/frontend/dist
+![工具打不开时先定位认证层 · SVG 示意](../frontend/public/tutorial/deployment/auth-flow.svg)
+
+
+- [ ] 能区分工具认证弹窗、浏览器限制和服务故障。
+
+### 备份并启用新版应用登录保护
+
+先把两个工具源码、公共 tools/tool-auth.js、验收脚本及两个目标 Nginx 配置备份到 /www/backup 的私有目录。确认没有 SEO 写入任务或 FTP 发布进行中，才安排工具重启。无需改业务数据库、API 或 worker。
+
+工具读取 backend/.env 与进程环境。生产必须 NODE_ENV=production，并设置 ADMIN_PUBLIC_URL、SEO_PUBLIC_URL、FTP_PUBLIC_URL 为各自 HTTPS 根地址；BACKEND_PORT 指向现有主 API，本机为 5108。由登录网关向回环 /auth/login、/auth/profile 校验账号。
+
+部署必须同时包含公共认证模块、两个工具 server.js 和新版生产验收脚本。若缺少公共域名配置，生产启动会拒绝；不要设置 development 绕过。两个工具各保持单个 fork 实例，因为浏览器会话暂存在各进程内存中。
+
+本次使用带源文件指纹与归档哈希校验的窄范围补丁包；deploy/install-tool-auth-update.cjs 是针对本次旧版本的迁移脚本，不是可以反复执行的全新安装器。原版本指纹不匹配时停止，不能删除校验强行覆盖。
+
+> 注意：两项本机登录页必须 200、匿名 API 必须 401，才能执行下一步。旧工具仍能匿名返回配置时，保留宝塔认证并停止迁移。
+
+代码与环境核对完成后逐步执行，失败就停止
+
+```sh
+cd /www/wwwroot/pboot_admin_center
+node --test tools/tool-auth.test.cjs deploy/verify-production.test.cjs
+pm2 restart pboot-seo-tool pboot-ftp-tool --update-env
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5388/_tool-auth/login
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5389/_tool-auth/login
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5388/api/config
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5389/api/config
 ```
 
-在网站 Nginx 配置中加入项目模板里的内容：
+- [ ] 新保护在回环入口已生效，备份与恢复对象明确，只有 SEO/FTP 被重启。
 
-[管理后台 Nginx 模板](../deploy/nginx/admin.example.com.conf)
+### 在宝塔移除已被替代的弹窗规则
 
-关键路由：
+完成上一项检查后，进入宝塔 → 网站 → 反向代理 → seo-admin 项目 → 全局配置 → http认证。只删除名称 PbootTools、路径 / 的旧规则并确认。
 
-```nginx
+在 ftp-admin 项目重复同样操作。不能把主后台或其他站点的认证一并删除，不要修改代理目标、证书、强制 HTTPS 或公网端口。截图中认证表为空是因为保护已移到 Node 应用，不是工具完全公开。
+
+在宝塔终端运行 nginx -t，确认语法通过。再直接打开两个 HTTPS 工具地址，应该看到项目自己的邮箱密码表单，而不是浏览器原生认证弹窗或 Nginx 错误页。
+
+宝塔 Nginx 语法检查
+
+```sh
+/www/server/nginx/sbin/nginx -t
+```
+
+![修改前：全局配置 → http认证中的 PbootTools / 规则触发浏览器原生认证。](../frontend/public/tutorial/deployment/101-tools-basic-auth-setting.jpg)
+
+1. 在当前反代项目的 http认证标签查看规则。
+2. 新应用认证通过检查后，才删除这条旧规则。
+
+![SEO 项目已移除旧弹窗认证，保护由生产版 Node 登录网关承担。](../frontend/public/tutorial/deployment/103-seo-basic-replaced.jpg)
+
+1. 仅当前 SEO 项目旧规则已移除；匿名 API 仍返回 401。
+
+![FTP 项目也完成替换，证书、代理目标和其他站点未更改。](../frontend/public/tutorial/deployment/104-ftp-basic-replaced.jpg)
+
+1. FTP 也要单独处理，不能只改 SEO。
+
+- [ ] 两个指定旧规则已移除，HTTPS 正常，新登录页显示，匿名接口仍拒绝。
+
+### 使用主后台账号登录 SEO 与 FTP
+
+直接访问 SEO 或 FTP HTTPS 根地址，在账号邮箱与密码框填写可登录主后台的完整账号。不是宝塔账号，也不是旧 PbootTools 的用户名和短密码。教程及截图不保存真实密码。
+
+SEO 与模型页面共享 SEO 子域名的登录状态；FTP 为另一子域名，第一次打开也需登录。同一账号不代表跨子域名自动单点登录。returnTo 会保留安全的当前工具路径及 siteId，登录后返回原页面。
+
+会话最长 8 小时，同时受后端 JWT 有效期约束；重启该工具后需重新登录。Cookie 为 HttpOnly、Secure、SameSite=Lax，限定当前主机，不能靠 HTTP 使用；修改密码后的旧 JWT 是否失效取决于主后台现有账号策略。
+
+退出可打开当前域名 /_tool-auth/login 后点击“退出当前工具”。两个工具分别退出；关闭标签页不等于退出。连续失败触发限流时等候后再试，不要反复提交。
+
+![内部浏览器可见的 SEO 登录表单，截图不包含账号密码。](../frontend/public/tutorial/deployment/105-seo-browser-login.jpg)
+
+1. 填写主后台邮箱，不是宝塔用户名。
+2. 使用主后台完整密码；不使用旧工具短密码。
+
+![FTP 子域名单独登录，使用同一套主后台账号。](../frontend/public/tutorial/deployment/106-ftp-browser-login.jpg)
+
+1. 登录后回到原来的 FTP 页面，保留安全的 siteId 参数。
+
+- [ ] 两个工具都实际提交表单并进入页面，账号不在 URL、截图或教程中泄露。
+
+### 登录 POST 报 403：核对 Origin 与 Referrer-Policy
+
+这次调试发现：命令行登录通过，但浏览器原生 form 提交 403。原因是登录页原先返回 Referrer-Policy: no-referrer，让普通表单 POST 的 Origin 变成 null，被严格来源校验拦截。
+
+当前登录页使用 strict-origin-when-cross-origin，表单 POST 必须来自本工具配置的 HTTPS origin。修改后必须刷新登录页再试；不要放行 Origin:null、删掉来源校验，或把密码塞到查询参数里。MDN 参考链接附在教程末尾。
+
+反向代理保留 X-Forwarded-Proto、X-Forwarded-Host 和 X-Real-IP；不要隐藏 Set-Cookie、把私有接口缓存给其他人，或给 Cookie 添加跨站 Domain。浏览器仍失败时依次查实际 origin、公网 URL、HTTPS、Cookie 和后端认证响应。
+
+SEO 调用 FTP 的内部 API 会转交当前已验证的 Bearer 身份，限定回环接口；无凭据请求依旧失败。这与浏览器的跨域 Cookie 无关，不需要把 Cookie 共享给整个主域。
+
+![新版登录和内部工具联动流程 · SVG 示意，不是宝塔界面截图。](../frontend/public/tutorial/deployment/tool-session-flow.svg)
+
+
+- [ ] 真实浏览器表单已通过，保留来源检查；不是仅用 curl 模拟成功。
+
+### 逐页确认 SEO、模型和 FTP 真正可用
+
+2026-09-12 已在内部浏览器实际登录并打开 SEO 总览、模型总览、模型配置和 FTP 发布页。顶部工具导航使用各自 HTTPS 域名，站点为当前受管网站。
+
+SEO 截图中的 435 个 URL、1024 个问题是之前的报告，不是本次新扫描结果；本次只验收页面读取及登录。模型“未配置 Key”和 FTP“尚未测试”表示业务配置待填写，不表示网站打不开。
+
+本次未保存模型 Key、调用付费模型、生成文章、运行网站扫描、修改 FTP 账号或执行上传发布。FTP 计划预览不是实际传输，已上传为 0。
+
+生产验收脚本还检查匿名拒绝、登录、导航、模型状态、SEO 读取 FTP 状态及退出后会话失效；CLI 验收必须搭配真实浏览器验证，才能发现表单来源问题。
+
+![实际表单登录后的 SEO 总览。435 个 URL / 1024 个问题来自历史报告，本次未扫描。](../frontend/public/tutorial/deployment/107-seo-browser-ready.jpg)
+
+1. 模型配置与 SEO 共用当前子域名会话。
+
+![模型总览读取成功；未配置 Key 的提示保留，本次没有调用付费服务。](../frontend/public/tutorial/deployment/110-models-browser-ready.jpg)
+
+1. 配置入口可打开；模型可用性需要另行提供 Key 后验证。
+
+![模型配置页打开成功，当前 Key 输入均为空，没有公开任何密钥。](../frontend/public/tutorial/deployment/111-model-config-browser-ready.jpg)
+
+1. DeepSeek Key 的配置位置；本次仅打开页面，没有保存或测试模型。
+
+![FTP 真实页面恢复，配置为空且已上传 0；本次未保存账号或传输文件。](../frontend/public/tutorial/deployment/108-ftp-browser-ready.jpg)
+
+1. 尚未测试代表远程 FTP 业务配置未完成，不是页面无法访问。
+2. 预览计划不等于发布，已上传仍为 0。
+
+![宝塔终端最终验收：Nginx 语法、17 项认证/验收脚本测试及正式域名检查通过。](../frontend/public/tutorial/deployment/112-tools-final-verification.jpg)
+
+1. PRODUCTION CHECK COMPLETE；不包含生成文章、扫描或 FTP 传输。
+2. 17 项测试通过且失败为 0。
+
+- [ ] 四个真实页面可读，身份联动和退出验证通过，未执行业务写入或传输。
+
+### 迁移失败的回退顺序
+
+本次修改前备份在 /www/backup/pboot-tool-auth-before-20260912033506857/before.tgz，包含原有工具文件与两个代理配置。备份属于这次服务器，不要在别的环境直接套用。
+
+如果必须恢复旧版无应用认证的工具，先在宝塔恢复对应的全路径访问保护并验证匿名 401，再恢复匹配的旧工具代码、重启这两个进程。不能先恢复旧代码再慢慢加保护。
+
+只恢复导致问题的文件和本项目代理配置；保留现有 API、worker、业务站及数据库。新版本只是会话或表单问题时，优先修复代码并重新登录，不为登录故障恢复业务数据。
+
+> 注意：不要把旧版工具匿名暴露到公网，也不要把整个备份包解压覆盖所有网站。
+
+- [ ] 回退期间始终有访问保护，恢复后重新验证 HTTPS、登录与只读接口。
+
+### 修正跨工具链接，不再打开 localhost
+
+在项目根目录运行公共 URL 配置脚本，三个参数依次是 admin、SEO、FTP 的 HTTPS 根地址。使用自己的真实域名替换下面 example.com。
+
+脚本更新后端公共地址和前端生产变量、保留原配置备份。前端变量是构建时生效，修改 .env 后必须重新构建；两个工具需要重启。
+
+内部 worker/API 通信仍走 127.0.0.1，不改成公网地址。各入口携带当前 siteId，空站点时不猜测 0 号站点。
+
+替换三个域名后再执行
+
+```sh
+cd /www/wwwroot/pboot_admin_center
+node deploy/configure-public-urls.cjs https://admin.example.com https://seo-admin.example.com https://ftp-admin.example.com
+pnpm --dir frontend build
+pm2 restart pboot-seo-tool pboot-ftp-tool --update-env
+pm2 save
+```
+
+- [ ] 顶部导航指向正确 HTTPS 域名，跨工具站点一致。
+
+## 10. PB 从 Apache 迁到 Nginx
+
+业务站与 Vue 管理后台是两套配置。先让 PB 独立正常，再接入管理中心。
+
+### 确认 PHP 项目、根目录和入口
+
+宝塔 → 网站 → PHP 项目，选准确的业务域名。根目录必须是包含 index.php 的 PB 程序目录，不是 template/cn，也不是 frontend/dist。
+
+确认 PHP 版本、PHP-FPM、默认首页和 server_name。原站使用 Apache .htaccess；Nginx 不会自动执行该文件的规则。
+
+本次业务站最初出现 404，用户处理后恢复。这里记录排查方法，不声称某条伪静态规则已经由本次操作验证能修复所有 404。
+
+![PB 业务站属于 PHP 项目，不是管理后台反代](../frontend/public/tutorial/deployment/42-shanbo-rig-php-project.jpg)
+
+1. 先选 PHP 项目
+2. 核对当前业务站的根目录
+
+- [ ] 业务站根目录、PHP 处理器和首页入口正确。
+
+### 区分根目录错误与伪静态错误
+
+如果 / 和 /index.php 都 404，先查命中哪个 vhost、实际 root 和 PHP 文件路径；不应先不断替换伪静态。
+
+如果首页正常，只有去掉问号的栏目/详情路径 404，再核对 PB 当前 URL 模式及对应 Nginx 重写规则。使用同版本 PB 的规则，在单个业务站内调整。
+
+保留宝塔 SSL、PHP include 和 existing extension 配置。更改前备份，nginx -t 通过后再 reload，验证首页、栏目、详情、语言切换和静态文件。
+
+- [ ] 已分别检查首页、index.php、栏目和详情，修改仅限对应业务站。
+
+### 真实案例：中文子域名 404 实际缺少官方授权
+
+2026-09-12 排查 cn.shanbo-rig.com：DNS 指向正确服务器，宝塔已绑定域名，根目录和 PHP include 正确；主域名 200、中文域名 404，平滑重载后仍未恢复。
+
+从服务器直接运行 PHP-CGI 读取应用响应，PBootCMS 提示未匹配到 cn.shanbo-rig.com 有效授权码。浏览器里的简短 Nginx 404 掩盖了应用错误，不能仅凭错误页样式判断为目录配置错误。
+
+处理：在 PBootCMS 官网按实际域名获取官方授权码，在 PB 后台的全局配置 → 配置参数中补充；保留现有有效授权，按当前 PB 版本支持的多授权格式填写。不要改源码绕过授权校验。
+
+授权补全后重新检查首页、栏目、详情及语言切换。域名能打开之后，还需检查 PB 语言区域对应的域名及模板设置；不能把 Nginx 域名绑定当作 PB 语言绑定。
+
+2026-09-12 后续已完成：先在宝塔补上空缺的 Nginx 伪静态规则；站点负责人补充中文域名官方授权后，中文首页、栏目、产品与新闻详情均返回 200。具体配置、截图、验收和其他语言复用方法见“语言域名与 Nginx 修复”章节。
+
+> 注意：主域名正常不代表子域名的授权、证书和语言映射全部正确。不要删除原授权码，也不要把授权码或后台密码写进公开教程。
+
+![直接读取 PHP 响应后，看到中文子域名缺少有效授权的真实提示。](../frontend/public/tutorial/deployment/69-cn-domain-license-diagnosis.jpg)
+
+1. 应用提示未匹配到 cn.shanbo-rig.com 有效授权码；需要补官方授权，而不是继续改目录。
+
+![中文子域名 404 的排查链：网络与目录正常，进一步读取应用授权错误。](../frontend/public/tutorial/deployment/language-license.svg)
+
+
+- [ ] 所有实际使用的语言域名授权有效，且分别完成首页与详情检查。
+
+### 补上 Apache 迁移后丢失的数据保护
+
+本次接入发现业务数据库和根目录部署压缩包可下载。已为该 PB 站安装 deploy/nginx/pboot-production-guard.conf，屏蔽 /data/ 以及根目录数据库、备份和压缩包。
+
+先确认 vhost 已 include extension/<业务域名>/*.conf，把防护文件放在该站专用目录。不要放到全局或 admin/SEO/FTP 反代配置中。
+
+仅当目标站不依赖根目录压缩包作为合法下载时使用该规则。先备份原 vhost，nginx -t 成功后重载；检查首页 200、敏感文件 404。不要为了测试下载整份数据库。
+
+> 注意：两条命令分步执行，校验失败时不要执行 reload。防护不等于完整安全审计。
+
+验证规则语法；成功后才重载
+
+```sh
+nginx -t
+nginx -s reload
+```
+
+![Nginx 防护验证：首页 200，数据库和部署包 404](../frontend/public/tutorial/deployment/56-nginx-database-archive-protected.jpg)
+
+1. 先语法校验成功，再重载
+2. 验证访问结果，不下载整份数据库
+
+- [ ] 首页与媒体仍正常，数据库和部署包不可经公网读取。
+
+## 11. 接入网站与路径检查
+
+所有路径都指服务器磁盘。每个独立网站保存自己的根目录、数据库和公共网址。
+
+### 扫描宝塔网站父目录
+
+后台 → 系统管理 → 站点管理 → 扫描网站，父目录选 /www/wwwroot，环境选宝塔。扫描只检查下一层 PB 程序结构和 data 数据库。
+
+选择需要接入的网站再导入，不勾选其他网站。本轮修复了全新 Linux 安装仍默认 E:/phpstudy_pro/WWW 的问题。
+
+界面从 /sites/runtime-defaults 读取服务器环境，有当前站时优先用它的父目录；浏览器运行在 Windows 不应影响服务器路径。
+
+![修复后的 Linux 扫描默认值](../frontend/public/tutorial/deployment/62-baota-scan-defaults-verified.jpg)
+
+1. 父目录默认为 /www/wwwroot
+2. 运行环境默认宝塔，与浏览器系统无关
+
+- [ ] 扫描目录为服务器路径，仅选中本次接入的网站。
+
+### 核对网站配置再保存
+
+填写站点名、唯一标识、宝塔环境、网站根目录、PB 数据库文件、HTTPS 线上网址。以业务站 config/database.php 中实际数据库配置为准，不按文件大小随便选一个 .db。
+
+PB 数据库保持在该业务站的 data/ 下，管理中心直接关联，不复制为中央库。managed-sites/<站点标识>/site.json 记录站点配置。
+
+站点启用、默认站点和 YouTube 频道分别设置。没有频道可以留空，不能把其他网站频道照搬。
+
+![关联线上业务站，截图中的路径只作为本次实例](../frontend/public/tutorial/deployment/47-configure-shanbo-rig-site.jpg)
+
+1. 填业务网站 HTTPS 地址，而非 admin 域名
+2. 根目录必须是服务器 Linux 路径
+3. 数据库按该站 config/database.php 核对
+
+- [ ] 根目录、真实数据库和 HTTPS 网址属于同一个站点。
+
+### 点击检查，确认权限与归属
+
+保存后点当前行“检查”，确认 root、配置和数据库检查通过。统计结果是本次检查状态，不是持续监控。
+
+如果权限不足，查 API 实际运行用户，再针对需要写入的 data/static/runtime/备份目录授权；不要给整个服务器 chmod 777。
+
+切换网站后，重新核对顶部名称。部署前的本地 E:/ 路径不能通过替换域名自动变成 Linux 路径。
+
+![站点配置检查通过的记录](../frontend/public/tutorial/deployment/48-site-link-check-passed.jpg)
+
+1. 检查正常数量来自刚刚执行的检查
+2. 每次修改路径后再次检查
+
+- [ ] 站点检查正常，当前选中的就是目标业务站。
+
+## 12. 栏目、产品与新闻导入
+
+首次接入顺序：站点检查 → PB 栏目 → 产品/新闻/单页 → 抽查。读取方向与发布方向不可混淆。
+
+### 先从 PB 获取栏目
+
+菜单管理点击“一键获取 PB 栏目”，阅读确认框：本次以 PB 为准更新中央栏目资料，保留关联信息，不改网站模型和模板。
+
+本次导入 32 个中文栏目和对应九种外语，共 320 个。数字是部署当天的快照，不是所有网站都必须有这么多栏目。
+
+中文作为母版；新建、删除和翻译会影响关联栏目。首次接入不要点击“同步全部到网站”来代替读取。
+
+![先看确认框，明确从 PB 读取](../frontend/public/tutorial/deployment/49-pull-pb-menus-confirm.jpg)
+
+1. 这次操作以 PB 栏目为准
+2. 核对站点与方向后开始获取
+
+![首次导入与反向发布的方向 · SVG 示意](../frontend/public/tutorial/deployment/sync-flow.svg)
+
+
+- [ ] 中文及外语栏目、父子关系、PB 编码均能对应。
+
+### 在空中央站点导入产品
+
+产品管理 → 全站从 PB 重建，只在本次中央站点没有需要保留的编辑时使用。该操作读取 PB，重建所选站点的中央记录，并非把 PB 内容清空。
+
+优先选择具体栏目范围进行日常同步；核对当前语言、中央数量、PB 数量和差异。第一次导入成功后不要反复全站重建。
+
+本次有 11 个中文产品及对应外语，数量一致。后续写回 PB 先做备份和小范围确认，不用全站覆盖来验证部署。
+
+> 注意：重建会替换所选站点已有的中央内容，可能丢失尚未同步到 PB 的编辑。
+
+![本次 11 个产品导入并显示图片，数据不是实时统计](../frontend/public/tutorial/deployment/52-products-imported.jpg)
+
+1. 导入数量与 PB 源数量一致
+2. 抽查产品缩略图而非只看导入成功消息
+
+- [ ] 产品数量、语言和栏目对应，缩略图可以显示。
+
+### 导入新闻与单页，保留真实翻译状态
+
+新闻也从 PB 读取到中央站点。本次 1 篇新闻，外语未翻译，界面显示 0/9 是真实数据状态，不是导入失败。
+
+单页模块的一键同步 PB 数据读取关于我们和联系我们；本次共 2 个。按钮名称较相似，以确认框的读写方向为准。
+
+历史图片不存在不会由数据库同步重建出来。记录缺失项，待补回原文件或重新上传。
+
+![新闻导入成功，但历史原图缺失](../frontend/public/tutorial/deployment/53-news-imported.jpg)
+
+1. FAILED 需要检查对应源文件是否存在
+2. 未翻译 0/9 是该新闻的真实状态
+
+![关于我们和联系我们单页导入记录](../frontend/public/tutorial/deployment/54-pages-imported.jpg)
+
+1. 单页也属于当前 siteId，不与其他网站混用
+
+- [ ] 新闻、单页与源站相符，未翻译与缺失图片分别记录。
+
+## 13. 图片、参数与模板栏目
+
+先区分文件缺失、URL 错误、字段不可见和模板没有调用，不要把所有问题都归于上传失败。
+
+### 抽查缩略图、大图与轮播图
+
+管理后台预览通过 /api/sites/static-file?siteId=...&path=... 读取当前站 static 文件。网站目录已有文件直接引用，避免重复复制到新目录。
+
+本次 11 张产品缩略图均为 500 × 400；CR1000I 的大图和四张轮播图正常。产品大图对应 ext_cp_BigPic，不能因为字段管理显示“原有功能管理”就判断它没导入。
+
+线上 CR1000I 详情页 00.jpg 原尺寸 1564 × 1006，已加载。详情图保持原比例，不为了与缩略图一致强行裁切。
+
+![抽查大图与轮播图的加载和对应关系](../frontend/public/tutorial/deployment/58-product-edit-media-verified.jpg)
+
+1. 产品大图由专用媒体字段维护
+2. 轮播图保留原图与标题，不重复建立参数字段
+
+- [ ] 至少一个产品的缩略图、大图、轮播图和线上详情全部正常。
+
+### 遇到 FAILED 时检查文件是否真的存在
+
+先核对请求 URL、siteId 和响应。接口明确返回“静态文件不存在”时，检查服务器对应 static 子路径、大小写和编码；不要反复重建内容。
+
+本次新闻 /static/codex/news/20260906/ 下两张旧 JPG 缺失，本地源目录也没有。需要补回原文件或重新上传，不擅自拿其他产品图替换文章。
+
+如果文件存在却请求错误，再检查 /api 代理、权限、路径规范化和引用域名。只读检查不等于执行资源清理。
+
+![新闻导入成功，但历史原图缺失](../frontend/public/tutorial/deployment/53-news-imported.jpg)
+
+1. FAILED 需要检查对应源文件是否存在
+2. 未翻译 0/9 是该新闻的真实状态
+
+- [ ] 已区分缺失源文件与程序/代理错误，并记录恢复方式。
+
+### 读取 PB 字段并启用需要的参数
+
+产品字段管理先点“读取 PB 字段”，核对 PB 字段名、使用数量和现有值。不要先点击“同步字段到 PB”新建重复字段。
+
+本次回拉力已有数据，但中央编辑器默认未启用。打开该字段开关后，CR1000I 编辑页显示 185；只改变中央编辑器可见性，没有改线上参数值。
+
+原有功能管理的产品大图、视频地址由产品媒体区维护，不作为普通参数重复添加。
+
+![读取已有 PB 字段后启用回拉力](../frontend/public/tutorial/deployment/59-existing-product-fields-linked.jpg)
+
+1. 先读取 PB 字段，不先反向创建
+2. 已有回拉力字段启用后可在编辑器显示
+
+- [ ] 需要的自定义参数在编辑器可见，字段名及数值与 PB 一致。
+
+### 文件夹导入：区分服务器与本机，核对目录层级及目标栏目
+
+在顶部先确认当前网站，再进入产品管理 → 添加产品 → 文件夹批量导入。首次打开会读取该站点配置的 rootPath。本次读取到 /www/wwwroot/shanbo-rig.com，不是管理后台目录，也不是操作电脑的 E 盘。
+
+新版顶部显示资料来源环境、后台连接地址和当前网站：线上 admin.shanbo-rig.com 显示服务器目录；连接 localhost、127.0.0.1 或 ::1 的本机后台显示本机后台目录。这是后台磁盘读取，不是浏览器上传本机文件。若本机地址背后另设远程反向代理，应以代理实际指向的后台机器为准。
+
+绿色的当前导入目录按完整层级展示，最后一级加粗，标注相对网站根目录的层数，例如 shanbo-rig.com → static → Rigs → RC Drilling Rigs 为根目录下第 3 级。蓝色导入目标单独列出网站、中文 CN 和栏目完整父子路径。目录名与栏目不是自动对应，扫描前必须对照确认。
+
+目录选择器的蓝色浏览位置和绿色当前导入目录互相独立。进入子文件夹只改变浏览位置，并显示浏览中，未选用，直到点击使用此目录才改变实际导入来源。网站根目录外、含相对层级的手填路径会单独提示；它们不会被伪装为站点内子目录。确认导入弹窗再次展示来源机器、完整目录、目标网站和栏目。
+
+资料目录右侧的房屋按钮回到当前网站根目录，文件夹按钮展开服务器目录选择。点击文件夹逐级进入，再点使用此目录回填。本次实际浏览 static → Rigs，看到 Core Drilling Rig 等子目录；生产验证只读取目录，没有点击扫描或导入。通常继续选择包含待导入型号的资料目录，不要直接扫描整个网站根目录。
+
+目录浏览只显示当前网站根目录内的普通非隐藏子目录，不显示文件内容，不跟随符号链接访问其他位置。切换站点时清空原目录及扫描结果，防止将另一个网站的资料误导入。原有手动填写服务器绝对路径的方式仍保留；目录浏览的范围限制不代表手动导入新增了相同限制。
+
+宽度和高度以像素为单位，默认 500 × 400，可分别填写 64 至 4096 的整数。图片按原比例缩放到白底画布，不拉伸；当前型号没有 0.jpg 时才由 1.jpg 生成。已有 0.jpg 或 0.JPG 直接使用，不重压缩、不改尺寸和修改时间。即使本次改成 800 × 600，已有图也保持原样。
+
+读取目录和扫描都是只读操作，只有核对扫描结果并确认导入才可能生成新缩略图。扫描后修改尺寸、目录、栏目或参数类型，会清空旧扫描结果，需要重新扫描。此尺寸设置仅作用于本次文件夹导入，单张图片上传与新闻缩略图仍使用原默认值。
+
+目录读取失败时，先检查站点管理中的网站根目录是否是服务器绝对路径、目录是否存在，以及后台运行用户是否有读取权限。只有域名或远程 FTP 账号不能直接读取另一台服务器的磁盘。不要用 chmod 777 处理权限问题；导入生成缩略图时还需要型号文件夹写权限。
+
+本次已通过隔离测试验证：800 × 600 等尺寸生成、重复导入保留旧图、跨站及越界目录拦截、扫描不写文件、手机布局；正式站只读验收。本轮部署默认不创建代码备份、不迁移数据库、不上传 GitHub，仅更新 API 和前端，SEO、FTP、worker 保持运行。
+
+![正式站只读扫描 RC Drilling Rigs：层级和来源环境清晰显示，5 个型号均可导入。截图中栏目仍为水井钻机，仅为扫描验收，未确认导入；实际使用须选择正确目标栏目。](../frontend/public/tutorial/deployment/173-folder-hierarchy-and-parameters.jpg)
+
+1. 服务器目录及后台连接域名，与本机文件上传区别开。
+2. 加粗最后一级 RC Drilling Rigs，并标注根目录下第 3 级。
+3. 确认网站及栏目；源文件夹不会自动决定目标栏目。
+4. 5 个型号可导入，仅扫描，没有写入。
+
+![逐级进入 static/Rigs，服务器返回四个实际子文件夹。仅列目录，不读取文件内容或写入产品。](../frontend/public/tutorial/deployment/168-folder-subdirectories.jpg)
+
+1. 核对当前目录，可继续进入具体产品资料子目录。
+2. 选择完成后，点击使用此目录回填路径。
+
+![正式站将本次缺失缩略图的生成尺寸设为 800 × 600；没有确认导入，已有文件未修改。](../frontend/public/tutorial/deployment/169-folder-thumbnail-size.jpg)
+
+1. 宽度、高度分别设置，默认 500 × 400。
+2. 已有 0.jpg 始终原样复用，尺寸设置不会覆盖旧图。
+
+![本次宝塔部署结果：backup=disabled、无数据库迁移，主后台及 SEO/FTP 检查通过；仅更新前端和 API。](../frontend/public/tutorial/deployment/172-folder-variants-release.jpg)
+
+1. 部署完成，无代码备份，SEO worker 保持运行。
+
+![正式站首次打开文件夹导入，自动读取当前网站的服务器根目录；未扫描或导入。](../frontend/public/tutorial/deployment/167-folder-server-root.jpg)
+
+1. 这里是业务网站根目录，不是电脑本机目录。
+2. 文件夹按钮打开当前网站的子目录列表。
+
+![宝塔发布完成：backup=disabled。API 和前端已更新，三个管理入口检查通过，没有迁移数据库或上传 GitHub。](../frontend/public/tutorial/deployment/166-folder-directory-release.jpg)
+
+1. 本轮没有创建代码备份，SEO worker 保持运行。
+
+- [ ] 当前站根目录正确；可选择服务器子目录；宽高只影响缺失的 0.jpg；扫描核对后再由用户确认导入。
+
+### 文件夹导入：固定三参数，新增字段自动关联 PB
+
+先选择当前网站，再进入产品管理 → 添加产品 → 文件夹批量导入，核对来源目录、环境和目标中文栏目。参数类型默认按型号资料，每个型号读取自己的 TXT，不强制所有型号使用同一套参数名称。正文 HTML、产品图片继续沿用原导入规则。
+
+在 TXT 的产品参数段写三行名称、单位、值，始终按首次出现顺序读取前三项，超过三项提示并忽略后续项。正式站只读扫描 WR400RC 的实际三项为钻孔深度 400 m、钻孔直径 105-305 mm、提升力 22 T，原样保留，不再将第三项强行替换成回转扭矩。无单位的参数需明确放在产品参数段中；SEO 标题、关键词和描述不当成参数。
+
+扫描是只读预览：同名称或已知别名、同单位且已启用的文本字段才复用；没有匹配字段时显示将新建独立字段并同步 PB。既有提升力字段为 kN、资料为 T 时，另建提升力（T）字段并保留原值，不修改旧 kN 字段、不换算 T/kN，也不将提升力塞入扭矩或发动机字段。下次相同名称和单位继续复用新字段，不按型号无限复制。
+
+同一个型号的 TXT 内名称相同却同时写了冲突数值或单位，仍需人工核对；同单位字段停用、受保护或存在多个匹配候选也会阻止该型号导入。手动选择岩芯钻机或水井钻机时仍沿用对应固定模板及严格单位检查。按型号资料才启用新的逐型号三参数及单位独立字段规则。
+
+确认导入时先备份，再补齐本次三项需要的 PB 原生字段定义及扩展列。已有字段的排序、名称及已有产品值保持不变；其他网站独立。重复字段不再创建，没有变化不再备份 PB 数据库。
+
+此时只创建中央后台中文产品，不自动发布 PB 产品。之后点击正常的同步网站，参数值跟随产品及共享参数流程写入 PB 字段。没有修改原模板，若模板写死字段，新增参数的前台展现须按实际模板另外接入。
+
+若提示 PB 数据库不可写或字段类型冲突，查看该型号的失败原因，修正网站目录权限或字段配置后重试。新建的本地字段会保留供复用，不重复创建。不要通过重建产品或清空数据库解决权限问题。本次回归使用隔离测试库，未批量导入或改动旧产品。
+
+本节首先展示 9 月 13 日新版界面和独立单位字段，其后保留 9 月 12 日上传及发布的历史截图，便于追溯。旧图中的自动识别已更名为按型号资料；旧发布备份发生在用户明确禁止自动备份之前，本次发布没有备份代码或上传 GitHub。
+
+型号 TXT 示例：只放实际的三个参数
+
+```sh
+产品型号：EX100
+产品参数：
+发动机功率（kW）：85
+整机重量（kg）：10000
+铲斗容量（m³）：0.4
+SEO标题：EX100 产品介绍
+```
+
+隔离参数与产品同步回归
+
+```sh
+pnpm --dir backend exec jest --runInBand product
+pnpm --dir frontend run type-check
+```
+
+![正式站只读扫描 RC Drilling Rigs：层级和来源环境清晰显示，5 个型号均可导入。截图中栏目仍为水井钻机，仅为扫描验收，未确认导入；实际使用须选择正确目标栏目。](../frontend/public/tutorial/deployment/173-folder-hierarchy-and-parameters.jpg)
+
+1. 服务器目录及后台连接域名，与本机文件上传区别开。
+2. 加粗最后一级 RC Drilling Rigs，并标注根目录下第 3 级。
+3. 确认网站及栏目；源文件夹不会自动决定目标栏目。
+4. 5 个型号可导入，仅扫描，没有写入。
+
+![WR400RC 实际 TXT 的提升力为 22 T，扫描提示新建提升力（T）并同步 PB 字段；未将 T 换算成 kN，也未实际导入。](../frontend/public/tutorial/deployment/174-folder-independent-unit.jpg)
+
+1. 原值 22 与单位 T 保持不变。
+2. 独立字段待创建，相同名称和单位可在后续型号复用。
+
+![固定三参数导入与 PB 字段关联流程 · SVG 示意，不是操作截图。](../frontend/public/tutorial/deployment/folder-three-parameters.svg)
+
+
+![本次宝塔部署结果：backup=disabled、无数据库迁移，主后台及 SEO/FTP 检查通过；仅更新前端和 API。](../frontend/public/tutorial/deployment/172-folder-variants-release.jpg)
+
+1. 部署完成，无代码备份，SEO worker 保持运行。
+
+![新版正式后台的文件夹导入入口；尚未选择资料或执行导入，未创建测试产品。](../frontend/public/tutorial/deployment/144-product-folder-import-ready.jpg)
+
+1. 宝塔部署后填写服务器实际目录，不填写本机 E 盘路径。
+2. 自动识别支持新的三参数组合。
+3. 先扫描，核对三项名称、单位和值，再确认导入。
+
+![通过宝塔上传固定三参数更新包，保留上传成功的现场记录。](../frontend/public/tutorial/deployment/142-product-parameters-upload.jpg)
+
+1. 确认对应产品参数更新包已上传成功。
+
+![三参数功能发布完成：备份位于 /www/backup/pboot-pdf-release-20260912135816567；API 更新，SEO、FTP 和 worker 保持运行。](../frontend/public/tutorial/deployment/143-product-parameters-release.jpg)
+
+1. 正式域名检查通过，记录此次源码与构建备份。
+
+- [ ] 扫描显示正确的三项；确认导入复用或新增字段；正常产品同步写入相同 PB 字段，没有重复字段或历史数据覆盖。
+
+### 预览 CN/EN 栏目绑定，未知编码不猜
+
+模板栏目绑定读取 CN/EN 模板和 PB 栏目，核对栏目名称与原编码，点“预览更新”检查影响文件。
+
+本次 44 个模板文件、15 组引用，其中 11 组能匹配，预览 0 个文件、0 处变化，说明现有可识别编码无需重写。
+
+旧 CN 引用 105、107、110、112 暂无明确映射，保持原编码。不要将它们随意映射到“看起来类似”的栏目，也不通过全站替换数字处理。
+
+![编码一致，预览显示无需重写模板](../frontend/public/tutorial/deployment/61-template-preview-no-changes.jpg)
+
+1. 0 处更新是正确结果，不需要强行改模板
+
+- [ ] 已预览影响范围，未知引用记录待确认，没有误改模板。
+
+## 14. 语言域名与 Nginx 修复
+
+2026-09-12 中文站恢复实录：空伪静态与域名授权是两个独立问题。以下按实际操作顺序说明，并提供新增其他语言的复用清单。
+
+### 第一步：DNS、证书与宝塔域名绑定
+
+以 cn.shanbo-rig.com 为例，先将 A 记录指向业务服务器。若域名还有 AAAA 记录，也必须指向实际提供同一网站的 IPv6 地址；DNS、HTTPS 证书和应用授权互不替代。
+
+宝塔 → 网站 → PHP项目 → shanbo-rig.com → 设置 → 域名管理，确认中文子域名已在列表里。一个 PB 程序的多个语言域名可绑定到同一个 PHP 站点，不要误绑定到 admin 的 Vue 反向代理。
+
+进入 SSL 页面确认当前证书覆盖本次新增的具体域名。主域名证书不必然覆盖子域名；已有其他语言域名出现在列表，也不代表它们的授权与语言模板已经验收。
+
+![宝塔 PHP 站点的语言域名绑定，CN 与主域名使用同一站点。](../frontend/public/tutorial/deployment/84-pboot-language-domain-bindings.jpg)
+
+1. 确认 cn.shanbo-rig.com 出现在当前业务 PHP 站点，而不是管理后台反代。
+
+- [ ] 当前语言域名解析正确、TLS 正常，并命中预期 PHP 站点。
+
+### 第二步：运行目录不是 cn/en 模板目录
+
+宝塔 → 当前 PHP 站点设置 → 网站目录。本次网站目录为 /www/wwwroot/shanbo-rig.com，运行目录为 /；目录里应有网站自己的 index.php。
+
+模板里的 cn、en 等文件夹由 PbootCMS 选择，不是 Nginx 的运行目录。不要为每种语言再复制一份数据库、程序或 static，也不要将根目录改成 template/cn。
+
+默认文档保留 index.php，并确认 PHP 页面选择正确版本。本次为 PHP 8.2；不同环境应先按自身 PB 版本验证，不要因 404 随意切换 PHP 或关闭防跨站。
+
+![根目录是 PB 程序目录；运行目录为 /，不是模板 cn 文件夹。](../frontend/public/tutorial/deployment/85-pboot-document-root.jpg)
+
+1. 网站目录必须包含真正的 index.php。
+2. 本次运行目录是 /，不要改成 template/cn。
+
+- [ ] root、运行目录和 PHP 入口正确，未改动模板与业务数据。
+
+### 第三步：修改规则前备份单个站点
+
+本次从宝塔终端备份当前站点的主配置、rewrite 文件和 extension 目录，备份放在 /www/backup，不能放进公开网站根目录。
+
+本次备份文件为 /www/backup/shanbo-rig-nginx-before-20260912.tgz。下列命令是本次实例；换域名、安装目录或日期时应替换路径，不要覆盖已有备份。
+
+同时查看配置文件中实际 include 的 rewrite 文件路径，确认没有另一个 location /。保留 SSL、enable-php-82.conf、证书验证目录和 pboot-production-guard.conf。
+
+本次单站配置备份实例
+
+```sh
+tar -czvf /www/backup/shanbo-rig-nginx-before-20260912.tgz -C / www/server/panel/vhost/nginx/shanbo-rig.com.conf www/server/panel/vhost/rewrite/shanbo-rig.com.conf www/server/panel/vhost/nginx/extension/shanbo-rig.com
+```
+
+![修改前备份当前业务站的 vhost、rewrite 和 extension，不包含其他站点。](../frontend/public/tutorial/deployment/87-nginx-backup.jpg)
+
+1. 确认归档包含本站 rewrite 与扩展保护配置，备份不放在公开网站目录。
+
+- [ ] 备份已生成，保存了正确站点的配置及扩展文件。
+
+### 第四步：在宝塔伪静态中填写 PB 规则
+
+本次宝塔 → 当前 PHP 站点设置 → 伪静态原本为空。Nginx 不读取 Apache 的 .htaccess，也不使用 IIS 的 web.config；把它们复制到网站根目录不能修复 Nginx 路由。
+
+对本次根目录安装，使用 PbootCMS 官方 2.X/3.X 手册的规则，粘贴到当前站点的伪静态编辑器，确认内容后点保存。下方配置也保存在 deploy/nginx/pboot-rewrite.conf，供下次核对。
+
+规则只把不存在的文件或目录转给 PB 的 index.php；真实静态文件仍按原配置处理。不要替换整个 server 块，也不要把管理后台的 try_files 到 /index.html 规则用在 PHP 网站上。
+
+如果已有 location /，在原规则内合并而不是重复增加。如果程序部署在 /test/ 等二级目录，必须按实际前缀改写入口；本实例不能原样用于二级目录。
+
+根目录安装的 PB 官方 Nginx 规则
+
+```sh
 location / {
-    try_files $uri $uri/ /index.html;
-}
-
-location ^~ /api/ {
-    proxy_pass http://127.0.0.1:5108/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 600s;
-    client_max_body_size 20m;
-    proxy_buffering off;
+    if (!-e $request_filename) {
+        rewrite ^/index.php(.*)$ /index.php?p=$1 last;
+        rewrite ^(.*)$ /index.php?s=$1 last;
+    }
 }
 ```
 
-`proxy_pass` 末尾的 `/` 不能漏掉，否则 `/api/sites` 可能被错误转发为后端的 `/api/sites`，而后端实际接口是 `/sites`。
+![修改前伪静态编辑器为空；复制 Apache 的 .htaccess 不会填入 Nginx 规则。](../frontend/public/tutorial/deployment/86-pboot-rewrite-empty.jpg)
 
-### SEO 域名
+1. 当前规则为空，需要配置 PHP 路由转发。
 
-使用：
+![通过宝塔保存的 PbootCMS 官方根目录伪静态规则。](../frontend/public/tutorial/deployment/88-pboot-rewrite-saved.jpg)
 
-[SEO Nginx 模板](../deploy/nginx/seo-admin.example.com.conf)
+1. 不存在的请求交给 /index.php，真实文件仍走原配置。
+2. 填完点保存，随后检查 nginx -t 和实际页面。
 
-目标地址：
+- [ ] 规则保存成功，未出现重复 location /，也未改动其他网站。
 
-```text
-http://127.0.0.1:5388
+### 第五步：首页仍 404 时检查应用授权
+
+本次规则保存后 nginx -t 成功，但主域名 200、中文域名仍为 404。直接读取同一 PHP 入口的应用响应，显示“未匹配到本域名有效授权码”。这不是继续改 root 或 rewrite 能解决的问题。
+
+在官方免费授权页填写实际访问的域名 cn.shanbo-rig.com，完成验证码并获取授权。按官方说明，多个域名分别获取，以英文逗号分隔追加到 PB 后台 → 全局配置 → 配置参数，保留已有有效授权。
+
+站点负责人本次亲自补充了中文域名授权。补充后中文站恢复；没有修改或绕过 PB 的授权校验源码。教程不公开授权码、后台密码或密钥。
+
+若无法直接读取 PHP 响应，可先看应用日志。不要为了显示错误而全局关闭保护，也不要根据浏览器短短一行 nginx 404 就判断为 Nginx 目录错误。
+
+> 注意：官方域名授权、SSL 证书、DNS 和 PB 语言绑定是四件不同的事。主域名能访问不代表其他域名均已配置。
+
+![规则语法已通过，但授权补充前 CN 仍 404，说明还需要检查应用层。](../frontend/public/tutorial/deployment/89-nginx-test-after-rewrite.jpg)
+
+1. 主站 200、CN 404；不能把规则保存成功当作中文站已经恢复。
+
+![直接读取 PHP 应用响应，明确提示中文域名未匹配到有效授权。](../frontend/public/tutorial/deployment/90-cn-application-error.jpg)
+
+1. 这里需要补充官方域名授权，不是继续更改 Nginx 网站目录。
+
+![负责人补充官方授权后，内置浏览器实际打开中文首页。](../frontend/public/tutorial/deployment/91-cn-home-restored.jpg)
+
+1. 确认当前语言为中文，不能只看到页面 200。
+
+- [ ] 对应域名官方授权有效，中文首页实际打开，而不是只看保存提示。
+
+### 第六步：区分兼容链接与伪静态链接
+
+本次保留网站原来的 URL 设置，导航仍输出 /?Drilling-Rigs/ 这样的兼容地址；同时已经验证无问号的 /Drilling-Rigs/ 与 /Integrated-Core-Drilling-Rig/cn-cr1000i.html 能正确显示对应内容。
+
+若下一步要让 PB 自动生成不带问号的链接，需要在 PB 配置参数中切换为伪静态，并通过 PB 后台清缓存，再核对模板生成的导航、分页、搜索和详情链接。不要只修改 Nginx 就声称 PB 已完成 URL 模式迁移。
+
+切换前记录原模式和公开链接，检查 canonical、站点地图及现有外链的兼容性；只在新模式全部验证通过后规划重定向。不要盲目将所有查询参数重定向掉，语言切换和搜索可能依赖参数。
+
+此次未切换全站 URL 模式，未改栏目、文章、模板或产品数据。截图中的遗留英文标题与占位内容属于内容维护，不是此次 Nginx 路由修复的一部分。
+
+![直接打开 https://cn.shanbo-rig.com/Drilling-Rigs/，产品栏目与图片正常。](../frontend/public/tutorial/deployment/92-cn-clean-product-list.jpg)
+
+1. 无问号栏目路由展示真实产品列表，不是默认欢迎页。
+
+![无问号 CR1000I 详情路由正常，产品标题、参数和图片可见。](../frontend/public/tutorial/deployment/93-cn-clean-product-detail.jpg)
+
+1. 确认型号与中文栏目对应，详情内容已由 PB 正常渲染。
+
+- [ ] 能区分服务器支持无问号路由和 PB 已切换链接生成模式。
+
+### 第七步：语法、页面与数据保护一起验收
+
+在宝塔终端执行 nginx -t。只有语法检查成功才允许平滑重载；使用手动文件修改时再执行 nginx -s reload，不要重启整台服务器。
+
+本次最终 HTTPS 检查：主域名首页、中文首页、中文产品栏目、CR1000I 详情、中文新闻详情与 admin 首页全部 200；/data/ 继续返回 404，保护没有被伪静态覆盖。
+
+内置浏览器已实际打开中文首页、产品列表及 CR1000I 详情并保存截图。HTTP 200 只证明请求成功，还需确认不是错误页、默认欢迎页、空白页或其他语言。
+
+本次没有提交询盘，没有生成 SEO 新闻，没有调用收费模型，也没有执行 FTP 发布、数据库迁移或资源清理。其他语言需按下一步逐个验收，不能由 CN 成功推断全部成功。
+
+宝塔本次 Nginx 检查路径
+
+```sh
+/www/server/nginx/sbin/nginx -t
 ```
 
-SEO 批量诊断和 AI 修复可能运行较久，模板将读取超时设置为 1800 秒。
+仅在检查成功且需手动重载时执行
 
-### FTP 域名
-
-使用：
-
-[FTP Nginx 模板](../deploy/nginx/ftp-admin.example.com.conf)
-
-目标地址：
-
-```text
-http://127.0.0.1:5389
+```sh
+/www/server/nginx/sbin/nginx -s reload
 ```
 
-远程巡检可能持续很久，模板将读取超时设置为 3600 秒。
+无问号栏目 HTTP 检查实例
 
-## 十三、防火墙端口
-
-公网只需要开放：
-
-```text
-80
-443
-宝塔面板自身端口
-SSH 端口
+```sh
+curl -sS --max-time 20 -o /dev/null -w '%{http_code} %{url_effective}\n' https://cn.shanbo-rig.com/Drilling-Rigs/
 ```
 
-不要向公网开放：
+![最终验收：Nginx 语法通过，主站/CN/栏目/详情/新闻/admin 为 200，数据目录仍为 404。](../frontend/public/tutorial/deployment/94-cn-nginx-verification.jpg)
 
-```text
-5108
-5278
-5388
-5389
-```
+1. 多个页面实测 200，包含不带问号的栏目与详情。
+2. /data/ 返回 404 是预期的访问保护，不能为消除 404 而放开它。
 
-这些端口只供本机 Nginx 和 PM2 使用。
+- [ ] 首页、栏目、详情和静态资源正常，数据目录仍不可公开访问。
 
-管理域名最好再增加至少一种限制：
+### 复用：以后新增 EN / FR / ES 等语言
 
-- 宝塔网站访问限制。
-- Nginx Basic Auth。
-- 固定办公 IP 白名单。
-- Cloudflare Access 等身份验证。
+每新增一种实际启用的语言，按顺序完成：DNS → 同一 PHP 站点域名绑定 → 覆盖该域名的 SSL → 官方域名授权 → PB 语言区域与模板 → 内容与页面验收。英文也可以沿用主域名，不一定新增 en 子域名。
 
-特别注意：当前登录页带有注册入口。第一次创建管理员后，不应让管理域名完全公开给陌生用户。
+在 PB 系统管理的数据区域中核对语言编码、域名和模板目录。当前代码以 HTTP_HOST 匹配语言域名，应填写纯主机名，例如 fr.shanbo-rig.com，不加 https://、斜杠或栏目路径；以实际部署版本表单要求为准。
 
-## 十四、在集中后台添加宝塔网站
+同一程序、同一运行目录的语言域名共用本站伪静态，不需要每种语言再写一遍 location /。若新建的是另一个独立网站，则应使用它自己的目录、库与单独配置，不能复用本网站的数据路径。
 
-登录：
+检查主域名跳转设置是否把所有语言强制跳到英文主站。用新的浏览器会话直接打开每个语言域名，检查导航语言、产品标题、模板、图片、分页及语言切换目标，避免旧 Cookie 造成看似成功。
 
-```text
-https://admin.example.com
-```
+若规则修改后出现 500、重复 location 或首页失效，先另存当前配置，再从本次备份解压到 /www/backup 下的独立检查目录，只恢复确认有误的那个站点文件；nginx -t 通过后重载。不要用历史整站备份覆盖新增文章或整个 vhost 目录。
 
-进入 `系统管理 → 站点管理 → 新增站点`。
+![新增语言的六项配置与验收顺序 · SVG 示意，不是其他语言已上线的证明。](../frontend/public/tutorial/deployment/language-domain-checklist.svg)
 
-![添加宝塔站点](./baota-assets/05-add-site.svg)
 
-以 `shanbo.cc` 为例：
+- [ ] 每个语言独立完成清单，记录成功与待配置项，不自动复制数据库。
 
-| 字段 | 内容 |
-|---|---|
-| 站点名称 | `山博主站` |
-| 站点标识 | `shanbo-main` |
-| 运行环境 | `宝塔服务器` |
-| 网站根目录 | `/www/wwwroot/shanbo.cc` |
-| 数据库文件 | `/www/wwwroot/shanbo.cc/data/真实数据库文件.db` |
-| 线上网址 | `https://shanbo.cc` |
+## 15. AI 写作、SEO 与视频配置
 
-保存后点击 `检查`。必须看到网站根目录、数据库和 `data` 目录归属检查通过。
+程序已安装不等于自动任务已启用。模型、频道和各网站计划都需要单独确认。
 
-同服务器上的其他 PbootCMS 网站使用同样方式添加，不需要配置 FTP。外部服务器上的网站才使用 FTP/SFTP 发布和巡检。
+### 配置共享模型并测试小请求
 
-## 十五、第一次上线验收
+先完成工具域名认证，再打开模型配置。按提供商填写正确 API 地址、模型 ID 与 Key；模型总览用来查看可用状态，不代表账户一定还有额度。
 
-![宝塔部署流程](./baota-assets/06-deploy-flow.svg)
+翻译模型和 SEO 写作模型可以分别选择。MyMemory 429 是限流/额度问题，不是最后一种语言绑定坏了；不要无间隔重试所有语言。
 
-按以下顺序检查：
+本次没有迁移模型 Key，也没有发起收费模型请求。Key 只能在管理员配置中填写，不写在教程、截图、URL 或前端源码里。
 
-1. 打开管理后台并登录。
-2. 打开站点管理，确认当前站点路径全部是 Linux 路径。
-3. 点击站点 `检查`，不要立即同步。
-4. 打开菜单、新闻、产品页面，只读取数据。
-5. 检查 PbootCMS 图片能否显示。
-6. 手动备份目标网站的 `data/*.db`。
-7. 选择一条测试内容执行同步。
-8. 打开真实网站检查页面。
-9. 确认数据库旁边生成了同步前备份。
-10. 再开始批量同步或 AI 修复。
+- [ ] 已明确模型选择、额度与测试方式，未将密钥写入公开资料。
 
-## 十六、配置迁移
+### 按网站配置中文内容计划
 
-![配置备份与迁移](./baota-assets/09-backup-migration.svg)
+每个网站分别设置行业、品牌、中文新闻栏目、关键词、写作模型、间隔与每日限额。钻机站与挖掘机站不能共用一份内容计划。
 
-推荐流程：
+保留全局暂停和本站总开关。先验证素材、模型和草稿，再明确选择是否发布；不要为了测试服务安装就自动生成并发布。
 
-1. 本地进入配置备份页面。
-2. 导出完整配置。
-3. 再导出“仅模型 Key”。
-4. 宝塔版本启动后先导入模型 Key。
-5. 再导入完整配置。
-6. 检查所有 Windows 路径并改成 Linux 路径。
-7. Google 服务账号 JSON 文件重新选择服务器上的真实路径。
-8. FTP、SEO、站点配置分别测试后再保存。
+不需要收集图片。没有 Brave Key 时可关闭关键词网络搜索，使用手动素材、现有文章库和关键词选题；DeepSeek 写作本身不等于已经联网搜索，不能将其生成内容当作已核实新闻。
 
-不要因为配置导入成功就直接运行批量操作，路径检查必须单独做一次。
+本次 worker 在线、只读检查通过、全局保持暂停。真实采集、生成、定时发布尚未完成业务验收。
 
-## 十七、备份哪些文件
+只读检查 worker，不领取任务
 
-至少备份：
-
-```text
-/www/wwwroot/pboot_admin_center/data/
-/www/wwwroot/pboot_admin_center/backend/.env
-/www/wwwroot/pboot_admin_center/managed-sites/
-/www/wwwroot/pboot_admin_center/backups/
-```
-
-`managed-sites/<站点标识>/api/uploads/` 是该站的后台上传目录；`seo/`、`ftp/`、`google/`、`state/` 分别保存当前站的配置和断点。不再备份旧版全局 `backend/uploads/` 或 `tools/*/*.json`。
-
-还要继续使用宝塔计划任务备份每个 PbootCMS 网站：
-
-```text
-/www/wwwroot/站点域名/data/
-/www/wwwroot/站点域名/static/
-```
-
-后台数据库和 PbootCMS 数据库是两套不同的数据，必须分别备份。
-
-## 十八、以后更新项目
-
-更新前：
-
-```bash
-pm2 status
-cp /www/wwwroot/pboot_admin_center/data/pboot-admin.sqlite \
-   /www/wwwroot/pboot_admin_center/data/pboot-admin.before-update.sqlite
-```
-
-上传新代码后：
-
-```bash
-cd /www/wwwroot/pboot_admin_center/backend
-pnpm install --frozen-lockfile
-pnpm run build
-
-cd /www/wwwroot/pboot_admin_center/frontend
-pnpm install --frozen-lockfile
-pnpm run build
-
-cd /www/wwwroot/pboot_admin_center/tools/seo_publish_tool
-pnpm install --frozen-lockfile
-
-cd /www/wwwroot/pboot_admin_center/tools/ftp_publish_tool
-pnpm install --frozen-lockfile
-
+```sh
 cd /www/wwwroot/pboot_admin_center
-pm2 reload deploy/ecosystem.config.cjs
-pm2 status
+node tools/seo-content-worker/index.cjs --check
 ```
 
-不要删除服务器上的 `.env`、后台数据库、SEO 配置、FTP 配置、服务账号文件和上传目录。
+- [ ] 本站计划与行业一致，未验证前保持暂停，区分写作模型与搜索来源。
 
-## 十九、常见问题
+### 视频使用独立 YouTube 频道配置
 
-| 现象 | 原因与处理 |
-|---|---|
-| 管理域名显示 502 | 5108 后端未启动；先用 `curl http://127.0.0.1:5108/project-identity` 检查 |
-| 页面打开但接口失败 | 前端仍使用 `localhost:5108`；确认 `.env.production` 是 `VITE_API_BASE_URL=/api` 后重新构建 |
-| 切换站点后数据库不存在 | 站点中还保存着 Windows 路径；改成 `/www/wwwroot/...` |
-| 同步提示无权限 | PM2 用户不能写 PbootCMS 的 `data/static/runtime` |
-| 图片显示 404 | `static` 目录路径错误，或 Nginx 没有把 `/api` 正确代理到 5108 |
-| PM2 重启后 SQLite 损坏 | 启动了多个 API 实例；保持单实例并使用优雅重启 |
-| SEO 或 AI 修复中途 504 | Nginx 读取超时太短；使用模板中的 600/1800 秒配置 |
-| FTP 巡检很慢 | 第一次需要建立基线；后续使用增量巡检和断点继续 |
-| Google 返回 403 | 检查服务账号是否加入 Search Console，并确认对应 API 已启用 |
-| 外网能直接访问 5388/5389 | 防火墙配置错误；关闭公网端口，只允许 Nginx 反向代理 |
+站点管理保存共享 YouTube Data API Key，每个网站填写自己的 UC 开头频道 ID。空频道不能直接同步。
 
-## 二十、最终验收清单
+当前视频模块以频道播放列表为分类，推送视频清单到站点 static/videos.js，由模板前端渲染；它不是传统 PB 视频表的全量导入。
 
-- [ ] 三个管理域名均已解析并启用 HTTPS。
-- [ ] 5108、5388、5389 只监听服务器内部或被防火墙阻止公网访问。
-- [ ] API、SEO、FTP 三个进程由 PM2 单实例守护。
-- [ ] 前端 `.env.production` 使用 `/api`。
-- [ ] 后台 SQLite 已迁移并可备份。
-- [ ] PbootCMS 站点路径全部是 Linux 路径。
-- [ ] PM2 用户可写目标站点 `data/static/runtime`。
-- [ ] 第一次写入前已备份 PbootCMS 数据库。
-- [ ] 完整配置与模型 Key 已分别备份。
-- [ ] 宝塔计划任务已备份管理数据库和业务站点。
+本次频道、Key 和视频外壳栏目未配置，没有同步或清理 PB 视频。先确认频道、栏目外壳及清单预览，再执行推送。
 
-完成这些检查后，宝塔上的管理系统就可以通过项目网址操作当前选择的 PbootCMS 网站。
+> 注意：不要用“清理 PB 视频数据”来解决列表为空。
+
+![视频配置未完成的真实空态，不是已验收成功图](../frontend/public/tutorial/deployment/55-video-channel-unconfigured.jpg)
+
+1. 视频外壳栏目缺失，需要先配置
+2. 数据源是 YouTube 播放列表
+
+- [ ] 频道、Key 和模板外壳已核对；尚未配置时不执行推送或清理。
+
+## 16. 产品与报价 PDF：多语言、详情与排版
+
+产品资料与报价单共用固定 A4 分页和服务器 Chromium。按当前网站读取目标语言产品，保存独立版本；报价金额不参与翻译，导出后检查实际文件。
+
+### 以实际 API 用户安装服务器浏览器
+
+本次使用后端依赖自带 Playwright 安装 Chromium。Windows 的浏览器目录不能直接用于 Linux。
+
+OpenCloudOS 9 不在该工具的官方支持系统列表内。本次按 ldd 报告补充 mesa-libgbm、alsa-lib，再实际渲染，不能把其他系统的包管理命令原样照搬。
+
+不要直接改现有 API 的运行用户或整站权限。本次 API 仍由 root 运行，只有 Chromium 经专用入口降权为 pbootpdf，详见后面的沙箱配置步骤。新服务器也可以将整个 API 配置为非 root，但须单独规划目录权限。
+
+安装 Chromium（在实际运行环境执行）
+
+```sh
+cd /www/wwwroot/pboot_admin_center
+pnpm --dir backend exec playwright install chromium
+```
+
+![服务器 PDF 依赖关系 · SVG 示意](../frontend/public/tutorial/deployment/pdf-flow.svg)
+
+
+- [ ] 实际 API 用户能启动 Linux Chromium，没有缺库报错。
+
+### 安装中文字体并用中文实际渲染
+
+本次 OpenCloudOS 9 安装 google-noto-sans-cjk-sc-fonts；其他系统以自身包名为准。先 fc-match 确认字体匹配，再导出含中文和图片的小样。
+
+中文、阿拉伯语、越南语要分别检查字体。升级前 fc-match :lang=ar 和 :lang=vi 匹配 DejaVu Sans，中文匹配 Noto Sans CJK SC。字体匹配成功不等于最终 PDF 已验收，仍需打开输出文件。
+
+没有站点时产品生成PDF显示空态、禁用导入，不请求 siteId=0；返回管理后台不应被无意义的未保存提示拦截。
+
+OpenCloudOS 9 本次字体方案
+
+```sh
+dnf install google-noto-sans-cjk-sc-fonts
+fc-match :lang=zh-cn
+```
+
+- [ ] 中文字体可用，PDF 不是方块字，图片加载完成后再导出。
+
+### 先备份，再通过宝塔上传更新包
+
+本轮先备份 frontend/src、frontend/dist、backend/src/brochure、backend/dist 和工具导航，记录在 /www/backup/pboot-pdf-before-20260912-140737/source-static.tgz。更新程序还会在真正安装前再备份一次。备份放在非公开目录，不放到网站静态目录。
+
+宝塔 → 文件 → /www/backup → 上传/下载 → 上传文件 → 选择更新包 → 开始上传。必须等列表显示“上传成功”，再进入终端；上传过程中离开页面可能取消请求。
+
+安装脚本先比对旧源码指纹和上传包 SHA-256，再检查 SEO/FTP 是否有正在运行的任务。指纹不一致时停止并核对差异，不能强制覆盖。源码和前端采用配套更新，不迁移数据库，不改 PB 产品正文。
+
+![升级前在宝塔终端备份程序，并检查中文、阿拉伯语与越南语字体匹配。](../frontend/public/tutorial/deployment/117-pdf-backup-fonts.jpg)
+
+1. 先记录非公开目录中的备份路径。
+2. 不同语言分别检查字体。
+
+![通过宝塔文件管理上传功能包，等待上传成功后再进入终端。](../frontend/public/tutorial/deployment/118-pdf-upload-package.jpg)
+
+1. 确认上传文件名和成功状态，不能提前离开。
+
+- [ ] 备份存在、上传成功、指纹一致、没有正在运行的发布任务后才安装。
+
+### 处理镜像 404 与 pnpm 参数兼容
+
+本次宝塔配置的 npm 镜像没有同步 DOMPurify 新版本，出现 ERR_PNPM_FETCH_404。保留锁文件和完整性检查，指定官方源安装；不要删锁文件、随意降级安全依赖或关闭校验。安装失败时更新程序恢复旧源码和静态资源。
+
+服务器 pnpm 与本地版本不同，pnpm test --runInBand 会把参数当作自身参数，提示 Unknown option。部署脚本统一改为 pnpm --dir backend exec jest --runInBand brochure，直接调用测试程序。
+
+先完成类型检查、后端测试、前后端构建，再切换输出目录并重启 API、SEO 与 FTP 工具。SEO 定时 worker 不在本轮重启范围。程序更新不代表可回退业务数据，数据库恢复必须另行评估。
+
+在项目目录检查依赖与测试
+
+```sh
+pnpm --dir frontend install --frozen-lockfile --registry=https://registry.npmjs.org
+pnpm --dir frontend run type-check
+pnpm --dir backend exec jest --runInBand brochure
+node --test deploy/brochure-ui.test.cjs
+```
+
+![镜像缺少依赖导致 404，安装程序恢复旧源码；随后改用官方源重试。](../frontend/public/tutorial/deployment/119-pdf-registry-recovery.jpg)
+
+1. 依赖下载 404 是镜像问题，保留锁文件并切官方源。
+2. 错误时恢复旧版本，不继续切换进程。
+
+![程序发布通过构建和正式域名检查；此时还需要继续验证真实 PDF 引擎。](../frontend/public/tutorial/deployment/120-pdf-release-ready.jpg)
+
+1. 程序检查通过不是 PDF 导出验收，要继续实测。
+
+- [ ] 安装没有 404；测试通过后才能发布，错误时保持旧版可用。
+
+### 选择站点和产品语言后导入
+
+顶部打开“产品生成PDF”，路由仍为 /#/brochures。先选择网站，再在资料信息中选择“产品语言”；选项来自该站点启用的语言，不把不同网站的产品混在一起。支持中文、英语、西班牙语、法语、俄语、阿拉伯语、葡萄牙语、印尼语、土耳其语和越南语。
+
+点击“从产品库导入”，勾选产品后导入。列表以中文主产品为索引，同时显示目标语言栏目和翻译状态；真正导入时读取该产品的目标语言标题、简介、图片说明和完整 content 正文。栏目按已有 sourceMenuId 关系匹配，不按顺序猜配。
+
+目标语言缺译时保留空缺并提示核对，不把中文静默当作外语内容。可从导入列表打开原产品编辑页补齐翻译，也可只在本份资料中补写。模型或翻译调用不在 PDF 导入过程中自动执行。
+
+![产品语言来自当前站点的已启用语言，先选语言再导入产品。](../frontend/public/tutorial/deployment/121-pdf-language-options.jpg)
+
+1. 选择本份 PDF 的产品语言。
+
+![实际导入英文 CR1000I，列表显示目标语言栏目和翻译状态。](../frontend/public/tutorial/deployment/122-pdf-english-import.jpg)
+
+1. 导入英文正文，栏目也使用英文关联。
+2. 勾选后导入所选产品。
+
+- [ ] 资料语言、导入对话框语言、栏目和正文一致；不同站点数据不混用。
+
+### 完整详情自由编辑，不额外生成参数表
+
+导入产品后，在“产品详情正文”编辑整个 HTML 字段，可增加或删除标题、段落、列表、图片以及原文已有的表格。不会自动拆出一张新的参数表，也不会重复生成独立参数数据。旧版资料的参数保留在折叠区，可明确点击“移除参数表”。
+
+“加入文档”开关只控制是否输出正文，关闭不会清掉已写内容；“清空正文”会确认后清空当前资料；“读取产品详情”会确认后替换为所选语言的库中原文。缺译或读取失败时不覆盖当前正文。手动添加的产品也可以直接填写 HTML、插入图片。
+
+编辑区有 HTML 源码与正文预览，右侧是最终分页预览。导出保留正文结构，统一 PDF 排版，不加载网站导航、脚本、iframe、远程样式和固定宽高。原网站有视频时需要改成文字说明或静态图片，不会自动抓取视频。
+
+全部修改只保存到当前站点的 PDF 资料，不回写产品库或 PB。完整正文可能包含你原先写的价格、联系方式等信息，导出前应自行核对；系统不会偷偷删改原字段。
+
+![完整 HTML 正文编辑区。截图时预览相对图片问题尚未修复；该问题与处理方法记录在本章最后一节。](../frontend/public/tutorial/deployment/123-pdf-full-detail-editor.jpg)
+
+1. 直接编辑完整字段，不另建参数表。
+2. 可排除正文、重新读取或确认清空。
+
+- [ ] 编辑、关闭正文、重新加入、清空和重新读取均只改变当前资料。
+
+### 语言版本独立保存，避免覆盖原稿
+
+已添加产品后切换语言，会出现“保存并新建”确认。先保存当前版本，再另建目标语言草稿；如果保存或读取翻译失败，保持原资料和原 ID。空白新资料可以直接选择语言。
+
+语言副本保留版式、公司信息和选中的图片，文字及详情重新读取目标语言。自定义文字不自动翻译；纯手动产品保留图片并清空文字，需要重新填写。当前资料中手工增删的正文不是原产品翻译库，切语言不会假装已经翻译。
+
+生成副本后核对标题、公司信息、中文残留和缺失内容，再点击“保存资料”。“已保存资料”可按语言、标题查询；“另存为”用于同语言多份客户版本。后续编辑原产品不会自动覆盖已保存的资料。
+
+- [ ] 两个语言版本的 ID 独立，重新打开原稿内容保持不变。
+
+### 调整 PDF 字号、行距和段落间距
+
+进入产品生成PDF，在资料信息下方找到“PDF 排版”。正文字号默认 11pt，可调 9–16pt；正文标题默认 16pt，可调 12–24pt；正文行距默认 1.6 倍，可调 1.2–2.2 倍；段落间距默认 6pt，可调 0–16pt。pt 是印刷字号单位，不是网页像素。
+
+字体高度通过“正文行距”控制，不给文字区固定高度。标题字号调整详情的 H1–H6 层级，不改变封面标题、产品型号或页眉页脚。正文中的原网页行内字号不会覆盖这里的设置，但原始 HTML 字段不被修改。
+
+推荐先用正文 11–12pt、行距 1.6–1.8。修改后等待右侧重新分页完成，再检查页数、表格和末页。正式站 CR1000I 英文测试草稿从 11pt / 1.6 调为 12pt / 1.8 后，由 12 页变为 14 页；这是内容重排的结果，并非固定页数。
+
+清空数值会恢复该项默认值；右上重置按钮只恢复排版设置，不删除正文、图片和产品。设置随保存资料、另存为、语言副本保留，各站点和各份资料独立。旧稿缺少排版字段时使用默认值，无需数据库迁移。
+
+![正式后台中的 PDF 排版设置。CR1000I 英文草稿调整到 12pt、1.8 倍行距，右侧自动重新分页为 14 页。](../frontend/public/tutorial/deployment/134-pdf-typography-controls.jpg)
+
+1. 正文字号和正文标题字号分别调整。
+2. 字体高度用行距控制，不固定文字高度。
+3. 表格另设字号、间距和三种样式。
+4. 字号变化后自动计算新的页数。
+
+- [ ] 修改字号或行距后预览页数重新计算；保存并重开仍保留设置，原产品内容不变。
+
+### 原文表格采用网页式分组与跨页表头
+
+默认“网页浅蓝”参考产品详情网页：浅蓝表头、浅蓝全宽分组栏、细边框、正常字重的参数值；原文明确写出的加粗仍保留。产品详情里的表格原样作为内容来源，不额外生成第二张参数表。
+
+“简洁横线”省去竖向边框，适合文字较多的说明；“清晰网格”增强格线，适合多列表格。表格字号默认 10.5pt，可调 8–14pt。表格行间距控制单元格内边距，可选紧凑、标准、宽松；表格文字行距跟随正文行距。
+
+保留原表格的列、合并单元格和数据顺序。已有 THEAD 的表格在续页重复表头；没有 THEAD、但首行全为 TH 的普通表格，仅在输出副本中提升为表头。全宽 TH 分组栏尽量与下一条参数同页，避免分组标题独自出现在页尾。
+
+复杂嵌套表格不自动猜测表头；超大合并单元格、极长单元格应实际预览，必要时在正文里拆分表格。统一排版不等于所有网站 CSS 都能完整搬进 PDF。多语言内容较长时，可先用紧凑间距，再合理减小表格字号，不拉伸文字也不删除数据。
+
+![真实产品网页里的技术参数表，作为 PDF 表格的视觉参考；本次没有修改网站原表格。](../frontend/public/tutorial/deployment/131-product-web-table-reference.jpg)
+
+1. 浅蓝表头和完整网格。
+2. 全宽分组栏保留在 PDF 中。
+
+- [ ] 表头续页重复、分组栏清晰；核对首行、末行及合并单元格，没有丢行或重复数据。
+
+### 宝塔发布字号更新并验证成品
+
+本次通过宝塔文件页上传 pboot-pdf-typography-20260912.tgz，先校验包的 SHA-256 和服务器旧源码指纹，再备份到 /www/backup/pboot-pdf-release-20260912085552937。备份包含本轮涉及的源码、文档和前后端构建输出，不覆盖数据库。
+
+依赖安装、类型检查、界面逻辑测试、后端校验测试及前后端构建通过后，切换静态目录并只重启 pboot-admin-api。使用 --api-only 打包模式，不重启 SEO、FTP 和定时 worker；发布后的登录及导航检查仍覆盖三个入口。
+
+本地用中文、英语、阿拉伯语、越南语长文及 60 行参数验证三种表格样式，检查完整行数、跨页表头、分组不孤立、行距、字号、A4 页面和末尾内容。生成的 PDF 再通过 Poppler 渲染，不能只凭页面预览判断服务器可导出。
+
+已打开旧版页面时，应重新打开产品生成PDF地址加载新版。升级不改 PB 产品原文，也不把测试草稿写回产品库。正式保存只写独立 PDF 资料；发布脚本不提交或推送 GitHub。
+
+隔离回归检查（不修改业务数据）
+
+```sh
+node --test deploy/brochure-ui.test.cjs
+node deploy/brochure-browser-check.cjs
+pnpm --dir backend exec jest --runInBand brochure
+pnpm --dir frontend run type-check
+```
+
+![宝塔文件管理确认字号排版更新包上传成功后，再执行校验与部署。](../frontend/public/tutorial/deployment/132-typography-upload-success.jpg)
+
+1. 等待上传成功，不在上传过程中离开。
+
+![字号更新完成，仅管理 API 重启；登录、站点列表和两个独立工具入口检查通过。](../frontend/public/tutorial/deployment/133-typography-release-ready.jpg)
+
+1. SEO、FTP 和 worker 未重启。
+2. 发布完成，备份路径写入日志。
+
+- [ ] 日志出现 PDF_RELEASE_COMPLETE，再检查正式 PDF 的表格、字体和末页，保留发布前备份。
+
+### 预览一直排版或误报翻译超时
+
+旧版将普通接口超时也提示为翻译中断。出现该提示并不代表模型失败，也不能说明服务器已经取消任务。新版改为通用超时提示；如果刚才正在保存，应先查看已保存资料，确认是否成功，不要连续另存造成重复记录。
+
+预览只在浏览器中分页，不调用翻译模型。现场曾出现图片全部加载完成、分页停在第 6 页的情况。分页库使用动画帧和空闲回调，嵌入预览被隐藏、移出可视区时可能被浏览器限制。新版仅在隔离的文档内提供定时器兜底，主后台的动画调度保持不变。
+
+先看预览栏：加载图片、加载字体、自动分页。图片或字体超时会显示相应错误；不要通过删除产品库内容来解决预览问题。点击右侧圆形刷新按钮“重新排版”，重新生成当前草稿的预览。编辑模式停止预览，切回编辑与预览或预览模式会按最新内容重新分页。
+
+2026-09-13 更新：相同地址合并预加载，同时最多加载 3 个图片地址；单次最多 15 秒，失败自动重试一次，图片队列最多 60 秒。图片解码、字体、分页另设 10/15/60 秒限制，父页面 150 秒兜底。失败停止剩余队列，不展示不完整页数、不自动忽略缺图；旧结果通过代次编号隔离，不覆盖新一轮预览。
+
+页面先恢复当前网站的浏览器草稿，再读取站点公司资料。公司资料接口超时不会跳过已有草稿；初始化失败或缓存格式异常时，不用默认空文档覆盖原缓存。正式保存仍需点击保存资料。
+
+本次修复采用 --frontend-only 发布，只替换前端构建，不重启 API、SEO、FTP 或定时进程，不迁移数据库。发布前核对源码指纹并备份，完成后用当前产品正文验证预览、重新排版和服务器 PDF。
+
+预览恢复回归测试
+
+```sh
+node --test deploy/brochure-ui.test.cjs
+node deploy/brochure-browser-check.cjs
+pnpm --dir frontend run type-check
+```
+
+![预览恢复更新包在宝塔上传成功，本次只替换前端。](../frontend/public/tutorial/deployment/139-pdf-recovery-upload.jpg)
+
+1. 先确认上传成功，再执行校验和部署。
+
+![实际发布日志：预览修复通过构建、三个正式入口和登录检查，无数据库迁移。](../frontend/public/tutorial/deployment/140-pdf-recovery-release.jpg)
+
+1. 上传包的校验结果为 OK。
+2. 完成后记录备份路径，不把部分构建当成部署成功。
+
+![同一份英文 CR1000I 浏览器草稿恢复为完整 14 页；没有保存或回写原产品。](../frontend/public/tutorial/deployment/141-pdf-preview-recovered.jpg)
+
+1. 页数已显示 14 页，不再一直 Preparing pages。
+2. 需要重新分页时用此刷新按钮，编辑内容不变。
+
+- [ ] 浏览器限制动画回调时仍可分页；无效或不响应图片明确失败；长表格首末行完整，重新排版不改变资料。
+
+### 检查固定 A4、离线图片和服务器 PDF
+
+编辑工作区随浏览器撑满宽度，桌面左右分栏、窄屏上下排列；独立网页仍以最大 1500px 展示，纸张固定为 A4 纵向。内容超过一页自动续页；“每个产品另起一页”可关闭；图片尺寸支持大图和适中，图片保持比例。详情中的长图限制到单页可用高度，长正文正常续页。
+
+阿拉伯语采用 RTL；正文中的拉丁型号、数值和单位通过隔离方向保留正确次序。固定标题提供十种语言，正文只读取现有译文，不自动生成翻译。外语版本检测到中文时提醒核对，不替用户断定翻译正确。
+
+网页和 PDF 导出会读取并内嵌主图、附图和详情正文图片，重复地址只读取一次。缺图、无效链接、跨域被拒绝或超限会明确失败，不输出残缺文件。外站图无法读取时应重新上传图片并替换正文地址。
+
+单份最多 20 个产品，每个正文最多 30 万字符，保存 JSON 总计不超过 2MB；上传单图 5MB，导出单图 10MB、图片合计 40MB；分页最多 150 页，输出 PDF 最多 80MB。关闭正文开关后该块的图片不会参与导出。
+
+先看预览页数和“待核对”项目，再选打开网页、下载 HTML 或导出 PDF。PDF 在自己的服务器生成，不使用电脑打印窗口、不上传第三方 PDF 网站；下载后要核对正文末尾、图片、页码和字体。
+
+本轮实际从正式英文产品 CR1000I 导入，下载到 12 页 A4 PDF，包含主图、正文、原文表格、附图及最后联系方式。资料保持未保存测试草稿，没有回写产品或 PB。不同内容、字体和图片设置会产生不同页数，12 页不是固定模板。
+
+- [ ] 桌面与手机预览不溢出，PDF 文本可读、图片完整、末尾内容和页码正确。
+
+### 全宽工作区、去缩略图与两列产品图
+
+进入产品生成PDF，编辑与预览工作区撑满可用宽度，仅保留两侧操作留白。桌面左右各半，窄屏上下排列；编辑单视图也不再限制为 1500px。不要把屏幕工作区宽度当作纸张宽度，导出始终是固定 A4。
+
+新导入时只读取产品大图和轮播图，不再额外读取缩略图 0.jpg，避免它与第一张轮播图视觉重复。大图为空时第一张轮播图作为主图；只有缩略图而没有大图、轮播图的产品不会自动添加图片，应自行选择图片。
+
+第一张主图独占一行，其余附图保持原顺序，每行两张。三张附图是 2+1，四张是 2+2，五张是 2+2+1；末尾落单一张全宽显示，保留原比例，不裁切设备。可继续手动上传、替换、移动、删除引用和修改说明。
+
+附图按一组两张计算分页，当前页剩余高度不足时整组移到下一页。产品详情 HTML 内的图片保持正文位置，不移动到附图区。网页预览、下载 HTML 和 PDF 共用同一分组排版。
+
+旧的已保存资料和浏览器草稿不清洗、不自动删除缩略图，手工选择仍保留。截图使用旧英文 CR1000I 草稿验证兼容，因此第一组仍能看到旧的重复缩略图；用户可以在本份资料里手动删除。新版默认去缩略图要通过重新导入产品验证，不修改产品库原文件。
+
+预览栏显示加载图片的完成数量和重试状态。偶发失败会自动重试一次，最终仍失败时显示错误和重新排版按钮，原稿不变。无效图片、跨域限制或持续断网不会被伪装成成功；下载前必须处理错误。
+
+本次用隔离测试覆盖首次 503 后恢复、最多三路请求、无效及不响应图片、0 至 5 张附图、四种语言长文表格和旧草稿。线上旧英文 CR1000I 草稿从 14 页缩为 12 页，仅布局变化，不代表所有产品固定 12 页。
+
+同一轮功能发布只保留一份必要回滚备份。随后补教程时，install-tutorial-update.sh 可传入该轮 pboot-pdf-release 目录，复用目录并只备份实际变化的教程源文件，旧静态目录直接移动保留；不再重复打包整个项目。不得传入其他项目或未经核验的备份路径。
+
+布局和预览回归测试
+
+```sh
+node --test deploy/brochure-ui.test.cjs
+node deploy/brochure-browser-check.cjs
+pnpm --dir frontend run type-check
+```
+
+![在宝塔 /www/backup 上传本轮小型前端更新包。](../frontend/public/tutorial/deployment/148-pdf-gallery-upload.jpg)
+
+1. 确认文件上传成功，再执行构建。
+
+![前端发布完成，正式域名检查通过；未迁移数据库或重启后台任务。](../frontend/public/tutorial/deployment/149-pdf-gallery-release.jpg)
+
+1. 发布完成后仍要在页面实测预览和导出。
+
+![线上编辑工作区撑满可用宽度，旧英文草稿完成 12 页排版，内容未改动。](../frontend/public/tutorial/deployment/150-pdf-full-width.jpg)
+
+1. 仅保留两侧留白，工作区不再限制 1500px。
+2. 显示页数表示排版完成，可再次重新排版。
+
+![附图每行两张。此图为旧草稿，旧的重复缩略图按兼容原则保留，需用户手动移除。](../frontend/public/tutorial/deployment/151-pdf-gallery-pairs.jpg)
+
+1. 同一组两张图片同行，不跨页拆散。
+2. 后续图片继续按原顺序两列展示。
+
+![最后一张附图单独占满一行，按原比例显示。](../frontend/public/tutorial/deployment/152-pdf-gallery-single.jpg)
+
+1. 落单附图独占整行，不留半行空位。
+
+![390px 窄屏验证：编辑与预览上下排列，操作栏换行；不把整页横向撑开。](../frontend/public/tutorial/deployment/153-pdf-gallery-mobile.jpg)
+
+1. 操作按钮按可用宽度换行。
+
+- [ ] 主图独占一行，附图两列，末尾单张全宽；图文不丢失，旧资料不被清洗，失败可重试。
+
+### 报价单：选择语言并保存独立版本
+
+打开顶部“报价单生成”，路径 /#/quotations。先确认当前网站，再新建或打开已有报价；编辑区上方的“报价语言”只列出该网站启用的语言，支持十种语言。空报价可以直接切换语言；不再默认加入第一件产品。
+
+已有产品时选择另一种语言，确认后先保存当前原稿，再读取每件产品已有的目标语言名称、栏目和技术参数，生成新编号的独立报价。新版本还需点击“保存报价单”。取消、保存失败、译文读取失败或编号获取失败，都不替换当前编辑稿。
+
+这一步不调用 AI 翻译整份报价，也不把中文静默当作外语。缺少产品名称译文时先在产品管理补齐；外语参数从该语言正文表格或简介提取，不直接搬用中文公共参数。部分字段缺失时会提示核对，可以在报价中补写。
+
+数量、单价、币种、运费、定金比例、客户资料、选中图片与自定义备注保持原值，不换算汇率。已知默认标题和默认条款会切换文字，自定义公司简介、商务条款和客户信息需人工核对。原报价中手工改过的参数保存在原稿，新语言版本重新读取产品库参数。
+
+报价单列表可按语言筛选，打开、编辑、保存后保留原语言，不再强制回到中文。各网站的服务器记录和浏览器草稿相互隔离；旧缓存格式异常时保留原缓存，不用空白默认稿自动覆盖。公司资料读取失败也不会清空已恢复草稿。
+
+![正式站报价语言选项来自当前网站；展开查看后取消，未保存或替换旧稿。](../frontend/public/tutorial/deployment/161-quotation-language.jpg)
+
+1. 先选目标语言；有产品时会确认保存原稿并另建版本。
+
+![报价语言版本流程 · SVG 示意](../frontend/public/tutorial/deployment/quotation-version-flow.svg)
+
+
+- [ ] 原报价和新语言报价编号、记录 ID 独立；数量、单价等商务数据不变，原产品和 PB 数据不回写。
+
+### 报价单：A4 自动续页与服务器直接下载
+
+报价单现在与产品 PDF 一样提供“编辑与预览”“编辑”“预览”三种视图，桌面左右各半、撑满可用宽度，手机上下排列。纸张仍是 A4 纵向，不随屏幕宽度改变。修改后稍等预览重新排版，右侧显示页数才表示完成。
+
+产品图片、数量、单价和小计独立排版，技术参数使用真实表格，长表格自动续页并重复表头，保留全部导入参数，不再只取前 80 条。设备总价、运费、定金、尾款及报价总额单独显示。新选产品默认使用产品大图，无大图时选第一张产品图，不默认添加缩略图；每件产品最多可选三张图片，也可全部取消。
+
+“打开网页”和“下载 HTML”先内嵌图片并完成分页。“导出 PDF”通过当前后台已认证的 POST /api/brochures/export-pdf 调用本服务器 Chromium，直接下载文件，不弹电脑打印窗口，不向第三方 PDF 网站上传数据。接口名称沿用现有产品 PDF 接口，无需额外购买 PDF 服务。
+
+预览共用图片队列、自动重试和 150 秒总超时，失败时点“重新排版”。坏图明确报错，不输出缺图的成功文件。导出 413、502 或 504 时检查 Nginx 请求大小、超时和 API 日志，再检查本章服务器浏览器、字体与沙箱步骤，不能关闭登录或沙箱来解决。
+
+下载提示未出现时，先检查浏览器下载列表和本机下载文件夹。本轮内部浏览器自动化未捕获 blob 下载事件，但实际文件已经下载；服务器日志同时记录 201、1268661 字节，下载文件也是 1268661 字节。工具等待超时不等于导出失败，不要连续点击制造多次任务。保存请求超时则先查报价单列表，再决定是否重试。
+
+本次正式站用已有中文 DTH30C 浏览器草稿导出 3 页 A4 PDF，并将三页逐一渲染检查：主图、33 条参数、表头、最后一条附件、汇总及页脚完整。草稿里的零报价保持原值，仅用于验证排版，不是可以发给客户的正式报价；未新建服务器报价记录或改写旧数据。实际页数随内容变化。
+
+![正式站旧中文报价恢复后完成 3 页 A4 预览。画面零金额为旧草稿原值，不是正式报价。](../frontend/public/tutorial/deployment/159-quotation-workspace.jpg)
+
+1. 显示 A4 和页数表示预览已完成。
+2. 金额仅按数量、单价和运费计算，不交给模型翻译。
+
+![宝塔终端核实真实 PDF 请求：最后一行返回 201、1268661 字节，与已下载文件一致。](../frontend/public/tutorial/deployment/160-quotation-pdf-response.jpg)
+
+1. 应同时检查实际下载文件，不能只看自动化等待结果。
+
+![实际服务器下载文件的第 3 页渲染图（不是浏览器预览截图）：末行参数、运输、汇总和页脚完整。零金额沿用旧草稿。](../frontend/public/tutorial/deployment/162-quotation-pdf-last.jpg)
+
+1. 导出后逐项核对定金、尾款和总额；示例不是正式报价。
+
+- [ ] 实际下载文件可打开，检查首末页、图片、参数末行、金额及页码；语言切换和排版不能改变商务数值。
+
+### 报价更新：隔离验证、宝塔发布与单次备份
+
+2026-09-13 通过宝塔上传 pboot-quotation-update-20260913.tgz，校验包与旧源码指纹后执行前端更新。沿用既有服务器 PDF 引擎，无数据库迁移，不重启 API、SEO、FTP 或定时 worker。成功日志为 PDF_RELEASE_COMPLETE，并完成三个正式入口的登录、导航和模型状态只读检查。
+
+隔离浏览器测试覆盖十种语言、每份 95 条参数、跨页表头、最后参数与末尾内容、金额定金计算及阿拉伯语方向；再通过模拟 API 验证保存中文、切换英语、保存英语和服务器 PDF 按钮。桌面 1440px 与手机 390px 无横向溢出。测试不向真实数据库创建报价。
+
+本轮唯一的发布回退目录是 /www/backup/pboot-pdf-release-20260913064949084。教程随后增量发布复用这个目录，只追加实际变化的教程源文件和旧静态输出，不重复创建整项目备份；不提交或推送 GitHub。其他轮次必须使用各自验证过的回退目录，不能盲用本例路径。
+
+项目根目录执行隔离检查
+
+```sh
+node --test deploy/quotation-ui.test.cjs deploy/brochure-ui.test.cjs deploy/fresh-install-ui.test.cjs tools/public-navigation.test.cjs
+node deploy/quotation-browser-check.cjs
+pnpm --dir frontend run type-check
+```
+
+- [ ] 类型检查、24 项逻辑测试、十语言浏览器测试通过，再用正式站下载文件验收；不以模拟测试代替真实导出。
+
+### PDF 引擎失败：单独降权 Chromium，不关闭沙箱
+
+现象：页面预览可用，但点导出后提示 PDF 引擎运行失败。首先在宝塔终端检查实际 PM2 用户、浏览器路径、字体和系统依赖；API 启动成功不能代替 PDF 实际生成测试。本次原因是 API 以 root 运行，浏览器只在 /root/.cache/ms-playwright，且缺少专用执行入口。
+
+本项目 deploy/configure-brochure-chromium.cjs 仅适配当前 /www/wwwroot/pboot_admin_center 布局，其他路径先修改并审核。脚本把匹配版本浏览器复制到 /www/server/pboot-pdf-browser，创建无登录权限的 pbootpdf 用户，保留浏览器文件为 root 所有，仅工作目录可写。
+
+deploy/chromium-pdf-sandbox.sh 通过 setpriv 只降低浏览器权限，清除继承环境，保持 DevTools 管道；只调整本次 Playwright 临时 profile 的所有者，不递归修改网站目录。chromiumSandbox:true 保持启用，不能加 --no-sandbox 绕过错误。
+
+脚本先在真实沙箱内生成小 PDF。只有 SANDBOX_PROBE_PASS 后才备份 backend/.env 到 /www/backup 并设置 BROCHURE_PDF_EXECUTABLE_PATH，随后仅重启 API。探测失败时不更新 API 环境，应继续按错误补依赖或改用受支持运行环境。env 备份包含密钥，权限必须为 600，不能放教程或公开目录。
+
+当前服务器执行（上传并校验脚本后）
+
+```sh
+cd /www/wwwroot/pboot_admin_center
+export PATH=/www/server/nvm/versions/node/v22.23.2/bin:$PATH
+export PM2_HOME=/root/.pm2
+node deploy/configure-brochure-chromium.cjs
+```
+
+仅在出现 SANDBOX_PROBE_PASS 后执行
+
+```sh
+pm2 restart pboot-admin-api --update-env
+pm2 save
+```
+
+![宝塔实际执行：上传校验通过，低权限 Chromium 保留沙箱并成功生成测试 PDF。](../frontend/public/tutorial/deployment/124-pdf-sandbox-probe.jpg)
+
+1. SANDBOX_PROBE_PASS 后才更新环境并重启 API。
+
+- [ ] 低权限 Chromium 沙箱探测通过，再用页面里的导出按钮实际下载完整 PDF；不改变 PB 或整个 API 的运行用户。
+
+### 预览缺图或正文图标变方框的处理
+
+本次正式站使用同域 /api 图片代理。旧预览只允许绝对 HTTP 地址，导致主图/附图被略过，预览显示 9 页而导出内嵌图片后是 12 页。现已在 brochureImageUrl 将代理地址解析为当前后台域名的绝对地址，同时保留 siteId，不能拼到其他站点或 PB 域名。完整正文图片也走同一映射。
+
+不要为解决缺图而关闭浏览器跨域保护或在 HTML 内写入 Token。检查当前站点代理返回 image/*、图片解码完成，再分页；导出仍会将图片内嵌到文件。补充的浏览器测试使用 /api 相对地址模拟正式环境，防止只在 localhost 绝对地址上通过。
+
+另一问题是 PDF 文字正常，但正文标题的图标成为方框。这不是正文丢失，而是 Linux 缺 Emoji 字体。本次 OpenCloudOS 9 安装 google-noto-emoji-color-fonts 并更新字体缓存；重新生成 PDF 后图标正常。不删除原文图标来掩盖字体缺失。
+
+本次实际 PDF 下载后由 Poppler 检查 A4、页数并渲染页面，核对首页大图、正文、表格续页、附图与尾页；原始导入正文保留，不自动修正旧产品内容。
+
+OpenCloudOS 9 的图标字体（其他系统先查询包名）
+
+```sh
+dnf list available '*emoji*'
+dnf install -y google-noto-emoji-color-fonts
+fc-cache -f
+fc-match emoji
+```
+
+代码回归检查
+
+```sh
+node deploy/brochure-browser-check.cjs
+node --test deploy/brochure-ui.test.cjs
+pnpm --dir frontend run type-check
+```
+
+![OpenCloudOS 9 安装 Noto Color Emoji，重新生成后 PDF 正文图标正常。](../frontend/public/tutorial/deployment/125-pdf-emoji-fonts.jpg)
+
+1. 安装成功后更新缓存，并确认字体匹配。
+
+- [ ] 预览主图与附图可见；导出文件图标不再是方框，检查末页确认正文没有被截断。
+
+## 17. 上线验收清单
+
+分层验证：网络与服务、登录与导航、业务读取、受控写入。前一层成功不能代表后一层已通过。
+
+### 运行不发布的生产检查
+
+deploy/verify-production.cjs 检查 HTTP 转 HTTPS、证书、管理员登录、站点列表、工具网页匿名 303、登录表单 200、匿名 API 401、认证后 200、公共导航与模型状态、SEO 到 FTP 的身份转交及退出。
+
+只需一份主后台凭据 JSON，字段为 email/password，放在 /root 等非公开目录并设置权限 600。文件名使用示例，内容私下填写；新版不再需要旧工具 Basic 认证文件。
+
+脚本不调用模型、不扫描网站、不执行 FTP 和发布。本次接入后两个工具 setupRequired=false；不能把接口验收写成全业务验收。
+
+替换域名及私有凭据文件路径
+
+```sh
+cd /www/wwwroot/pboot_admin_center
+node deploy/verify-production.cjs https://admin.example.com https://seo-admin.example.com https://ftp-admin.example.com /root/admin-check.json
+```
+
+- [ ] 只读生产检查通过，认证、路径与跨工具站点正确。
+
+### 抽查真实业务读取
+
+检查栏目层级、语言对应、产品数量、详情大图与参数、新闻和单页。确认当前 siteId 始终一致。
+
+本次已验证：32 组中文/外语栏目、11 个产品、1 篇新闻、2 个单页、产品媒体和参数。旧新闻缺图、首页旧车型文案、SEO 标题遗留内容单独记录。
+
+尚未执行：真实 AI 文章生成、反向覆盖 PB、FTP 传输、资源清理、视频推送及服务器重启。
+
+![本次 11 个产品导入并显示图片，数据不是实时统计](../frontend/public/tutorial/deployment/52-products-imported.jpg)
+
+1. 导入数量与 PB 源数量一致
+2. 抽查产品缩略图而非只看导入成功消息
+
+- [ ] 已记录已通过项目和未执行项目，不把内容缺失误报为部署成功。
+
+### 写入测试必须另选小范围并先备份
+
+需要验证后台写回网站时，先确认目标站点和栏目，备份对应 PB 数据，再选一条可恢复的内容测试。确认网站显示后再考虑批量。
+
+资源清理先扫描、查看引用证据、再人工勾选。动态拼接地址不能简单视为未使用，本次没有删除图片或目录。
+
+同机站点接入不要求 FTP。只有确有远程发布目标时再配置 FTP，先预览差异、确认范围与远程备份，不能拿发布按钮当连通性检查。
+
+> 注意：本教程的勾选进度只是阅读者的手动记录，不会替你执行同步、删除或发布。
+
+- [ ] 高影响操作有独立确认、备份、范围和恢复方案。
+
+## 18. 实际问题与排错速查
+
+先定位响应层级，再改最小范围。保留错误和修复后的对照，不通过删除数据消除提示。
+
+### 401、404、502、504 分开处理
+
+401：匿名工具 API 拒绝是正常保护；网页带 WWW-Authenticate: Basic 则检查旧宝塔规则是否仍在。新版网页应跳转可见登录表单，使用主后台账号。403 登录来源错误按“Origin 与 Referrer-Policy”步骤检查。
+
+404：区分 Nginx 未命中、PHP 入口、API 路径与静态文件缺失。/api/sites 应转到 API 的 /sites，proxy_pass 是否带尾部 / 会改变 URI 转发。
+
+502：检查对应端口的进程、启动错误、回环请求，再查反向代理目标。不要盲目开放内网端口到公网。
+
+504：确认后台任务仍在运行、模型是否限流，再检查对应站点超时；只调整具体长任务代理，避免全局无限超时。
+
+![工具打不开时先定位认证层 · SVG 示意](../frontend/public/tutorial/deployment/auth-flow.svg)
+
+
+- [ ] 已按状态码定位到认证、路由、进程或任务超时。
+
+### 重启、旧构建和空站点问题
+
+页面能打开但请求 localhost：环境变量改了却没构建，或部署的不是当前 dist。检查 frontend/.env.production.local 的优先级。
+
+新前端调用新 API 出现 Cannot GET：可能后端仍运行旧 dist。先核对路由源码、构建是否成功、PM2 cwd 与启动文件，再重启本项目 API。
+
+工具在无站点时不断重启：本次已修复空配置路径问题；最新代码应显示 setupRequired，不应循环崩溃。
+
+产品介绍显示站点 0、空站点离开被拦截、概览账号不显示：本次已做空态和导航回归。不要为掩盖这些问题自动灌入测试业务数据。
+
+- [ ] 前后端版本与运行目录一致，空站点保持可操作的空态。
+
+### 路径、图片与翻译误判
+
+Linux 扫描仍是 E:/：新默认值接口未部署或前端缓存旧包；当前逻辑以服务器环境和所选站点为准。
+
+产品参数有值但编辑器看不到：读取 PB 字段、启用对应参数；大图等专用媒体字段不当普通参数管理。
+
+翻译 429：先处理提供商限流/额度，保留已完成语言，换可用模型或稍后重试；不要删除语言绑定。
+
+新闻缩略图 FAILED：先确认静态文件接口的具体响应。本次两张原文件缺失，不是 Nginx 压缩比或尺寸限制导致。
+
+![修复后的 Linux 扫描默认值](../frontend/public/tutorial/deployment/62-baota-scan-defaults-verified.jpg)
+
+1. 父目录默认为 /www/wwwroot
+2. 运行环境默认宝塔，与浏览器系统无关
+
+![新闻导入成功，但历史原图缺失](../frontend/public/tutorial/deployment/53-news-imported.jpg)
+
+1. FAILED 需要检查对应源文件是否存在
+2. 未翻译 0/9 是该新闻的真实状态
+
+- [ ] 错误按真实原因分类，没有为修复显示问题删除原数据。
+
+### 宝塔终端、补丁与安全记录
+
+终端初次打开可能连接缓慢；等出现 shell 提示符再输入。多行脚本注意 UTF-8、LF 与 here-document 结束符，不把一段输出当成命令继续运行。
+
+补丁应用前检查 git status 和受影响文件，git apply --check 通过后再应用。服务器已有未提交修复时，不用 git reset --hard 或重复应用同一补丁。
+
+2026-09-12 教程发布时，cp -an 在跳过已存在的旧资源时返回非零，导致 set -e 中止发布。旧 dist 当时未切换，因此仍能访问。现已改为 Node COPYFILE_EXCL 保留缺少的旧资源，仅忽略 EEXIST，其他错误仍停止；补充重复执行和不覆盖新资源的测试。不要直接忽略所有复制错误，也不要重新执行首次安装。
+
+本次数据库能被公网下载的问题已加站点专用 Nginx 防护。面板 HTTP、账号弱保护仍应后续改进，不为教程截图关闭认证。
+
+截图只记录表单、结果与无密钥日志；不截图 .env、凭据文件、私钥、带 Token 的请求或命令。
+
+- [ ] 能复现操作步骤，保留回退依据，教程资料不含凭据。
+
+## 19. 后续更新、备份与回退
+
+更新现有项目不执行首次安装脚本。只重启本项目需要更新的进程，不重启整台服务器。
+
+### 先确认差异并建立更新备份
+
+记录 git status、当前代码版本、PM2 cwd/用户/状态、Nginx 配置以及构建目录。没有 Git 时记录包版本与校验值。
+
+准备一个全新的、非公开的时间戳备份目录。停止 API 与 worker 的写入后，备份中央库和本次受影响的运行配置、源码及 dist，再按原状态恢复。不要把已有暂停的自动任务擅自启用。
+
+本次回退材料在 /www/backup/shanbo-rig-onboarding-20260911：原 vhost、前后端 dist 和改动前源码。新一轮更新创建新目录，不覆盖这份备份。
+
+更新前只读盘点
+
+```sh
+cd /www/wwwroot/pboot_admin_center
+git status --short
+git rev-parse HEAD
+pm2 list
+```
+
+- [ ] 已保留更新前版本、文件和数据，知道本次要替换哪些内容。
+
+### 安装锁定依赖、测试、构建、再发布
+
+只传本次修改文件和新增素材，不覆盖 .env、data、managed-sites 或用户上传。依赖变化时按各自锁文件安装。
+
+先测试再构建，两端都通过才发布；仅前端变更一般不需要重启 API。后端变更要确认单实例安全重启，SQL.js 不用多实例滚动重载。
+
+Nginx 配置变化先 nginx -t。前端新页面上线后强制刷新，确认资源不 404，旧页面仍能工作。
+
+本次教程先构建到 dist-tutorial-next，校验后保留旧版带哈希的 assets，再切换目录；上一版保存在 dist-before-tutorial-时间戳。只重启 SEO/FTP 两个导航相关工具，没有重启 API 或修改业务数据。不要重复运行已完成的同一更新包。
+
+> 注意：命令逐步执行并检查结果，不能在构建失败后继续重启；纯教程前端更新无需重启 API。
+
+按实际改动选择执行，任一步失败先停止
+
+```sh
+cd /www/wwwroot/pboot_admin_center
+pnpm --dir backend build
+pnpm --dir frontend build
+node --test deploy/tutorial-content.test.cjs
+pm2 restart pboot-admin-api
+pm2 save
+```
+
+- [ ] 测试及构建通过，新版静态资源完整，相关进程正常。
+
+### 发现问题时做最小范围回退
+
+只有前端资源出错时，回退对应 frontend/dist；后端问题回退匹配的源码/构建并重启本项目 API。先检查新版本是否产生数据结构变化。
+
+恢复中央库前停止所有写库进程，确认这是必要操作，并先另存当前库。只因页面打不开就回滚数据库会丢失新内容。
+
+Nginx 回退只恢复目标站配置，验证成功才重载。不要整目录覆盖 /www/wwwroot，也不要恢复无关网站。回退后重新做 HTTPS、登录、站点和产品媒体检查。
+
+![更新失败时最小范围回退 · SVG 示意](../frontend/public/tutorial/deployment/rollback.svg)
+
+
+- [ ] 恢复对象与故障匹配，当前数据已留存，回退后重新验收。
+
+### 完成交接并维护教程
+
+交接主后台账号（也用于 SEO/FTP 网页登录）、宝塔入口、站点目录、备份位置、证书续签和模型/频道待配置项。工具各自保存会话，不是自动单点登录。密码走私有渠道，不能放入本页面。
+
+按本教程勾选确认只是当前浏览器的个人记录，不改变线上服务，也不代表自动检测通过。换浏览器需要重新核对。
+
+修改教程源数据后运行内容校验和构建；加入截图前检查敏感信息，更新箭头和图注。示意图必须标注 SVG 示意，不伪装成实操截图。
+
+2026-09-12 首次教程上线时，14 项针对性测试、正式域名后台登录、站点列表、SEO/FTP 认证、模型状态和跨工具教程入口通过，首批 32 个图片/示意图及素材清单经 HTTPS 校验一致。随后已追加中文站修复实录：宝塔伪静态补齐、负责人补充官方授权后，中文首页与栏目、产品、新闻详情恢复；全站 URL 模式迁移及其他语言验收不包含在本次已完成范围内。
+
+- [ ] 账号和运行资料已私下交接，已验证与待配置项目分别列清。
+
+## 官方参考
+
+- [Google：请求重新抓取](https://developers.google.com/search/docs/crawling-indexing/ask-google-to-recrawl)：普通产品与新闻的 Sitemap 和手动网址检查流程。
+- [Google：Search Console Sitemap PUT](https://developers.google.com/webmaster-tools/v1/sitemaps/submit)：官方接口路径及空成功响应。
+- [Google：Indexing API 适用范围](https://developers.google.com/search/apis/indexing-api/v3/using-api)：仅支持特定招聘与直播页面，通知不等于收录。
+- [DeepSeek：JSON 输出](https://api-docs.deepseek.com/guides/json_mode/)：连接测试使用 JSON object 模式，SEO 数组写作保持原流程。
+- [DOMPurify：HTML 安全清理](https://github.com/cure53/DOMPurify)：正文保留允许的 HTML 结构，移除脚本及不适合 PDF 的页面布局。
+- [PbootCMS：伪静态配置](https://www.pbootcms.com/docs/239.html)：PB 2.X / 3.X 的 Apache、IIS 与 Nginx 规则及二级目录注意事项。
+- [PbootCMS：官方免费域名授权](https://www.pbootcms.com/freesn/)：实际访问域名分别获取授权；多域名授权按官方格式补充，保留旧授权。
+- [PbootCMS：多语言建站](https://www.pbootcms.com/docs/234.html)：数据区域、语言模板、语言内容和切换标签。
+- [Nginx：HTTP Basic Authentication](https://nginx.org/en/docs/http/ngx_http_auth_basic_module.html)：旧 Basic 规则与备用保护；当前工具已使用应用网页登录。
+- [MDN：Referrer-Policy 与表单 Origin](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy)：no-referrer 可能使普通 form POST 的 Origin 为 null；与 fetch 请求行为不同，真实浏览器必须验收。
+- [Nginx：proxy_pass](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass)：代理 URI 与尾部斜杠的含义。
+- [PM2：Startup Script](https://pm2.keymetrics.io/docs/usage/startup/)：保存进程、自启和 Node 升级后的路径维护。
+
+截图箭头叠加显示见后台图文教程；本 Markdown 的图片链接需要部署站可访问。

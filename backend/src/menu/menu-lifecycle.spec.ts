@@ -152,6 +152,49 @@ describe('CN-driven menu lifecycle (isolated databases)', () => {
     expect(fs.readFileSync(pb)).toEqual(before); expect((await repo.findOneByOrFail({ id: cn.id })).pbootSyncPending).toBe(true);
   });
 
+  it('syncs imported cross-language URLs without changing existing paths or content', async () => {
+    const cn = await service.create(draft()); await translate(); await service.syncAllToPboot();
+    const en = (await repo.find()).find(item => item.sourceMenuId === Number(cn.id))!;
+    write('update ay_content_sort set filename=? where acode=?', ['rigs', 'en']);
+    await repo.update(en.id, { href: '/rigs', urlName: 'rigs' });
+    write('insert into ay_content values (?,?,?)', ['cn', cn.code.split(':')[2], '']);
+    const content = query('select * from ay_content');
+    const identities = query('select acode,scode,filename from ay_content_sort order by id');
+    await service.update(String(cn.id), { seoTitle: 'Updated title', orderNum: 8 });
+
+    expect(await service.syncOneToPboot(String(cn.id))).toMatchObject({ created: 0, updated: 2 });
+    expect(query('select acode,scode,filename from ay_content_sort order by id')).toEqual(identities);
+    expect(query('select title,sorting from ay_content_sort where acode=?', ['cn'])[0])
+      .toEqual({ title: 'Updated title', sorting: 8 });
+    expect(query('select * from ay_content')).toEqual(content);
+  });
+
+  it('still blocks duplicate URLs in the same language, even when an existing URL is unchanged', async () => {
+    const cn = await service.create(draft()); await service.syncAllToPboot();
+    write("insert into ay_content_sort (acode,scode,pcode,mcode,name,filename) values ('cn','99','0','3','Conflicting parts','RIGS')");
+    const before = fs.readFileSync(pb);
+    await expect(service.syncOneToPboot(String(cn.id))).rejects.toThrow('URL');
+    expect(fs.readFileSync(pb)).toEqual(before);
+  });
+
+  it('still blocks renaming an existing menu to a URL used by another language', async () => {
+    const cn = await service.create(draft()); await service.syncAllToPboot();
+    write("insert into ay_content_sort (acode,scode,pcode,mcode,name,filename) values ('fr','99','0','3','Existing French','occupied')");
+    await repo.update(cn.id, { href: '/occupied', urlName: 'occupied' });
+    const before = fs.readFileSync(pb);
+    await expect(service.syncOneToPboot(String(cn.id))).rejects.toThrow('URL');
+    expect(fs.readFileSync(pb)).toEqual(before);
+  });
+
+  it('does not allow a new menu to introduce another cross-language duplicate URL', async () => {
+    const cn = await service.create(draft());
+    write("insert into ay_content_sort (acode,scode,pcode,mcode,name,filename) values ('fr','99','0','3','Existing French','rigs')");
+    const before = fs.readFileSync(pb);
+    await expect(service.syncOneToPboot(String(cn.id))).rejects.toThrow('URL');
+    expect(fs.readFileSync(pb)).toEqual(before);
+    expect((await repo.findOneByOrFail({ id: cn.id })).pbootSyncPending).toBe(true);
+  });
+
   it('never infers translated categories by numeric offsets or sibling positions', async () => {
     const cn = await service.create(draft()); const first = await createChild(cn, 'first'); const second = await createChild(cn, 'second');
     const en = await repo.save(repo.create({ ...draft('Rigs'), siteId: 2, code: 'pboot:en:101', sourceMenuId: Number(cn.id), href: '/en-rigs', urlName: 'en-rigs' }));

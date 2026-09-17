@@ -14,11 +14,12 @@
       <div class="site-switcher">
         <el-icon><Monitor /></el-icon>
         <el-select
-          v-model="activeSiteId"
+          :model-value="activeSiteId || undefined"
           size="small"
           filterable
           :loading="sitesLoading"
-          placeholder="选择站点"
+          :disabled="!enabledSites.length"
+          :placeholder="enabledSites.length ? '选择站点' : '尚未添加网站'"
           @change="handleSiteChange"
         >
           <el-option v-for="site in enabledSites" :key="site.id" :label="site.name" :value="site.id">

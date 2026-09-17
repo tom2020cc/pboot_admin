@@ -1,0 +1,13 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const {execFileSync}=require('node:child_process');
+const root='/www/wwwroot/pboot_admin_center',front=path.join(root,'frontend/dist-brochure-layout-next');
+const run=(cmd,args)=>execFileSync(cmd,args,{cwd:root,stdio:'inherit'});
+assert.equal(fs.realpathSync(root),root);
+run(process.execPath,['--test','deploy/brochure-ui.test.cjs','deploy/quotation-ui.test.cjs']);
+run('pnpm',['--dir','frontend','run','type-check']);
+run(process.execPath,['deploy/brochure-browser-check.cjs']);
+run('pnpm',['--dir','frontend','run','build-only','--outDir',front]);
+run('chmod',['-R','a+rX',front]);
+fs.cpSync(front,path.join(root,'frontend/dist'),{recursive:true,filter:p=>p!==path.join(front,'index.html')});
+fs.renameSync(path.join(front,'index.html'),path.join(root,'frontend/dist/index.html'));
+console.log('BROCHURE_FRONTEND_FINALIZED');

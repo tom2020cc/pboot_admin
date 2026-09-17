@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="/site-context.js"></script>
+  <title>宝塔服务器巡检</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    main{max-width:1600px} .server-band{padding:24px 0;border-bottom:1px solid #dbe3ec}
+    h1{font-size:23px;margin:0 0 16px} .scope-grid{display:grid;grid-template-columns:1fr 2fr;gap:16px}
+    .scope-grid dt{color:#627086;font-size:13px}.scope-grid dd{margin:6px 0;font-weight:600;overflow-wrap:anywhere}
+    .server-controls{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+    .server-controls label{display:flex;flex-direction:column;gap:6px}.server-controls input[type=number]{width:125px}
+    .server-controls .toggle{flex-direction:row;align-items:center;align-self:center}
+    .metrics{margin:20px 0}.server-message{padding:12px;background:#edf6ff;border-left:3px solid #1681d6;overflow-wrap:anywhere}
+    .server-message.error{background:#fff0f0;border-color:#dd4545}.table-wrap td{overflow-wrap:anywhere}
+    #warnings{white-space:pre-wrap;max-height:220px;overflow:auto;color:#875714;font-size:13px}
+    .server-footer{font-size:13px;color:#68788a;margin:16px 0} .filter-row{display:grid;grid-template-columns:180px minmax(0,1fr);gap:12px;margin:16px 0}
+    .filter-row select,.filter-row input{min-width:0;width:100%} .report-actions{display:flex;gap:10px;flex-wrap:wrap}
+    .file-actions{display:flex;gap:6px;flex-wrap:wrap;min-width:200px}.file-actions button{font-size:12px;padding:5px 9px}
+    .danger{color:#bd2839;border-color:#e8acb5}.file-state{display:block;font-size:12px;color:#257346;margin-top:5px}
+    dialog{width:min(1050px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:0;border:1px solid #dbe3ec;border-radius:6px;color:#263444;box-sizing:border-box}
+    dialog::backdrop{background:rgb(15 25 35 / 45%)}.dialog-body{padding:20px;overflow:auto;max-height:calc(100dvh - 76px)}
+    .dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.dialog-head h2{margin:0;font-size:19px}
+    .file-meta{font-size:13px;line-height:1.8;overflow-wrap:anywhere}.file-code{white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;max-height:45vh;background:#f4f6f8;border:1px solid #dce3e9;padding:14px;font:12px/1.65 Consolas,monospace;tab-size:4}
+    .file-review{display:grid;gap:12px;margin-top:16px}.file-review input[type=text]{width:100%;box-sizing:border-box}.file-review label{display:flex;gap:8px;align-items:flex-start}
+    #fileError{color:#ad2735;white-space:pre-wrap} .records{margin-top:24px}.records summary{font-weight:600;cursor:pointer;margin-bottom:12px}.record{padding:12px 0;border-bottom:1px solid #dbe3ec;overflow-wrap:anywhere}.record small{display:block;color:#68788a;margin:5px 0}
+    @media(max-width:650px){main{padding:12px}.scope-grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.server-controls{align-items:stretch}.filter-row{grid-template-columns:1fr}.table-wrap{overflow:auto}.table-wrap table{min-width:620px}}
+  </style>
+</head>
+<body>
+  <header class="app-header"><div class="brand"><div class="mark">BT</div><span>宝塔服务器巡检</span></div><div id="status" class="header-status">正在读取</div></header>
+  <nav id="toolNav" class="tool-nav" aria-label="项目工具导航"></nav>
+  <main>
+    <nav class="page-switch" aria-label="FTP 功能"><a href="/">发布管理</a><a href="/security.html">FTP 安全巡检</a><a class="active" href="/server-security.html">宝塔服务器巡检</a></nav>
+    <section class="server-band">
+      <h1>当前网站文件安全</h1>
+      <dl class="scope-grid"><div><dt>服务器网站</dt><dd id="siteName">-</dd></div><div><dt>服务器根目录</dt><dd id="siteRoot">-</dd></div></dl>
+      <div class="server-message" id="scanMessage" role="status">尚无巡检结果</div>
+      <div class="server-controls" style="margin-top:18px">
+        <button class="primary" id="scanBtn">扫描当前网站</button><button id="stopBtn" disabled>停止扫描</button><button id="refreshBtn">刷新状态</button>
+      </div>
+      <div class="metrics" aria-label="扫描统计">
+        <div class="metric"><span>已检查文件</span><strong id="scanned">0</strong></div>
+        <div class="metric high"><span>高风险</span><strong id="high">0</strong></div>
+        <div class="metric medium"><span>需关注</span><strong id="medium">0</strong></div>
+        <div class="metric"><span>未完成读取</span><strong id="skipped">0</strong></div>
+      </div>
+      <div id="progress" class="server-footer"></div>
+    </section>
+    <section class="server-band">
+      <div class="server-controls">
+        <label class="toggle"><input id="enabled" type="checkbox">当前网站定时巡检</label>
+        <label>间隔（分钟）<input id="intervalMinutes" type="number" min="15" max="10080" value="360"></label>
+        <label>最多扫描条目<input id="maxFiles" type="number" min="100" max="100000" value="30000"></label>
+        <label>单文件上限（MB）<input id="maxFileMB" type="number" min="1" max="64" value="8"></label>
+        <button id="saveBtn">保存巡检设置</button>
+      </div>
+      <p id="nextRun" class="server-footer">定时巡检未开启</p>
+    </section>
+    <section class="server-band">
+      <div class="report-actions"><button id="downloadBtn" disabled>下载报告 JSON</button><button id="baselineBtn" disabled>采用本次指纹基线</button></div>
+      <div id="baseline" class="server-footer">尚未建立文件指纹基线</div>
+      <div class="filter-row"><select id="severity" aria-label="风险筛选"><option value="all">全部记录</option><option value="pending">待处理风险</option><option value="high">高风险</option><option value="medium">需关注</option><option value="low">变化记录</option><option value="trusted">已信任</option><option value="quarantined">已隔离</option></select><input id="search" type="search" placeholder="搜索路径或问题" aria-label="搜索路径或问题"></div>
+      <div class="table-wrap"><table><thead><tr><th>等级</th><th>文件路径</th><th>问题</th><th>操作</th></tr></thead><tbody id="findings"><tr><td colspan="4">尚未扫描</td></tr></tbody></table></div>
+      <p id="warnings"></p>
+      <details class="records"><summary id="trustedTitle">信任记录</summary><div id="trustedRecords"></div></details>
+      <details class="records"><summary id="quarantineTitle">隔离区</summary><div id="quarantineRecords"></div></details>
+      <details class="records"><summary>最近文件操作</summary><div id="actionHistory"></div></details>
+      <h2>最近巡检</h2><div id="history" class="server-footer">暂无记录</div>
+    </section>
+    <p class="server-footer">检测引擎：文件规则与 SHA-256 指纹，不代表专业杀毒结论。扫描本身只读。人工删除会移入网站目录外的隔离区，不永久清除；信任仅匹配已核对的文件版本。操作后重新扫描。跳过 .git、.svn、node_modules；链接、超限或不可读文件标记为未完成。</p>
+  </main>
+  <dialog id="fileDialog" aria-labelledby="fileTitle">
+    <div class="dialog-body">
+      <div class="dialog-head"><h2 id="fileTitle">读取风险文件</h2><button id="closeFile" aria-label="关闭文件预览" title="关闭">关闭</button></div>
+      <p id="fileError" role="alert"></p>
+      <div id="fileMeta" class="file-meta"></div>
+      <pre id="fileContent" class="file-code" tabindex="0" aria-label="文件文本内容"></pre>
+      <div class="file-review">
+        <label><input id="reviewConfirmed" type="checkbox">已核对当前文件；了解删除核心文件可能导致网站无法访问</label>
+        <input id="trustReason" type="text" maxlength="300" placeholder="信任理由（必填）" aria-label="信任理由">
+        <div class="report-actions"><button id="trustFile" disabled>信任当前版本</button><button id="quarantineFile" class="danger" disabled>删除（移入隔离）</button></div>
+      </div>
+    </div>
+  </dialog>
+  <script src="/common.js"></script><script src="/server-security.js"></script>
+</body>
+</html>

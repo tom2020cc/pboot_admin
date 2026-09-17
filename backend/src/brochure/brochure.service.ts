@@ -16,13 +16,14 @@ export class BrochureService {
     return { title: body.data.title.trim(), itemCount: body.data.items.length, data: body.data };
   }
 
-  findAll(search = '') {
+  async findAll(search = '', language = '') {
     const query = this.repo.createQueryBuilder('brochure')
-      .select(['brochure.id', 'brochure.title', 'brochure.itemCount', 'brochure.createTime', 'brochure.updateTime'])
+      .select(['brochure.id', 'brochure.title', 'brochure.itemCount', 'brochure.createTime', 'brochure.updateTime', 'brochure.data'])
       .where('brochure.siteId = :siteId', { siteId: this.sites.getCurrentSiteId() })
       .orderBy('brochure.updateTime', 'DESC').addOrderBy('brochure.id', 'DESC');
     if (search.trim()) query.andWhere('brochure.title LIKE :search', { search: `%${search.trim().slice(0, 200)}%` });
-    return query.getMany();
+    const rows = await query.getMany();
+    return rows.filter(row => !language || row.data.language === language).map(({ data, ...row }) => ({ ...row, language: data.language || 'zh-CN' }));
   }
 
   async findOne(id: number) {

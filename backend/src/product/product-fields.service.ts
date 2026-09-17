@@ -160,8 +160,8 @@ export class ProductFieldsService {
     return this.withDb((db) => this.definitionsFor(db));
   }
 
-  async prepareFolderParameters(parameters: FolderParameters) {
-    return this.withDb((db) => {
+  async prepareFolderParameters(parameters: FolderParameters, syncFields = false) {
+    const prepared = await this.withDb((db) => {
       const fields = this.definitionsFor(db);
       const { mappings, errors } = mapFolderParameters(parameters, fields);
       if (errors.length) throw new BadRequestException(errors.join('；'));
@@ -175,8 +175,11 @@ export class ProductFieldsService {
       }
       if (fields.length > 100) throw new BadRequestException('产品字段数量超过 100 项');
       if (created.length) this.writeConfig(fields);
-      return folderSharedParameters(parameters, mappings);
+      return { parameters: folderSharedParameters(parameters, mappings), names: mappings.map((item) => item.fieldName) };
     });
+    // Only confirmed imports create PB field definitions; product publishing remains explicit.
+    if (syncFields && prepared.names.length) await this.syncToPboot(prepared.names);
+    return prepared.parameters;
   }
 
   parameterRows(value: ProductSharedParameters | null, language: string) {
@@ -201,27 +204,73 @@ export class ProductFieldsService {
     return Object.fromEntries(fields.map((field) => [field.name, productFieldValue(value, field)]));
   }
 
-  async syncToPboot() {
+  async syncToPboot(names?: string[]) {
     const database = this.dbPath();
     const SQL = await initSqlJs();
+    const originalStat = fs.lstatSync(database);
+    if (!originalStat.isFile()) throw new BadRequestException('网站数据库不是普通文件，未写入。');
     const original = fs.readFileSync(database);
     const hash = (buffer: Buffer) => createHash('sha256').update(buffer).digest('hex');
     const originalHash = hash(original);
+    const assertUnchanged = () => {
+      const current = fs.lstatSync(database);
+      if (!current.isFile() || current.dev !== originalStat.dev || current.ino !== originalStat.ino
+        || current.uid !== originalStat.uid || current.gid !== originalStat.gid || current.mode !== originalStat.mode
+        || current.mtimeMs !== originalStat.mtimeMs || current.ctimeMs !== originalStat.ctimeMs
+        || hash(fs.readFileSync(database)) !== originalHash) {
+        throw new BadRequestException('网站数据或文件权限刚刚发生变化，请重试。');
+      }
+    };
     const db = new SQL.Database(Uint8Array.from(original));
     try {
-      const fields = this.definitionsFor(db).filter((field) => field.enabled && !protectedProductField(field));
+      const selected = names && new Set(names.map((name) => name.toLowerCase()));
+      const fields = this.definitionsFor(db).filter((field) => field.enabled && !protectedProductField(field) && (!selected || selected.has(field.name.toLowerCase())));
+      if (selected && fields.length !== selected.size) throw new BadRequestException('导入参数字段发生变化，请重新扫描后导入。');
+      const schemaVersion = () => db.exec('pragma schema_version')[0]?.values[0]?.[0];
+      const originalSchemaVersion = schemaVersion();
+      const existing = new Set(this.nativeFields(db).map((field) => field.name.toLowerCase()));
       ensurePbootFieldDefinitions(db, Object.fromEntries(fields.map((field) => [field.name, field.label])));
-      for (const field of fields) db.run('update ay_extfield set description=?,sorting=? where name=? and mcode=?', [field.label, field.sort, field.name, '3']);
+      // Targeted imports keep existing PB labels and ordering; only newly added fields need metadata.
+      for (const field of fields.filter((field) => !selected || !existing.has(field.name.toLowerCase()))) {
+        db.run('update ay_extfield set description=?,sorting=? where lower(name)=lower(?) and mcode=? and (description is not ? or sorting is not ?)', [field.label, field.sort, field.name, '3', field.label, field.sort]);
+      }
+      const changes = Number(db.exec('select total_changes()')[0]?.values[0]?.[0] || 0);
+      if (!changes && schemaVersion() === originalSchemaVersion) return { synced: fields.length, backupPath: '', siteId: this.sites.getCurrentSiteId() };
       if (db.exec('pragma integrity_check')[0]?.values[0]?.[0] !== 'ok') throw new BadRequestException('网站数据库检查失败，未写入。');
-      if (hash(fs.readFileSync(database)) !== originalHash) throw new BadRequestException('网站数据刚刚发生变化，请重试。');
+      assertUnchanged();
       const backupPath = path.join(this.sites.getCurrentSiteStorageDir('backups'), `before-product-fields-${Date.now()}-${randomUUID()}.db`);
       fs.writeFileSync(backupPath, original);
       const temporary = `${database}.fields-${randomUUID()}.tmp`;
+      let descriptor: number | undefined;
+      let created = false;
       try {
-        fs.writeFileSync(temporary, Buffer.from(db.export()));
-        if (hash(fs.readFileSync(database)) !== originalHash) throw new BadRequestException('网站数据刚刚发生变化，请重试。');
+        descriptor = fs.openSync(temporary, 'wx', 0o600);
+        created = true;
+        fs.writeFileSync(descriptor, Buffer.from(db.export()));
+        // Atomic replacement must retain the PHP user's database write access.
+        try {
+          const staged = fs.fstatSync(descriptor);
+          if (process.platform !== 'win32' && (staged.uid !== originalStat.uid || staged.gid !== originalStat.gid)) {
+            fs.fchownSync(descriptor, originalStat.uid, originalStat.gid);
+          }
+          fs.fchmodSync(descriptor, originalStat.mode & 0o7777);
+          const preserved = fs.fstatSync(descriptor);
+          if (process.platform !== 'win32' && (preserved.uid !== originalStat.uid || preserved.gid !== originalStat.gid
+            || (preserved.mode & 0o7777) !== (originalStat.mode & 0o7777))) {
+            throw new Error('Database ownership or mode mismatch');
+          }
+        } catch {
+          throw new BadRequestException('无法保留网站数据库的所属用户或权限，未替换原文件。');
+        }
+        fs.fsyncSync(descriptor);
+        fs.closeSync(descriptor);
+        descriptor = undefined;
+        assertUnchanged();
         fs.renameSync(temporary, database);
-      } finally { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); }
+      } finally {
+        if (descriptor !== undefined) fs.closeSync(descriptor);
+        if (created && fs.existsSync(temporary)) fs.unlinkSync(temporary);
+      }
       return { synced: fields.length, backupPath, siteId: this.sites.getCurrentSiteId() };
     } finally { db.close(); }
   }

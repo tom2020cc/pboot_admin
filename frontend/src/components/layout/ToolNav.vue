@@ -17,7 +17,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
-import { Connection, Cpu, Document, House, Monitor, Search, Setting, Tickets, Upload } from "@element-plus/icons-vue";
+import { Connection, Cpu, Document, House, Monitor, Reading, Search, Setting, Tickets, Upload } from "@element-plus/icons-vue";
 import { useSitesStore } from "@/stores/sites";
 import { buildToolUrls } from "@/utils/toolUrls";
 import { API_BASE_URL } from "@/utils/request";
@@ -39,14 +39,15 @@ const items = computed(() => [
   { id: "backend", label: "后端接口", icon: Connection, url: urls.backend },
   { id: "sites", label: "站点管理", icon: Monitor, url: urls.sites },
   { id: "quotation", label: "报价单生成", icon: Tickets, url: urls.quotation },
-  { id: "brochure", label: "产品介绍", icon: Document, url: withSite(urls.brochure) },
+  { id: "brochure", label: "产品生成PDF", icon: Document, url: withSite(urls.brochure) },
   { id: "seo", label: "SEO 检查", icon: Search, url: withSite(urls.seo) },
   { id: "models", label: "模型总览", icon: Cpu, url: withSite(urls.models) },
   { id: "models-config", label: "模型配置", icon: Setting, url: withSite(urls.modelsConfig) },
   { id: "ftp", label: "FTP 发布", icon: Upload, url: withSite(urls.ftp) },
-]);
+  { id: "tutorial", label: "部署教程", icon: Reading, url: `${window.location.origin}/#/deployment-tutorial` },
+].filter(item => item.id !== 'backend' || import.meta.env.DEV || import.meta.env.VITE_ENABLE_SWAGGER === 'true'));
 
-const isLocalTool = (id: string) => id === "admin" || id === "sites" || id === "quotation" || id === "brochure";
+const isLocalTool = (id: string) => id === "admin" || id === "sites" || id === "quotation" || id === "brochure" || id === "tutorial";
 </script>
 
 <style scoped>
