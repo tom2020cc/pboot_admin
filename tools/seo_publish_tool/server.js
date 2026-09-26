@@ -5,10 +5,27 @@ const crypto = require("crypto");
 const initSqlJs = require("sql.js");
 const cheerio = require("cheerio");
 const seoAi = require("./ai-seo");
+const cnAudit = require('./cn-audit');
+const googleScope = require("./google-scope");
 const siteRuntime = require("../site-runtime");
+const { buildPublicNavigation } = require("../public-navigation");
+const { deploymentEnvironment } = require('../deployment-environment');
+const { createToolAuth, runWithToolIdentity, toolRequestHeaders } = require("../tool-auth");
 
 const TOOL_ROOT = __dirname;
 const PACKAGE_ROOT = path.resolve(TOOL_ROOT, "..", "..");
+const sharedGoogleAccount = require('./google-shared-account').createSharedGoogleAccount(
+  path.join(PACKAGE_ROOT, 'managed-sites', '_shared', 'google', 'service-account.json'));
+const sharedBingAccount = require('./bing-shared-account').createSharedBingAccount(
+  path.join(PACKAGE_ROOT, 'managed-sites', '_shared', 'bing', 'account.json'));
+const sharedYandexAccount = require('./yandex-shared-account').createSharedYandexAccount(
+  path.join(PACKAGE_ROOT, 'managed-sites', '_shared', 'yandex', 'account.json'));
+const bingApi = require("./bing-api").createBingApi();
+const baiduApi = require("./baidu-api");
+const pushBaidu = baiduApi.createBaiduApi();
+const baiduLocks = new Set();
+const yandexScope = require('./yandex-api');
+const yandexApi = yandexScope.createApi();
 const PUBLIC_ROOT = path.join(TOOL_ROOT, "public");
 const CONFIG_PATH = path.join(TOOL_ROOT, "seo.config.json");
 const AI_CONFIG_PATH = path.join(TOOL_ROOT, "ai.config.json");
@@ -353,27 +370,19 @@ function getProjectSettings() {
     backendPort: Number(env.BACKEND_PORT || 5000),
     frontendPort: Number(env.FRONTEND_PORT || 5178),
     seoPort: PORT,
-    ftpPort: Number(ftp.localPort || 5189),
+    ftpPort: Number(process.env.FTP_TOOL_PORT || env.FTP_TOOL_PORT || ftp.localPort || 5189),
     localDatabasePath: path.resolve(PACKAGE_ROOT, "backend", env.DB_SQLJS_LOCATION || "dev.sqlite"),
   };
 }
 
 function buildNavigation(active = "seo") {
   const ports = getProjectSettings();
-  return [
-    { id: "admin", label: "管理后台", url: `http://localhost:${ports.frontendPort}/#/` },
-    { id: "backend", label: "后端接口", url: `http://localhost:${ports.backendPort}/api-docs` },
-    { id: "sites", label: "站点管理", url: `http://localhost:${ports.frontendPort}/#/sites` },
-    { id: "quotation", label: "报价单生成", url: `http://localhost:${ports.frontendPort}/#/quotations` },
-    { id: "seo", label: "SEO 检查", url: `http://localhost:${ports.seoPort}` },
-    { id: "models", label: "模型总览", url: `http://localhost:${ports.seoPort}/models.html` },
-    { id: "models-config", label: "模型配置", url: `http://localhost:${ports.seoPort}/models-config.html` },
-    { id: "ftp", label: "FTP 发布", url: `http://localhost:${ports.ftpPort}` },
-  ].map((item) => ({ ...item, url: siteRuntime.withSiteQuery(item.url), active: item.id === active }));
+  return buildPublicNavigation({ ...parseEnvFile(BACKEND_ENV_PATH), ...process.env }, ports, active, siteRuntime.withSiteQuery);
 }
 
 function readConfig() {
   const config = readJson(currentSeoConfigPath());
+  const site = siteRuntime.currentSite();
   return {
     siteName: "PbootCMS",
     siteBaseUrl: "http://localhost",
@@ -392,6 +401,9 @@ function readConfig() {
     baidu: { enabled: true, token: "", site: "" },
     robots: { disallow: [] },
     ...config,
+    // The managed site is authoritative after a database rename or environment move.
+    ...(site?.rootPath ? { localRoot: site.rootPath } : {}),
+    ...(site?.dbPath ? { databasePath: site.dbPath } : {}),
   };
 }
 
@@ -521,18 +533,7 @@ function getDefaultAcode(areas) {
   return String(areas.find((area) => String(area.is_default) === "1")?.acode || "en");
 }
 
-function languageBaseUrl(config, acode, areas, usePublicUrl) {
-  const baseUrl = cleanBaseUrl(
-    usePublicUrl ? config.siteBaseUrl : config.localTestBaseUrl || config.siteBaseUrl,
-  );
-  if (!usePublicUrl || !config.useLanguageSubdomains) return baseUrl;
-  const languageCode = String(acode || getDefaultAcode(areas));
-  if (languageCode === getDefaultAcode(areas)) return baseUrl;
-  const parsed = new URL(baseUrl);
-  const rootHost = parsed.hostname.replace(/^www\./i, "");
-  parsed.hostname = `${languageCode}.${rootHost}`;
-  return cleanBaseUrl(parsed.toString());
-}
+const { languageBaseUrl } = require("./language-url");
 
 function buildUrl(baseUrl, config, candidate, fallback) {
   let slug = sanitizePath(candidate) || sanitizePath(fallback);
@@ -708,8 +709,9 @@ function findLocalEditorRecord(localDb, kind, record) {
 function buildVueEditorUrl(localDb, kind, record) {
   const localRecord = findLocalEditorRecord(localDb, kind, record);
   if (!localRecord) return "";
-  const frontendPort = getProjectSettings().frontendPort;
-  return siteRuntime.withSiteQuery(`http://localhost:${frontendPort}/#/${localRecord.route}/edit/${localRecord.id}`);
+  const url = new URL(buildNavigation().find(item => item.id === 'admin').url);
+  url.hash = `/${localRecord.route}/edit/${localRecord.id}`;
+  return url.toString();
 }
 
 function addIssue(issues, severity, type, title, detail, url, meta = {}) {
@@ -749,7 +751,8 @@ function calculateSeoHealth(stats, issues) {
   };
 }
 
-async function inspectSite() {
+async function inspectSite(options = {}) {
+  const acode = options.acode === 'cn' ? 'cn' : '';
   const config = readConfig();
   const siteRoot = resolveSiteRoot(config);
   const dbPath = findDatabase(config);
@@ -772,7 +775,7 @@ async function inspectSite() {
        left join ay_model m on m.mcode=s.mcode
        ${config.includeHiddenMenus ? "" : "where s.status='1' or s.status=1 or s.status is null"}
        order by s.acode asc, cast(s.sorting as integer) asc, cast(s.scode as integer) asc`,
-    );
+    ).filter(row => !acode || String(row.acode) === acode);
     const contents = queryRows(
       db,
       `select c.id,c.acode,c.scode,c.title,c.subtitle,c.filename,c.ico,c.content,c.keywords,c.description,c.date,c.create_time,c.update_time,c.sorting,c.status,c.outlink,
@@ -783,7 +786,7 @@ async function inspectSite() {
        left join ay_model m on m.mcode=s.mcode
        ${config.includeHiddenContent ? "" : "where c.status='1' or c.status=1 or c.status is null"}
        order by c.acode asc, cast(c.sorting as integer) asc, c.id asc`,
-    );
+    ).filter(row => !acode || String(row.acode) === acode);
 
     const urls = [];
     const issues = [];
@@ -948,7 +951,7 @@ async function inspectSite() {
 
     issues.sort((a, b) => severityWeight(b.severity) - severityWeight(a.severity));
     const stats = {
-      areas: areas.length,
+      areas: acode ? areas.filter(area => String(area.acode) === acode).length : areas.length,
       menus: sorts.length,
       contents: contents.length,
       checkedRecords: urls.filter(item => !isVideoType('', item.type)).length,
@@ -962,6 +965,10 @@ async function inspectSite() {
 
     return {
       config,
+      ...(acode ? { audit: { language: 'cn',
+        publicHome: areas.some(area => String(area.acode) === 'cn') ? languageBaseUrl(config, 'cn', areas, true) + '/' : '',
+        localHome: areas.some(area => String(area.acode) === 'cn' && String(area.is_default) === '1') ? languageBaseUrl(config, 'cn', areas, false) + '/' : '',
+      } } : {}),
       siteRoot,
       dbPath,
       dbRelativePath: toRelative(siteRoot, dbPath),
@@ -1009,7 +1016,7 @@ function collectJsonLdTypes(value, result = new Set()) {
   return result;
 }
 
-async function auditRenderedPage(targetUrl) {
+async function auditRenderedPage(targetUrl, report = null) {
   let requestedUrl;
   try {
     requestedUrl = new URL(String(targetUrl || "").trim());
@@ -1021,7 +1028,8 @@ async function auditRenderedPage(targetUrl) {
   }
 
   const startedAt = Date.now();
-  const response = await fetch(requestedUrl, {
+  const scoped = report ? await cnAudit.fetchPage(requestedUrl.href, report) : null;
+  const response = scoped ? scoped.response : await fetch(requestedUrl, {
     redirect: "follow",
     headers: {
       "User-Agent": "Mozilla/5.0 (compatible; PbootCMS-SEO-Audit/2.0; +https://shanbo.cc)",
@@ -1031,7 +1039,7 @@ async function auditRenderedPage(targetUrl) {
   });
   const html = await response.text();
   const loadMs = Date.now() - startedAt;
-  const finalUrl = response.url || requestedUrl.toString();
+  const finalUrl = scoped?.finalUrl || response.url || requestedUrl.toString();
   const contentTypeHeader = String(response.headers.get("content-type") || "");
   const xRobotsTag = String(response.headers.get("x-robots-tag") || "");
   const $ = cheerio.load(html);
@@ -1221,8 +1229,13 @@ async function generateFiles() {
   const robotsPath = path.resolve(siteRoot, report.config.outputRobots || "robots.txt");
   fs.writeFileSync(sitemapPath, generateSitemapXml(report.urls), "utf8");
   fs.writeFileSync(robotsPath, generateRobotsTxt(report.config), "utf8");
+  // A dedicated Russian sitemap never mixes other language hosts into Yandex submissions.
+  let ruScope;
+  try { ruScope = yandexScope.russianPages(report); } catch { /* Other engines do not require an RU site. */ }
+  if (ruScope) fs.writeFileSync(path.join(siteRoot, 'sitemap-ru.xml'), generateSitemapXml(ruScope.urls.map(url => ({ url, lang: 'ru' }))), 'utf8');
   return {
     sitemapPath,
+    russianSitemapPath: ruScope ? path.join(siteRoot, 'sitemap-ru.xml') : null,
     robotsPath,
     urlCount: report.urls.length,
     issueCount: report.issues.length,
@@ -1238,13 +1251,13 @@ function getFtpToolInfo() {
   } catch (_error) {
     // The SEO tool remains usable even if the optional FTP tool is absent.
   }
-  const port = Number(config.localPort || 5189);
+  const port = getProjectSettings().ftpPort;
   return {
     toolRoot,
     configPath,
     port,
     baseUrl: `http://127.0.0.1:${port}`,
-    browserUrl: siteRuntime.withSiteQuery(`http://localhost:${port}`),
+    browserUrl: buildNavigation().find(item => item.id === 'ftp').url,
     configured: Boolean(config.host && config.user),
   };
 }
@@ -1256,8 +1269,10 @@ async function requestFtpTool(pathname, options = {}) {
     const siteId = siteRuntime.currentSite()?.id;
     const response = await fetch(`${info.baseUrl}${pathname}`, {
       ...fetchOptions,
+      redirect: 'error',
       headers: {
         ...(fetchOptions.headers || {}),
+        ...toolRequestHeaders(`${info.baseUrl}${pathname}`),
         ...(siteId ? { "X-Pboot-Site-Id": String(siteId) } : {}),
       },
       signal: AbortSignal.timeout(timeout),
@@ -1289,6 +1304,27 @@ async function publishLocalSite() {
     localMessage = `PB 数据已更新，但无法访问本地站 ${localUrl}：${error.message || String(error)}`;
   }
   return { ok: localStatus >= 200 && localStatus < 400, localUrl, localStatus, message: localMessage, generated };
+}
+
+async function startSeoPublication() {
+  const environment = deploymentEnvironment({ ...parseEnvFile(BACKEND_ENV_PATH), ...process.env }).environment;
+  if (environment === 'baota') {
+    const generated = await generateFiles();
+    const report = await inspectSite();
+    const { keyFiles } = ensureIndexNowKeys(report.config, report.siteRoot, report.urls.map(item => new URL(item.url).host));
+    return {
+      mode: 'direct', started: false,
+      state: { running: false, uploaded: 0, skipped: 0, failed: 0, published: 2 + Number(Boolean(generated.russianSitemapPath)) + keyFiles.length, finishedAt: new Date().toISOString(), mode: 'direct' },
+      generated,
+      message: '已直接生成到当前宝塔网站目录，无需 FTP 上传。',
+    };
+  }
+  await publishLocalSite();
+  const result = await requestFtpTool('/api/upload', {
+    method: 'POST', timeout: 10000, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'seo' }),
+  });
+  return { mode: 'ftp', started: true, ftpUrl: result.info.browserUrl, state: result.data.state,
+    message: 'SEO 文件已在本地重新生成，FTP 正在上传 sitemap、robots 和验证文件。' };
 }
 
 function ensureIndexNowKeys(config, siteRoot, hosts) {
@@ -1390,13 +1426,13 @@ async function submitIndexNowPayload(endpoint, payload) {
       const body = await response.text();
       const pending = response.status === 202 || isIndexNowVerificationPending(body);
       lastResult = {
-        ok: response.ok,
+        ok: response.ok && !pending,
         pending,
         skipped: false,
         status: response.status,
         statusText: response.statusText,
         body,
-        pushed: response.ok ? payload.urlList.length : 0,
+        pushed: response.ok && !pending ? payload.urlList.length : 0,
         requested: payload.urlList.length,
         attempts: attempt,
       };
@@ -1434,7 +1470,9 @@ async function pushIndexNow(options = {}) {
   const report = await inspectSite();
   const siteRoot = report.siteRoot;
   const groups = new Map();
-  for (const item of report.urls) {
+  const pages = options.engine === 'yandex'
+    ? yandexScope.russianPages(report).urls.map(url => ({ url })) : report.urls;
+  for (const item of pages) {
     const parsed = new URL(item.url);
     const group = groups.get(parsed.host) || { baseUrl: parsed.origin, urlList: [] };
     group.urlList.push(item.url);
@@ -1484,15 +1522,17 @@ async function pushIndexNow(options = {}) {
     const configuredEndpoints = Array.isArray(config.indexNow.endpoints)
       ? config.indexNow.endpoints
       : [];
-    const endpoints = configuredEndpoints.length
-      ? configuredEndpoints
-      : [config.indexNow.endpoint, "https://yandex.com/indexnow"];
+    // The shared IndexNow endpoint forwards notifications to participating engines.
+    // Bing's workflow does not need a second, potentially slow Yandex request.
+    const endpoints = options.engine === 'yandex' ? ['https://yandex.com/indexnow']
+      : options.engine === 'bing' ? ['https://api.indexnow.org/indexnow']
+      : configuredEndpoints.length ? configuredEndpoints : [config.indexNow.endpoint, "https://yandex.com/indexnow"];
     const endpointResults = [];
     for (const endpoint of endpoints) {
       const endpointResult = await submitIndexNowPayload(endpoint, payload);
       endpointResults.push({ endpoint, ...endpointResult });
     }
-    const best = endpointResults.find((item) => item.ok) || endpointResults[0];
+    const best = endpointResults.find((item) => item.ok) || endpointResults.find((item) => item.pending) || endpointResults[0];
     results.push({ host, keyLocation, endpoints: endpointResults, ...best });
   }
 
@@ -1540,7 +1580,9 @@ function getBingSettings(config = readConfig()) {
     baseUrl,
     siteUrl: String(bing.siteUrl || (baseUrl ? `${baseUrl}/` : "")).trim(),
     sitemapUrl: `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`,
-    apiKeyConfigured: Boolean(bing.apiKey),
+    apiKeyConfigured: sharedBingAccount.resolve(bing).configured,
+    accountSource: sharedBingAccount.resolve(bing).accountSource,
+    sharedAccount: sharedBingAccount.status(),
     verification: bing.verification?.code ? { code: bing.verification.code } : null,
     links: {
       addSite: "https://www.bing.com/webmasters/home/addsite",
@@ -1555,7 +1597,7 @@ function buildBingSiteAuthXml(code) {
 }
 
 function getBingApiKey(config = readConfig()) {
-  return String((config.bingWebmaster && config.bingWebmaster.apiKey) || "").trim();
+  return sharedBingAccount.resolve(config.bingWebmaster || {}).apiKey;
 }
 
 async function checkBingPublicState() {
@@ -1607,132 +1649,70 @@ async function checkBingPublicState() {
     }
     result.ok = result.ok && Boolean(result.verification.ok);
   } else {
-    result.parts.push("尚未配置 Bing 验证码");
+    result.parts.push("未设置 XML 验证文件；若已用 DNS 或 Google 导入验证，无需重复设置。");
   }
   result.parts.push(settings.apiKeyConfigured ? "Bing Webmaster API Key 已配置" : "Bing Webmaster API Key 未配置（sitemap 提交和收录查询需要）");
   return result;
 }
 
 async function submitBingSitemap(siteUrl, sitemapUrl, apiKey) {
-  const key = String(apiKey || getBingApiKey()).trim();
-  if (!key) throw new Error("请先配置 Bing Webmaster API Key。");
-  const url = `https://ssl.bing.com/webmaster/api.svc/json/SubmitSitemap?apikey=${encodeURIComponent(key)}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ siteUrl, sitemapUrl }),
-    signal: AbortSignal.timeout(30000),
-  });
-  const text = await response.text();
-  let parsed = null;
-  try {
-    parsed = JSON.parse(text);
-  } catch (_error) {
-    /* non-JSON */
-  }
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      siteUrl,
-      sitemapUrl,
-      message: (parsed && (parsed.Message || parsed.message)) || `HTTP ${response.status}`,
-    };
-  }
-  return { ok: true, status: response.status, siteUrl, sitemapUrl, message: `已把 sitemap 提交给 Bing：${sitemapUrl}` };
+  return bingApi.sitemap(apiKey || getBingApiKey(), siteUrl, sitemapUrl);
 }
 
 async function inspectBingUrl(siteUrl, targetUrl, apiKey) {
-  const key = String(apiKey || getBingApiKey()).trim();
-  if (!key) throw new Error("请先配置 Bing Webmaster API Key。");
-  const url = `https://ssl.bing.com/webmaster/api.svc/json/GetUrlDetail?apikey=${encodeURIComponent(key)}&siteUrl=${encodeURIComponent(siteUrl)}&url=${encodeURIComponent(targetUrl)}`;
-  const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(30000) });
-  const text = await response.text();
-  let parsed = null;
-  try {
-    parsed = JSON.parse(text);
-  } catch (_error) {
-    /* non-JSON */
-  }
-  if (!response.ok) {
-    return { ok: false, status: response.status, message: (parsed && (parsed.Message || parsed.message)) || `HTTP ${response.status}` };
-  }
-  const d = (parsed && parsed.d) || {};
-  const indexed = Boolean(d.IsIndexed === true || d.isIndexed === true || d.Indexed === true);
-  return {
-    ok: true,
-    inspectionUrl: targetUrl,
-    siteUrl,
-    indexed,
-    lastCrawled: d.DateLastCrawled || d.LastCrawled || d.lastCrawled || "",
-    httpCode: d.HttpStatusCode || d.HttpCode || d.httpCode || "",
-    message: `Bing 收录状态：${indexed ? "已收录" : "未收录或未知"}`,
-    raw: d,
-  };
+  return bingApi.inspect(apiKey || getBingApiKey(), siteUrl, targetUrl);
 }
 
 // ===== 百度搜索资源平台（主动推送 API，token 在 ziyuan.baidu.com 生成） =====
 
-function getBaiduSettings(config = readConfig()) {
-  const baidu = config.baidu || {};
-  const baseUrl = cleanBaseUrl(config.siteBaseUrl || "");
-  return {
-    enabled: baidu.enabled !== false,
-    token: String(baidu.token || "").trim(),
-    site: String(baidu.site || baseUrl).trim(),
-    tokenConfigured: Boolean(baidu.token),
-    sitemapUrl: `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`,
-    links: {
-      platform: "https://ziyuan.baidu.com/",
-      addSite: "https://ziyuan.baidu.com/linksubmit/index",
-      sitemapSubmit: "https://ziyuan.baidu.com/linksubmit/index",
-    },
-  };
+async function getBaiduContext() {
+  const scope = baiduApi.chinesePages(await inspectSite());
+  const cfg = readConfig().baidu || {};
+  const historyPath = siteRuntime.siteFile('seo', 'baidu-submissions.json', path.join(TOOL_ROOT, 'baidu-submissions.json'));
+  const history = baiduApi.readHistory(historyPath);
+  let configuredSite = '';
+  try { configuredSite = baiduApi.siteOrigin(cfg.site); } catch {}
+  const ready = cfg.enabled !== false && Boolean(cfg.token) && configuredSite === scope.site;
+  return { ...scope, cfg, ready, configuredSite, historyPath, history,
+    pending: scope.urls.filter(url => !history.accepted[url]) };
+}
+
+async function getBaiduStatus() {
+  const ctx = await getBaiduContext();
+  return { site: ctx.site, configuredSite: ctx.configuredSite, enabled: ctx.cfg.enabled !== false,
+    tokenConfigured: Boolean(ctx.cfg.token), ready: ctx.ready, total: ctx.urls.length,
+    pending: ctx.pending.length, accepted: ctx.urls.length - ctx.pending.length,
+    lastResult: ctx.history.lastResult,
+    urls: ctx.pending,
+    links: { platform: `https://ziyuan.baidu.com/indexs/index?site=${encodeURIComponent(ctx.site + '/')}`,
+      submit: `https://ziyuan.baidu.com/linksubmit/index?site=${encodeURIComponent(ctx.site + '/')}` } };
 }
 
 async function submitBaiduUrls(urls, options = {}) {
-  const cfg = getBaiduSettings();
-  if (!cfg.token) throw new Error("请先配置百度推送 token（百度搜索资源平台 → 普通收录 → 主动推送）。");
-  const site = String(options.site || cfg.site || "").trim();
-  if (!site) throw new Error("缺少百度推送站点（site），请在配置中填写，例如 https://cn.shanbo.cc。");
-  const list = (Array.isArray(urls) ? urls : [urls])
-    .map((value) => String(value || "").trim())
-    .filter((value) => /^https?:\/\//i.test(value));
-  if (!list.length) return { ok: true, submitted: 0, success: 0, message: "没有可提交的 URL。" };
-
-  const endpoint = `http://data.zz.baidu.com/urls?site=${encodeURIComponent(site)}&token=${encodeURIComponent(cfg.token)}`;
-  let response;
-  try {
-    response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: list.join("\n"),
-      signal: AbortSignal.timeout(60000),
-    });
-  } catch (error) {
-    throw new Error(`百度接口请求失败：${error.message || String(error)}。请确认服务器能访问 data.zz.baidu.com。`);
+  const ctx = await getBaiduContext();
+  if (!ctx.ready) throw new Error('请保存当前中文站对应的百度 Token；旧站点的配置不能直接用于此域名。');
+  if (options.site && baiduApi.siteOrigin(options.site) !== ctx.site) throw new Error('只能提交当前项目的 CN 中文站。');
+  let list = Array.isArray(urls) ? [...new Set(urls)] : [];
+  if (list.some(url => !ctx.urls.includes(url))) throw new Error('提交列表包含当前中文站清单以外的页面，已停止提交。');
+  if (options.test && (list.length !== 1 || list[0] !== ctx.site + '/')) throw new Error('接口测试只允许提交中文首页 1 条。');
+  if (!options.test) list = list.filter(url => !ctx.history.accepted[url]);
+  if (!list.length) return { ok: true, submitted: 0, success: 0, message: '本批页面已记录为接收成功，无需重复提交。' };
+  if (list.length > 1 && ctx.history.lastResult?.site === ctx.site && !ctx.history.lastResult.ok) {
+    throw new Error('上次提交未成功，请先到百度平台检查，再用“提交首页测试”确认接口恢复后批量提交。');
   }
-  const text = await response.text();
-  let parsed = null;
+  if (baiduLocks.has(ctx.historyPath)) throw new Error('当前网站正在提交，请等待完成。');
+  baiduLocks.add(ctx.historyPath);
   try {
-    parsed = JSON.parse(text);
-  } catch (_error) {
-    parsed = null;
-  }
-  const success = parsed ? Number(parsed.success) : 0;
-  const remain = parsed ? Number(parsed.remain) : null;
-  return {
-    ok: response.ok && parsed && typeof parsed.success !== "undefined",
-    status: response.status,
-    submitted: list.length,
-    success: Number.isFinite(success) ? success : 0,
-    remain: Number.isFinite(remain) ? remain : null,
-    notValid: parsed?.not_valid || [],
-    notSameSite: parsed?.not_same_site || [],
-    message: parsed
-      ? `百度推送：成功 ${success}/${list.length}${remain != null ? `，剩余配额 ${remain}` : ""}`
-      : `百度接口返回异常：HTTP ${response.status} ${text.slice(0, 160)}`,
-  };
+    const result = await pushBaidu({ site: ctx.site, token: ctx.cfg.token, urls: list });
+    const now = new Date().toISOString();
+    // Partial responses do not identify every accepted URL reliably. Never guess them.
+    if (result.ok) for (const url of list) ctx.history.accepted[url] = now;
+    ctx.history.lastResult = { ...result, site: ctx.site, at: now };
+    const temp = ctx.historyPath + '.tmp';
+    writeJson(temp, ctx.history);
+    fs.renameSync(temp, ctx.historyPath);
+    return result;
+  } finally { baiduLocks.delete(ctx.historyPath); }
 }
 
 // 国内搜索引擎站长平台入口（360/搜狗/神马/头条没有标准主动推送 API，需在各自平台提交 sitemap）
@@ -1793,7 +1773,7 @@ async function getIndexingOverview() {
   const googleQuota = googleQuotaInfo(googleStore, config);
   const sc = getSearchConsoleConfig(config);
   const bing = getBingSettings(config);
-  const yandex = getYandexSettings(config);
+  const yandex = await getYandexSettings(config, report);
   const baidu = getBaiduSettings(config);
   const indexNow = config.indexNow || {};
   const indexNowKeyCount = Object.keys(indexNow.keys || {}).length;
@@ -1905,22 +1885,21 @@ async function getIndexingOverview() {
   };
 }
 
-function getYandexSettings(config = readConfig()) {
+async function getYandexSettings(config = readConfig(), report = null) {
   const yandex = config.yandexWebmaster || {};
-  const baseUrl = cleanBaseUrl(config.siteBaseUrl);
-  let host = "";
-  try {
-    host = new URL(baseUrl).hostname;
-  } catch (_error) {
-    host = "";
-  }
+  let scope, scopeError = '';
+  try { scope = yandexScope.russianPages(report || await inspectSite()); } catch (error) { scopeError = error.message; }
+  const baseUrl = scope?.site || '';
+  const host = baseUrl ? new URL(baseUrl).host : '';
   return {
-    host,
+    host, scopeError, urlCount: scope?.urls.length || 0,
     baseUrl,
-    sitemapUrl: `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`,
+    sitemapUrl: baseUrl ? `${baseUrl}/sitemap-ru.xml` : "",
     verification: yandex.verification?.filename ? { filename: yandex.verification.filename } : null,
     indexNowEnabled: Boolean(config.indexNow?.enabled),
-    webmasterTokenConfigured: Boolean(yandex.oauthToken),
+    webmasterTokenConfigured: sharedYandexAccount.resolve(yandex).configured,
+    accountSource: sharedYandexAccount.resolve(yandex).accountSource,
+    sharedAccount: sharedYandexAccount.status(),
     webmasterUserId: String(yandex.userId || ""),
     webmasterHostId: String(yandex.hostId || ""),
     links: {
@@ -1938,7 +1917,8 @@ async function checkYandexPublicState() {
   if (isSuspiciousPublicUrl(report.config.siteBaseUrl)) {
     throw new Error("当前站点网址看起来不是线上真实域名，无法检查线上文件。请先修改真实线上域名。");
   }
-  const hosts = [...new Set(report.urls.map((item) => new URL(item.url).host))];
+  const scope = yandexScope.russianPages(report);
+  const hosts = [new URL(scope.site).host];
   const { keyFiles } = ensureIndexNowKeys(report.config, report.siteRoot, hosts);
   const keyChecks = [];
   for (const item of keyFiles) {
@@ -1947,7 +1927,7 @@ async function checkYandexPublicState() {
     keyChecks.push({ host: item.host, keyLocation, ...result });
   }
 
-  const settings = getYandexSettings(report.config);
+  const settings = await getYandexSettings(report.config, report);
   let verificationCheck = null;
   if (settings.verification?.filename) {
     const localFile = path.join(report.siteRoot, settings.verification.filename);
@@ -2000,98 +1980,41 @@ async function checkYandexPublicState() {
 
 // ===== Yandex Webmaster API（OAuth token；sitemap 提交，自动解析 user_id/host_id） =====
 
-function getYandexWebmasterConfig(config = readConfig()) {
+async function getYandexWebmasterConfig(config = readConfig()) {
   const yw = config.yandexWebmaster || {};
-  const baseUrl = cleanBaseUrl(config.siteBaseUrl || "");
-  let host = "";
-  try {
-    host = new URL(baseUrl).hostname;
-  } catch (_error) {
-    host = "";
-  }
-  return {
-    oauthToken: String(yw.oauthToken || "").trim(),
-    userId: String(yw.userId || "").trim(),
-    hostId: String(yw.hostId || "").trim(),
-    host,
-    baseUrl,
-    sitemapUrl: `${baseUrl}/${config.outputSitemap || "sitemap.xml"}`,
-  };
+  const scope = yandexScope.russianPages(await inspectSite());
+  return { oauthToken: sharedYandexAccount.resolve(yw).oauthToken, baseUrl: scope.site,
+    host: new URL(scope.site).host, sitemapUrl: scope.site + '/sitemap-ru.xml' };
 }
-
-async function yandexApi(pathname, token, options = {}) {
-  const response = await fetch(`https://api.webmaster.yandex.net/v4${pathname}`, {
-    ...options,
-    headers: {
-      Authorization: `OAuth ${token}`,
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    signal: AbortSignal.timeout(30000),
-  });
-  const text = await response.text();
-  let data = null;
-  try {
-    data = JSON.parse(text);
-  } catch (_error) {
-    data = null;
-  }
-  return { ok: response.ok, status: response.status, data, text };
-}
-
-function yandexApiError(result) {
-  if (result.data && (result.data.error_message || result.data.error_code)) {
-    return result.data.error_message || result.data.error_code;
-  }
-  return `HTTP ${result.status}`;
-}
+const yandexApiError = yandexScope.apiError;
 
 async function resolveYandexHost() {
-  const cfg = getYandexWebmasterConfig();
-  if (!cfg.oauthToken) throw new Error("请先配置 Yandex OAuth token。");
-
-  let userId = cfg.userId;
-  if (!userId) {
-    const u = await yandexApi("/user/", cfg.oauthToken);
-    if (!u.ok || !(u.data && u.data.user_id)) {
-      throw new Error(`获取 Yandex user_id 失败：${yandexApiError(u)}`);
-    }
-    userId = String(u.data.user_id);
-  }
-
-  const h = await yandexApi(`/user/${userId}/hosts/`, cfg.oauthToken);
-  if (!h.ok || !(h.data && Array.isArray(h.data.hosts))) {
-    throw new Error(`获取 Yandex 站点列表失败：${yandexApiError(h)}`);
-  }
-  const hosts = h.data.hosts || [];
-  const normalize = (v) => String(v || "").toLowerCase().replace(/^www\./, "").replace(/\/+$/, "");
-  const match = hosts.find((item) => normalize(item.ascii_host || item.unicode_host) === normalize(cfg.host));
-  if (!match) {
-    throw new Error(
-      `在 Yandex Webmaster 里没找到站点 ${cfg.host}。请先在 Yandex Webmaster 添加并验证该站点。已添加的主机：${hosts.map((x) => x.ascii_host || x.unicode_host).join("、") || "（空）"}。`,
-    );
-  }
+  const cfg = await getYandexWebmasterConfig();
+  const u = await yandexApi('/user/', cfg.oauthToken);
+  if (!u.ok || !u.data?.user_id) throw new Error('获取 Yandex 账号失败：' + yandexApiError(u));
+  const userId = String(u.data.user_id);
+  const h = await yandexApi('/user/' + userId + '/hosts/', cfg.oauthToken);
+  if (!h.ok || !Array.isArray(h.data?.hosts)) throw new Error('读取 Yandex 站点失败：' + yandexApiError(h));
+  const match = yandexScope.selectHost(h.data.hosts, cfg.baseUrl);
   const hostId = String(match.host_id);
-
   const config = readConfig();
   config.yandexWebmaster = { ...(config.yandexWebmaster || {}), userId, hostId };
   writeJson(currentSeoConfigPath(), config);
-  return { userId, hostId, host: cfg.host, hosts };
+  return { userId, hostId, host: cfg.host, cfg };
 }
 
 async function submitYandexSitemap(sitemapUrl) {
-  const cfg = getYandexWebmasterConfig();
-  if (!cfg.oauthToken) throw new Error("请先配置 Yandex OAuth token。");
-  const { userId, hostId } = await resolveYandexHost();
+  const { userId, hostId, cfg } = await resolveYandexHost();
   const target = sitemapUrl || cfg.sitemapUrl;
-  const r = await yandexApi(`/user/${userId}/hosts/${hostId}/sitemaps/`, cfg.oauthToken, {
-    method: "POST",
-    body: JSON.stringify({ url: target }),
-  });
-  if (!r.ok) {
-    return { ok: false, status: r.status, message: `提交失败：${yandexApiError(r)}` };
-  }
-  return { ok: true, status: r.status, sitemapUrl: target, message: `已把 sitemap 提交给 Yandex：${target}` };
+  if (target !== cfg.sitemapUrl) throw new Error('请使用当前俄语站自动生成的 sitemap-ru.xml。');
+  const response = await fetch(target, { redirect: 'error', signal: AbortSignal.timeout(15000) });
+  const xml = await response.text();
+  const doc = cheerio.load(xml, { xmlMode: true });
+  const urls = doc('urlset > url > loc').map((_i, element) => doc(element).text().trim()).get();
+  if (!response.ok || !urls.length || urls.some(url => {
+    try { return new URL(url).origin !== cfg.baseUrl; } catch { return true; }
+  })) throw new Error('线上俄语站地图不可用或包含其他语言域名，请先点击“生成并上传”。');
+  return yandexScope.submitSitemap(yandexApi, { token: cfg.oauthToken, userId, hostId, site: cfg.baseUrl, sitemapUrl: target });
 }
 
 function loadSearchIndexCoverageStore() {
@@ -2167,7 +2090,7 @@ function normalizeYandexSearchSample(item = {}) {
 }
 
 async function refreshYandexIndexCoverage(maxDetails = 1000) {
-  const cfg = getYandexWebmasterConfig();
+  const cfg = await getYandexWebmasterConfig();
   if (!cfg.oauthToken) throw new Error("请先在搜索引擎提交页配置 Yandex OAuth token。");
   const { userId, hostId } = await resolveYandexHost();
   const details = [];
@@ -2337,7 +2260,7 @@ async function getSearchIndexCoverage() {
         total: totalUrls,
         source: "Yandex Webmaster API",
         updatedAt: yandexSnapshot?.checkedAt || "",
-        configured: Boolean(getYandexWebmasterConfig(config).oauthToken),
+        configured: sharedYandexAccount.resolve(config.yandexWebmaster || {}).configured,
         exact: Boolean(yandexSnapshot),
         truncated: Boolean(yandexSnapshot?.truncated),
         details: yandexDetails,
@@ -2454,18 +2377,23 @@ async function checkGooglePublicFiles() {
   }
   const settings = getGoogleSearchConsoleSettings(config);
   if (!settings.sitemapUrlValid) throw new Error("Sitemap 线上地址格式不正确。");
+  googleScope.assertGoogleScope(config, getSearchConsoleConfig(config).siteUrl, settings.sitemapUrl);
   const robotsUrl = `${cleanBaseUrl(config.siteBaseUrl)}/${config.outputRobots || "robots.txt"}`;
   const [sitemap, robots] = await Promise.all([
     fetchPublicSeoFile(settings.sitemapUrl, "sitemap.xml"),
     fetchPublicSeoFile(robotsUrl, "robots.txt"),
   ]);
-  const sitemapType = /<sitemapindex(\s|>)/i.test(sitemap.text) ? "sitemapindex" : "urlset";
-  const urlCount = (sitemap.text.match(/<url(?:\s|>)/gi) || []).length;
-  const sitemapCount = (sitemap.text.match(/<sitemap(?:\s|>)/gi) || []).length;
-  const sitemapValid = /<(urlset|sitemapindex)(\s|>)/i.test(sitemap.text)
-    && (sitemapType === "sitemapindex" ? sitemapCount > 0 : urlCount > 0);
+  const xml = cheerio.load(sitemap.text, { xmlMode: true });
+  const sitemapType = xml('sitemapindex').length ? "sitemapindex" : "urlset";
+  const urlCount = xml('urlset > url > loc').length;
+  const sitemapCount = xml('sitemapindex > sitemap > loc').length;
+  const locations = xml(`${sitemapType} > ${sitemapType === 'urlset' ? 'url' : 'sitemap'} > loc`).toArray().map(el => xml(el).text().trim());
+  const sitemapValid = locations.length > 0 && locations.every(value => googleScope.belongsToSite(value, config));
   if (!sitemapValid) throw new Error("线上 sitemap 可以访问，但没有有效 URL，或不是有效的 urlset / sitemapindex XML。");
-  const robotsReferencesSitemap = robots.text.toLowerCase().includes(settings.sitemapUrl.toLowerCase());
+  const robotsReferencesSitemap = robots.text.split(/\r?\n/).some(line => {
+    const match = line.replace(/#.*$/, '').trim().match(/^sitemap\s*:\s*(.+)$/i);
+    return match && match[1].trim() === settings.sitemapUrl;
+  });
   return {
     ok: true,
     checkedAt: new Date().toISOString(),
@@ -2500,15 +2428,8 @@ function base64UrlFromString(value) {
 
 function getGoogleIndexingConfig(config = readConfig()) {
   const raw = config.googleIndexing || {};
-  let serviceAccount = raw.serviceAccount || null;
-  if (!serviceAccount && raw.clientEmail && raw.privateKey) {
-    serviceAccount = { client_email: raw.clientEmail, private_key: raw.privateKey };
-  }
-  const enabled = Boolean(serviceAccount && serviceAccount.client_email && serviceAccount.private_key);
   return {
-    enabled,
-    serviceAccount,
-    clientEmail: serviceAccount ? serviceAccount.client_email : "",
+    ...sharedGoogleAccount.resolve(raw),
     property: defaultGoogleProperty(config),
     dailyQuota: googleDailyLimit(config),
   };
@@ -2558,7 +2479,8 @@ function buildGoogleServiceAccountJwt(serviceAccount, scope) {
 const googleTokenCache = new Map();
 
 async function getGoogleAccessToken(serviceAccount, scope) {
-  const cached = googleTokenCache.get(scope);
+  const cacheKey = googleScope.tokenCacheKey(serviceAccount, scope, siteRuntime.currentSite()?.id);
+  const cached = googleTokenCache.get(cacheKey);
   if (cached && cached.expire > Date.now() + 60000) {
     return cached.token;
   }
@@ -2574,7 +2496,7 @@ async function getGoogleAccessToken(serviceAccount, scope) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.access_token) {
-    googleTokenCache.delete(scope);
+    googleTokenCache.delete(cacheKey);
     throw new Error(
       `Google 取 access_token 失败：${data.error_description || data.error || `HTTP ${response.status}`}`,
     );
@@ -2583,7 +2505,7 @@ async function getGoogleAccessToken(serviceAccount, scope) {
     token: data.access_token,
     expire: Date.now() + (Number(data.expires_in) || 3600) * 1000,
   };
-  googleTokenCache.set(scope, entry);
+  googleTokenCache.set(cacheKey, entry);
   return data.access_token;
 }
 
@@ -2654,7 +2576,7 @@ async function getGoogleIndexingMetadata(serviceAccount, url) {
       message: (parsed && parsed.error && parsed.error.message) || `HTTP ${response.status}`,
     };
   }
-  const metadata = (parsed && parsed.urlNotificationMetadata) || {};
+  const metadata = parsed || {};
   const update = metadata.latestUpdate;
   const remove = metadata.latestRemove;
   return {
@@ -2749,11 +2671,46 @@ function searchConsoleApiError(parsed, status) {
   return { reason: "google-error", message: rawMessage, detail: rawMessage };
 }
 
+async function testSearchConsoleProperty(siteUrl) {
+  const cfg = getSearchConsoleConfig();
+  googleScope.assertGoogleScope(readConfig(), siteUrl);
+  if (!cfg.enabled) return { ok: false, reason: 'not-configured', message: '请先保存 Google 服务账号 JSON。' };
+  const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
+  const response = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}`, {
+    headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) return { ok: false, siteUrl, ...searchConsoleApiError(data, response.status) };
+  const canSubmit = ['siteOwner', 'siteFullUser'].includes(data.permissionLevel);
+  const canRead = canSubmit || data.permissionLevel === 'siteRestrictedUser';
+  return { ok: canRead, canSubmit, siteUrl, clientEmail: cfg.clientEmail, permissionLevel: data.permissionLevel || '',
+    message: canSubmit ? `Search Console 属性权限正常（${data.permissionLevel}），可以提交 Sitemap 和查询收录。`
+      : '服务账号未取得完整权限，不能提交 Sitemap；请检查当前属性的用户和权限。' };
+}
+
+async function checkIndexingEligibility(url) {
+  if (!googleScope.belongsToSite(url, readConfig())) throw new Error('URL 不属于当前网站。');
+  const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(15000) });
+  if (!response.ok) { await response.body?.cancel(); throw new Error(`页面返回 HTTP ${response.status}，不能验证 Indexing API 适用性。`); }
+  const chunks = []; let bytes = 0;
+  for await (const chunk of response.body) {
+    bytes += chunk.length;
+    if (bytes > 2 * 1024 * 1024) throw new Error('页面过大，未执行 Indexing API 通知。');
+    chunks.push(chunk);
+  }
+  const type = googleScope.indexingPageType(Buffer.concat(chunks).toString('utf8'));
+  if (!type) throw new Error('普通产品/新闻页请提交 Sitemap；Indexing API 仅支持真实 JobPosting 或 VideoObject 中的 BroadcastEvent 页面。');
+  return type;
+}
+
 async function submitSearchConsoleSitemap(siteUrl, sitemapUrl) {
   const cfg = getSearchConsoleConfig();
+  googleScope.assertGoogleScope(readConfig(), siteUrl, sitemapUrl);
   if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
+  const access = await testSearchConsoleProperty(siteUrl);
+  if (!access.ok || !access.canSubmit) return { ...access, ok: false, message: access.message || "该属性没有提交权限。" };
   const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_SCOPE);
-  const url = `https://searchconsole.googleapis.com/v1/sites/${encodeURIComponent(siteUrl)}/sitemaps/${encodeURIComponent(sitemapUrl)}`;
+  const url = `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/sitemaps/${encodeURIComponent(sitemapUrl)}`;
   const response = await fetch(url, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },
@@ -2780,12 +2737,13 @@ async function submitSearchConsoleSitemap(siteUrl, sitemapUrl) {
     status: response.status,
     siteUrl,
     sitemapUrl,
-    message: `已把 sitemap 提交给 Google Search Console：${sitemapUrl}`,
+    message: `Google 已接收 Sitemap：${sitemapUrl}。提交成功不代表页面已收录。`,
   };
 }
 
 async function listSearchConsoleSitemaps(siteUrl) {
   const cfg = getSearchConsoleConfig();
+  googleScope.assertGoogleScope(readConfig(), siteUrl);
   if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
   const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
   const response = await fetch(
@@ -2866,7 +2824,7 @@ function diagnoseSearchConsoleInspection(result) {
   if (canonicalMismatch || /ALTERNATE|DUPLICATE|CANONICAL/i.test(coverage)) {
     return { state: "canonical", label: "规范网址不同", tone: "warning", indexed: false, nextAction: `检查 canonical、内链和 Sitemap 是否统一指向 ${googleCanonical || "首选网址"}。` };
   }
-  if (verdict === "PASS" || /SUBMITTED AND INDEXED|URL IS ON GOOGLE|INDEXED/i.test(coverage)) {
+  if (verdict === "PASS") {
     return { state: "indexed", label: "已收录", tone: "success", indexed: true, nextAction: "保持页面稳定，持续更新 Sitemap，无需重复请求收录。" };
   }
   if (/CRAWLED|DISCOVERED/.test(coverage.toUpperCase())) {
@@ -2877,6 +2835,7 @@ function diagnoseSearchConsoleInspection(result) {
 
 async function inspectSearchConsoleUrl(inspectionUrl, siteUrl) {
   const cfg = getSearchConsoleConfig();
+  googleScope.assertGoogleScope(readConfig(), siteUrl, inspectionUrl);
   if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
   const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
   const response = await fetch("https://searchconsole.googleapis.com/v1/urlInspection/index:inspect", {
@@ -2899,6 +2858,7 @@ async function inspectSearchConsoleUrl(inspectionUrl, siteUrl) {
     };
   }
   const result = (parsed && parsed.inspectionResult) || {};
+  if (!result.indexStatusResult?.verdict) return { ok: false, message: "Google 未返回有效收录诊断，请稍后重试。", inspectionUrl, siteUrl };
   const idx = result.indexStatusResult || {};
   const inspection = {
     ok: true,
@@ -2969,6 +2929,7 @@ function getSearchConsoleInspectionState(siteUrl) {
 
 async function querySearchConsolePerformance(siteUrl, days = 28, rowLimit = 250) {
   const cfg = getSearchConsoleConfig();
+  googleScope.assertGoogleScope(readConfig(), siteUrl);
   if (!cfg.enabled) throw new Error("请先配置 Google 服务账号 JSON。");
   const token = await getGoogleAccessToken(cfg.serviceAccount, GOOGLE_SEARCH_CONSOLE_READONLY_SCOPE);
   const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 28)));
@@ -3088,7 +3049,7 @@ function googleQuotaInfo(store, config = readConfig()) {
 
 function sendJson(res, data, status = 200) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
-  res.end(JSON.stringify(data, null, 2));
+  res.end(JSON.stringify(data, (key, value) => key === "oauthToken" ? undefined : value, 2));
 }
 
 function sendConfigBackup(res, scope = "all") {
@@ -3133,6 +3094,12 @@ function sendFile(res, filePath) {
 
 async function handleApi(req, res, pathname) {
   try {
+    const globalRoute = ['/api/ai/status', '/api/ai/config', '/api/ai/test'].includes(pathname)
+      || (req.method === 'GET' && pathname === '/api/config');
+    if (!siteRuntime.currentSite() && !globalRoute) {
+      sendJson(res, { message: "请先在管理后台添加网站。", setupRequired: true }, 400);
+      return;
+    }
     if (req.method === "GET" && pathname === "/api/config-backup/status") {
       const modelKeys = collectModelKeyConfig();
       sendJson(res, {
@@ -3187,8 +3154,9 @@ async function handleApi(req, res, pathname) {
       sendJson(res, result);
       return;
     }
-    if (req.method === "POST" && pathname === "/api/ai/preview") {
-      const body = await readRequestBody(req);
+    if (req.method === "POST" && ["/api/ai/preview", "/api/audit/ai/preview"].includes(pathname)) {
+      const rawBody = await readRequestBody(req);
+      const body = pathname.startsWith('/api/audit/') ? cnAudit.aiInput(rawBody) : rawBody;
       const config = readConfig();
       const result = await seoAi.getPreview(
         TOOL_ROOT,
@@ -3224,23 +3192,12 @@ async function handleApi(req, res, pathname) {
       return;
     }
     if (req.method === "POST" && pathname === "/api/publish/online") {
-      await publishLocalSite();
-      const result = await requestFtpTool("/api/upload", {
-        method: "POST",
-        timeout: 10000,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: "seo" }),
-      });
-      sendJson(res, {
-        started: true,
-        ftpUrl: result.info.browserUrl,
-        state: result.data.state,
-        message: "SEO 文件已在本地重新生成，FTP 正在上传 sitemap、robots 和验证文件。",
-      }, 202);
+      const result = await startSeoPublication();
+      sendJson(res, result, result.started ? 202 : 200);
       return;
     }
     if (req.method === "GET" && pathname === "/api/publish/online/status") {
-      const result = await requestFtpTool("/api/upload/status", { timeout: 4000 });
+      const result = await requestFtpTool("/api/upload/status", { timeout: 15000 });
       sendJson(res, { ftpUrl: result.info.browserUrl, state: result.data });
       return;
     }
@@ -3257,8 +3214,9 @@ async function handleApi(req, res, pathname) {
       sendJson(res, result);
       return;
     }
-    if (req.method === "POST" && pathname === "/api/ai/start") {
-      const body = await readRequestBody(req);
+    if (req.method === "POST" && ["/api/ai/start", "/api/audit/ai/start"].includes(pathname)) {
+      const rawBody = await readRequestBody(req);
+      const body = pathname.startsWith('/api/audit/') ? cnAudit.aiInput(rawBody) : rawBody;
       const config = readConfig();
       const result = seoAi.startJob(
         TOOL_ROOT,
@@ -3268,21 +3226,27 @@ async function handleApi(req, res, pathname) {
       sendJson(res, result, 202);
       return;
     }
-    if (req.method === "GET" && pathname === "/api/report") {
-      const report = await inspectSite();
+    if (req.method === "GET" && ["/api/report", "/api/audit/report"].includes(pathname)) {
+      const report = await inspectSite(pathname === '/api/audit/report' ? { acode: 'cn' } : {});
       report.publicUrlWarning = isSuspiciousPublicUrl(report.config.siteBaseUrl)
         ? "当前站点网址看起来是本地/测试域名，请先改成真实线上域名再生成 sitemap 或推送 IndexNow。"
         : "";
       sendJson(res, report);
       return;
     }
-    if (req.method === "POST" && pathname === "/api/page-audit") {
+    if (req.method === "POST" && ["/api/page-audit", "/api/audit/page"].includes(pathname)) {
       const body = await readRequestBody(req);
-      const result = await auditRenderedPage(body.url);
+      const report = pathname === '/api/audit/page' ? await inspectSite({ acode: 'cn' }) : null;
+      const result = await auditRenderedPage(body.url, report);
       sendJson(res, result);
       return;
     }
     if (req.method === "GET" && pathname === "/api/config") {
+      if (!siteRuntime.currentSite()) {
+        sendJson(res, { config: {}, navigation: buildNavigation(), site: null, setupRequired: true,
+          message: "请先在管理后台添加网站。", instance: {}, publicUrlWarning: false });
+        return;
+      }
       const config = readConfig();
       sendJson(res, {
         config,
@@ -3333,6 +3297,10 @@ async function handleApi(req, res, pathname) {
       if (!/^https?:\/\//i.test(next.localTestBaseUrl)) {
         throw new Error("本地测试地址必须以 http:// 或 https:// 开头。");
       }
+      if (body.gscSiteUrl || body.gscSitemapUrl) {
+        const gsc = getSearchConsoleConfig(next);
+        googleScope.assertGoogleScope(next, gsc.siteUrl, gsc.sitemapUrl);
+      }
       writeJson(currentSeoConfigPath(), next);
       sendJson(res, { config: next, publicUrlWarning: isSuspiciousPublicUrl(next.siteBaseUrl) });
       return;
@@ -3378,6 +3346,8 @@ async function handleApi(req, res, pathname) {
         enabled: cfg.enabled,
         clientEmail: cfg.clientEmail,
         property: cfg.property,
+        accountSource: cfg.accountSource,
+        sharedAccount: sharedGoogleAccount.status(),
         dailyQuota: cfg.dailyQuota,
         quota,
         helpUrl: "https://developers.google.com/search/apis/indexing-api/v3/using-api",
@@ -3397,10 +3367,10 @@ async function handleApi(req, res, pathname) {
       }
       const dailyQuota = Math.floor(requestedQuota);
       if (body.clear) {
-        config.googleIndexing = { ...current, serviceAccount: null, clientEmail: "", dailyQuota };
+        config.googleIndexing = { ...sharedGoogleAccount.configure(current, body, parseServiceAccount), dailyQuota };
         googleTokenCache.clear();
         writeJson(currentSeoConfigPath(), config);
-        sendJson(res, { enabled: false, message: "已清除 Google 服务账号配置。" });
+        sendJson(res, { enabled: false, message: "当前网站已停用 Google 服务账号，其他网站及共享账号不受影响。" });
         return;
       }
       if (body.quotaOnly) {
@@ -3410,15 +3380,17 @@ async function handleApi(req, res, pathname) {
         sendJson(res, { ok: true, dailyQuota, quota, message: `本地每日提交限额已保存为 ${dailyQuota} 条。` });
         return;
       }
-      const serviceAccount = parseServiceAccount(body.serviceAccount);
-      config.googleIndexing = { ...current, serviceAccount, clientEmail: serviceAccount.client_email, dailyQuota };
+      config.googleIndexing = { ...sharedGoogleAccount.configure(current, body, parseServiceAccount), dailyQuota };
       googleTokenCache.clear();
       writeJson(currentSeoConfigPath(), config);
+      const savedGoogle = getGoogleIndexingConfig(config);
       sendJson(res, {
-        enabled: true,
-        clientEmail: serviceAccount.client_email,
+        enabled: savedGoogle.enabled,
+        clientEmail: savedGoogle.clientEmail,
+        accountSource: savedGoogle.accountSource,
         dailyQuota,
-        message: "Google 服务账号已保存。",
+        message: savedGoogle.accountSource === 'shared'
+          ? "已使用共享 Google 服务账号；各网站仍需在 Search Console 中分别授权。" : "已保存当前网站独立的 Google 服务账号。",
       });
       return;
     }
@@ -3452,6 +3424,10 @@ async function handleApi(req, res, pathname) {
 
       for (let index = 0; index < urls.length; index += 1) {
         const item = urls[index];
+        try { await checkIndexingEligibility(item); } catch (error) {
+          results.push({ ok: false, skipped: true, url: item, reason: 'not-eligible', message: error.message });
+          continue;
+        }
         if (!force && store.submitted[item]) {
           results.push({ ok: true, skipped: true, url: item, reason: "already-submitted", message: "此前已提交过，已自动跳过。" });
           continue;
@@ -3543,6 +3519,7 @@ async function handleApi(req, res, pathname) {
         sendJson(res, { ok: false, message: "请输入有效的公开 http(s) URL。" }, 400);
         return;
       }
+      if (!googleScope.belongsToSite(target, readConfig())) throw new Error('URL 不属于当前网站。');
       sendJson(res, await getGoogleIndexingMetadata(cfg.serviceAccount, target));
       return;
     }
@@ -3583,7 +3560,7 @@ async function handleApi(req, res, pathname) {
         sendJson(res, {
           ok: true,
           clientEmail: cfg.clientEmail,
-          message: `服务账号验证成功：已用 ${cfg.clientEmail} 取得 Indexing API 访问令牌，可以继续提交。`,
+          message: '已取得 Indexing API 令牌；这不代表站点授权或收录成功，普通产品/新闻请使用 Sitemap。',
         });
       } catch (error) {
         sendJson(res, {
@@ -3605,6 +3582,12 @@ async function handleApi(req, res, pathname) {
         apiEnableUrl: "https://console.cloud.google.com/apis/library/searchconsole.googleapis.com",
         note: "siteUrl 为 Search Console 属性：域名属性填 sc-domain:example.com，网址前缀属性填 https://example.com/（末尾带 /）。两种属性都支持 URL Inspection，待查 URL 必须属于该属性。",
       });
+      return;
+    }
+    if (req.method === 'POST' && pathname === '/api/search-console/test') {
+      const body = await readRequestBody(req);
+      const siteUrl = normalizeSearchConsoleSiteUrl(body.siteUrl || getSearchConsoleConfig().siteUrl);
+      sendJson(res, await testSearchConsoleProperty(siteUrl));
       return;
     }
     if (req.method === "POST" && pathname === "/api/search-console/sitemap") {
@@ -3660,14 +3643,14 @@ async function handleApi(req, res, pathname) {
       return;
     }
     if (req.method === "GET" && pathname === "/api/yandex/status") {
-      sendJson(res, getYandexSettings());
+      sendJson(res, await getYandexSettings());
       return;
     }
     if (req.method === "POST" && pathname === "/api/yandex/verification") {
       const body = await readRequestBody(req);
       const config = readConfig();
       if (body.clear) {
-        config.yandexWebmaster = { verification: null };
+        config.yandexWebmaster = { ...(config.yandexWebmaster || {}), verification: null };
         writeJson(currentSeoConfigPath(), config);
         sendJson(res, { ok: true, message: "已清除 Yandex 验证文件配置（网站根目录里已保存的文件不会自动删除）。" });
         return;
@@ -3686,13 +3669,13 @@ async function handleApi(req, res, pathname) {
       const siteRoot = resolveSiteRoot(config);
       const target = path.join(siteRoot, filename);
       fs.writeFileSync(target, `${content}\n`, "utf8");
-      config.yandexWebmaster = { verification: { filename, savedAt: new Date().toISOString() } };
+      config.yandexWebmaster = { ...(config.yandexWebmaster || {}), verification: { filename, savedAt: new Date().toISOString() } };
       writeJson(currentSeoConfigPath(), config);
       sendJson(res, {
         ok: true,
         filename,
         filePath: target,
-        message: `已把 ${filename} 写入网站根目录。请点击「上传 SEO 文件到 FTP」把它传到线上，然后回到 Yandex Webmaster 点「检查」完成验证。`,
+        message: `已把 ${filename} 写入网站根目录。请点击第 1 步「先：生成并上传」，然后回到 Yandex Webmaster 点击 Verify 完成验证。`,
       });
       return;
     }
@@ -3703,17 +3686,10 @@ async function handleApi(req, res, pathname) {
     if (req.method === "POST" && pathname === "/api/yandex/token") {
       const body = await readRequestBody(req);
       const config = readConfig();
-      if (body.clear) {
-        config.yandexWebmaster = { ...(config.yandexWebmaster || {}), oauthToken: "" };
-        writeJson(currentSeoConfigPath(), config);
-        sendJson(res, { ok: true, message: "已清除 Yandex OAuth token。" });
-        return;
-      }
-      const token = String(body.token || "").trim();
-      if (!token) throw new Error("请粘贴 Yandex OAuth token。");
-      config.yandexWebmaster = { ...(config.yandexWebmaster || {}), oauthToken: token };
+      config.yandexWebmaster = sharedYandexAccount.configure(config.yandexWebmaster || {}, body);
       writeJson(currentSeoConfigPath(), config);
-      sendJson(res, { ok: true, message: "已保存 Yandex OAuth token。" });
+      sendJson(res, { ok: true, message: body.clear ? "已停用当前网站 Yandex API，共享账号和其他网站不受影响。"
+        : config.yandexWebmaster.accountSource === 'shared' ? "已使用共享 Yandex 账号；其他网站可复用 Token，每个网站仍需在此账号下验证。" : "已保存当前网站专用 Yandex Token。" });
       return;
     }
     if (req.method === "POST" && pathname === "/api/yandex/hosts") {
@@ -3729,7 +3705,7 @@ async function handleApi(req, res, pathname) {
     }
     if (req.method === "POST" && pathname === "/api/yandex/sitemap") {
       const body = await readRequestBody(req);
-      const cfg = getYandexWebmasterConfig();
+      const cfg = await getYandexWebmasterConfig();
       const sitemapUrl = String(body.sitemapUrl || cfg.sitemapUrl).trim();
       if (!sitemapUrl) throw new Error("缺少 sitemapUrl。");
       sendJson(res, await submitYandexSitemap(sitemapUrl));
@@ -3773,17 +3749,14 @@ async function handleApi(req, res, pathname) {
     if (req.method === "POST" && pathname === "/api/bing/apikey") {
       const body = await readRequestBody(req);
       const config = readConfig();
-      if (body.clear) {
-        config.bingWebmaster = { ...(config.bingWebmaster || {}), apiKey: "" };
-        writeJson(currentSeoConfigPath(), config);
-        sendJson(res, { ok: true, message: "已清除 Bing Webmaster API Key。" });
-        return;
-      }
-      const apiKey = String(body.apiKey || "").trim();
-      if (!apiKey) throw new Error("请粘贴 Bing Webmaster API Key。");
-      config.bingWebmaster = { ...(config.bingWebmaster || {}), apiKey };
+      config.bingWebmaster = sharedBingAccount.configure(config.bingWebmaster || {}, body);
       writeJson(currentSeoConfigPath(), config);
-      sendJson(res, { ok: true, message: "已保存 Bing Webmaster API Key。" });
+      sendJson(res, { ok: true, message: body.clear ? "已停用当前网站的 Bing API，其他网站不受影响。"
+        : config.bingWebmaster.accountSource === 'shared' ? "当前网站已使用共享 Bing API Key；同账号下其他已验证的网站也可共用。" : "已保存当前网站专用 Bing API Key。" });
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/bing/test") {
+      sendJson(res, await bingApi.test(getBingApiKey(), getBingSettings().siteUrl));
       return;
     }
     if (req.method === "POST" && pathname === "/api/bing/sitemap") {
@@ -3807,41 +3780,34 @@ async function handleApi(req, res, pathname) {
       return;
     }
     if (req.method === "GET" && pathname === "/api/baidu/status") {
-      sendJson(res, getBaiduSettings());
+      sendJson(res, await getBaiduStatus());
       return;
     }
     if (req.method === "POST" && pathname === "/api/baidu/config") {
       const body = await readRequestBody(req);
+      const ctx = await getBaiduContext();
+      if (baiduLocks.has(ctx.historyPath)) throw new Error('正在提交，请等待完成后修改配置。');
       const config = readConfig();
       if (body.clear) {
-        config.baidu = { enabled: true, token: "", site: "" };
+        config.baidu = { ...config.baidu, enabled: false };
         writeJson(currentSeoConfigPath(), config);
-        sendJson(res, { ok: true, message: "已清除百度推送配置。" });
+        sendJson(res, { ok: true, message: '已停用当前站点推送；配置与提交记录仍保留。' });
         return;
       }
-      const token = String(body.token || "").trim();
-      if (!token) throw new Error("请粘贴百度推送 token。");
-      config.baidu = {
-        enabled: body.enabled !== false,
-        token,
-        site: String(body.site || "").trim(),
-      };
+      if (body.site && baiduApi.siteOrigin(body.site) !== ctx.site) throw new Error('百度只允许配置当前项目的 CN 中文站。');
+      const suppliedToken = String(body.token || '').trim();
+      const token = suppliedToken || (ctx.configuredSite === ctx.site ? String(config.baidu?.token || '').trim() : '');
+      if (!token || /[\s?&=:/]/.test(token)) throw new Error('请粘贴中文站接口地址中的 Token 值，不要粘贴整个接口地址。');
+      config.baidu = { enabled: true, token, site: ctx.site };
       writeJson(currentSeoConfigPath(), config);
-      sendJson(res, { ok: true, message: "已保存百度推送配置。" });
+      sendJson(res, { ok: true, message: '中文站配置已保存，可以先提交首页测试，再批量提交。' });
       return;
     }
     if (req.method === "POST" && pathname === "/api/baidu/push") {
       const body = await readRequestBody(req);
-      const urls = Array.isArray(body.urls)
-        ? body.urls.map((value) => String(value || "").trim()).filter(Boolean)
-        : body.url
-          ? [String(body.url).trim()]
-          : [];
-      if (!urls.length) throw new Error("没有可提交的 URL。");
-      if (urls.length > 2000) throw new Error("百度单次最多提交 2000 个 URL，请分批提交。");
-      const result = await submitBaiduUrls(urls, { site: body.site });
-      result.urlCount = urls.length;
-      sendJson(res, result);
+      const urls = Array.isArray(body.urls) ? body.urls : body.url ? [body.url] : [];
+      if (!urls.length || urls.length > 100) throw new Error('每次提交 1–100 个中文站页面。');
+      sendJson(res, await submitBaiduUrls(urls, { site: body.site, test: body.test === true }));
       return;
     }
     if (req.method === "GET" && pathname === "/api/index-coverage") {
@@ -3886,8 +3852,14 @@ async function handleApi(req, res, pathname) {
   }
 }
 
-const server = http.createServer((req, res) => {
-  siteRuntime.runForRequest(req, res, () => {
+const authenticateTool = createToolAuth({ tool: 'seo', env: { ...parseEnvFile(BACKEND_ENV_PATH), ...process.env } });
+const server = http.createServer(async (req, res) => {
+  if (req.method === 'GET' && new URL(req.url, 'http://localhost').pathname === '/deployment-environment') {
+    sendJson(res, deploymentEnvironment({ ...parseEnvFile(BACKEND_ENV_PATH), ...process.env }));
+    return;
+  }
+  if (await authenticateTool(req, res)) return;
+  runWithToolIdentity(req, () => siteRuntime.runForRequest(req, res, () => {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     if (url.pathname.startsWith("/api/")) {
       handleApi(req, res, url.pathname);
@@ -3918,7 +3890,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     sendFile(res, resolvedPath);
-  });
+  }));
 });
 
 function startServer() {
@@ -3938,4 +3910,6 @@ function startServer() {
 
 if (require.main === module) startServer();
 
-module.exports = { inspectSite, findLocalEditorRecord, buildVueEditorUrl, calculateSeoHealth, addCategorySeoIssues, startServer };
+module.exports = { inspectSite, findLocalEditorRecord, buildVueEditorUrl, calculateSeoHealth, addCategorySeoIssues, startServer, readConfig, findDatabase,
+  _googleTest: { getGoogleAccessToken, submitSearchConsoleSitemap, testSearchConsoleProperty, diagnoseSearchConsoleInspection,
+    getGoogleIndexingMetadata, checkIndexingEligibility, googleTokenCache, inspectSearchConsoleUrl } };

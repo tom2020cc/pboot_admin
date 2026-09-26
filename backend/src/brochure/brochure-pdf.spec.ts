@@ -28,6 +28,19 @@ describe('brochure PDF document boundary', () => {
   it('accepts raster images', () => {
     expect(prepareBrochurePdfHtml(documentHtml.replace('Product data', '<img src="data:image/png;base64,AAAA" alt="photo">')).html).toContain('data:image/png;base64,AAAA');
   });
+  it('preserves language direction and semantic detail content', () => {
+    const html = prepareBrochurePdfHtml(documentHtml.replace('Product data', '<section lang="ar" dir="rtl"><h5>تفاصيل المنتج</h5><p>m<sup>2</sup></p><blockquote>Details</blockquote><table><caption>Specs</caption><tr><td colspan="2">1000</td></tr></table></section>')).html;
+    expect(html).toContain('lang="ar" dir="rtl"');
+    expect(html).toContain('<sup>2</sup>');
+    expect(html).toContain('<caption>Specs</caption>');
+    expect(html).toContain('colspan="2"');
+  });
+  it('preserves bounded typography styles and repeated semantic table headers', () => {
+    const html = prepareBrochurePdfHtml(documentHtml.replace('Product data', '<section class="brochure-content table-web" style="--body-font:12pt;--body-leading:1.8;--table-font:11pt"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody><tr class="table-group"><th colspan="2">Power head</th></tr><tr><td>Depth</td><td>1200 m</td></tr></tbody></table></section>')).html;
+    expect(html).toContain('--body-font:12pt'); expect(html).toContain('--body-leading:1.8');
+    expect(html).toContain('--table-font:11pt'); expect(html).toContain('<thead>');
+    expect(html).toContain('class="table-group"');
+  });
   it('rejects empty, unpaginated, oversized and too many page inputs', () => {
     for (const value of ['', '<p>not paginated</p>', 'a'.repeat(MAX_BROCHURE_HTML_BYTES + 1), '<div class="pagedjs_page"></div>'.repeat(151)]) {
       expect(() => prepareBrochurePdfHtml(value)).toThrow();
@@ -53,7 +66,7 @@ describe('brochure PDF renderer isolation', () => {
     expect(browser.newContext).toHaveBeenCalledWith({ javaScriptEnabled: false, serviceWorkers: 'block', acceptDownloads: false });
     const abort = jest.fn(); context.route.mock.calls[0][1]({ abort });
     expect(abort).toHaveBeenCalled();
-    expect(page.pdf).toHaveBeenCalledWith(expect.objectContaining({ format: 'A4', preferCSSPageSize: true, printBackground: true }));
+    expect(page.pdf).toHaveBeenCalledWith(expect.objectContaining({ width: '794px', height: '1123px', preferCSSPageSize: false, printBackground: true }));
     expect(browser.close).toHaveBeenCalled();
   });
   it('reports a missing browser with installation instructions', async () => {
@@ -61,11 +74,29 @@ describe('brochure PDF renderer isolation', () => {
     await expect(new BrochurePdfService().render(documentHtml)).rejects.toThrow('playwright install chromium');
     expect(chromium.launch).not.toHaveBeenCalled();
   });
+  it('accepts landscape A4 quotations without changing portrait brochure defaults', async () => {
+    page.locator.mockReturnValue({ evaluateAll: jest.fn().mockResolvedValue([{ width: 1123, height: 794 }]) });
+    await new BrochurePdfService().render(documentHtml);
+    expect(page.pdf).toHaveBeenCalledWith(expect.objectContaining({ width: '1123px', height: '794px' }));
+    page.locator.mockReturnValue({ evaluateAll: jest.fn().mockResolvedValue([{ width: 794, height: 1123 }]) });
+    await new BrochurePdfService().render(documentHtml);
+    expect(page.pdf).toHaveBeenLastCalledWith(expect.objectContaining({ width: '794px', height: '1123px' }));
+  });
+  it('rejects mixed page orientations', async () => {
+    page.locator.mockReturnValue({ evaluateAll: jest.fn().mockResolvedValue([{ width: 1123, height: 794 }, { width: 794, height: 1123 }]) });
+    await expect(new BrochurePdfService().render(documentHtml.replace('</body>', '<div class="pagedjs_page"></div></body>'))).rejects.toThrow('尺寸无效');
+    expect(page.pdf).not.toHaveBeenCalled();
+  });
   it('validates fixed page geometry and closes the renderer on failure', async () => {
-    page.locator.mockReturnValue({ evaluateAll: jest.fn().mockResolvedValue([{ width: 1000, height: 2000 }]) });
-    await expect(new BrochurePdfService().render(documentHtml)).rejects.toThrow('不是 A4');
+    page.locator.mockReturnValue({ evaluateAll: jest.fn().mockResolvedValue([{ width: 1000, height: 3000 }]) });
+    await expect(new BrochurePdfService().render(documentHtml)).rejects.toThrow('尺寸无效');
     expect(page.pdf).not.toHaveBeenCalled();
     expect(browser.close).toHaveBeenCalled();
+  });
+  it('exports custom paper using measured geometry without trusting CSS print size',async()=>{
+    page.locator.mockReturnValue({evaluateAll:jest.fn().mockResolvedValue([{width:944.88,height:1511.81}])});
+    await new BrochurePdfService().render(documentHtml);
+    expect(page.pdf).toHaveBeenCalledWith(expect.objectContaining({width:'945px',height:'1512px',preferCSSPageSize:false}));
   });
   it('rejects a third concurrent export and releases capacity after completion', async () => {
     const service = new BrochurePdfService();

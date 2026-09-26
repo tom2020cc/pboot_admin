@@ -1,9 +1,9 @@
 import request from '@/utils/request';
 import type { BrochureDraft } from '@/utils/brochure';
 
-export type BrochureSummary = { id: number; title: string; itemCount: number; createTime: string; updateTime: string };
+export type BrochureSummary = { id: number; title: string; language: string; itemCount: number; createTime: string; updateTime: string };
 export type BrochureRecord = BrochureSummary & { data: BrochureDraft };
-export const getBrochures = (search = '') => request.get<BrochureSummary[]>('/brochures', { params: { search } });
+export const getBrochures = (search = '', language = '') => request.get<BrochureSummary[]>('/brochures', { params: { search, language } });
 export const getBrochure = (id: number) => request.get<BrochureRecord>(`/brochures/${id}`);
 export const saveBrochure = (data: BrochureDraft, id?: number) => id
   ? request.patch<BrochureRecord>(`/brochures/${id}`, { data })

@@ -5,6 +5,10 @@
       <p>当前前端已连接 NestJS 后端服务。</p>
     </div>
 
+    <el-alert v-if="sitesReady && !sitesStore.activeSite" title="尚未添加网站" type="info" :closable="false" show-icon>
+      <router-link to="/sites">添加网站</router-link>
+    </el-alert>
+
     <div class="stats-grid">
       <div class="stat-card">
         <span>用户数量</span>
@@ -37,8 +41,8 @@
         <el-button type="primary" :loading="backupLoading" @click="handleCreateDatabaseBackup">备份当前数据库</el-button>
       </div>
       <div class="backup-meta">
-        <el-tag :type="currentDbInfo?.healthy === false ? 'danger' : 'success'" effect="plain">
-          {{ currentDbInfo?.healthy === false ? "当前库有警告" : "当前库正常" }}
+        <el-tag :type="currentDbInfo?.healthy === false ? 'danger' : currentDbInfo?.healthy === true ? 'success' : 'info'" effect="plain">
+          {{ currentDbInfo?.healthy === false ? "当前库有警告" : currentDbInfo?.healthy === true ? "当前库正常" : "数据库状态未加载" }}
         </el-tag>
         <el-tag effect="plain">菜单 {{ currentDbInfo?.counts?.menu ?? "-" }}</el-tag>
         <el-tag effect="plain">新闻 {{ currentDbInfo?.counts?.news ?? "-" }}</el-tag>
@@ -115,7 +119,10 @@ import { getProductList, type ProductItem } from "@/api/products";
 import { getInfo, getUsers, type UserInfo } from "@/api/users";
 import { createDatabaseBackup, getCurrentDatabaseInfo, getDatabaseBackups, type DatabaseBackupInfo } from "@/api/databaseBackups";
 import { getErrorMessage } from "@/utils/request";
+import { useSitesStore } from "@/stores/sites";
 
+const sitesStore = useSitesStore();
+const sitesReady = ref(false);
 const users = ref<UserInfo[]>([]);
 const menus = ref<MenuItem[]>([]);
 const newsList = ref<NewsItem[]>([]);
@@ -143,23 +150,24 @@ const formatDate = (value?: string) => {
 };
 
 const loadDashboard = async () => {
+  const requests: Promise<unknown>[] = [
+    getUsers().then((res) => { users.value = res.data; }),
+    getInfo().then((res) => { profileEmail.value = res.data?.email || ""; }),
+    getCurrentDatabaseInfo().then((res) => { currentDbInfo.value = res.data; }),
+    getDatabaseBackups().then((res) => { databaseBackups.value = res.data; }),
+  ];
+  // Observe global requests immediately while the site selection is resolved.
+  const globalResults = Promise.allSettled(requests);
   try {
-    const [userRes, menuRes, newsRes, productRes, profileRes, dbInfoRes, backupRes] = await Promise.all([
-      getUsers(),
-      getAll(),
-      getNewsList(),
-      getProductList(),
-      getInfo(),
-      getCurrentDatabaseInfo(),
-      getDatabaseBackups(),
-    ]);
-    users.value = userRes.data;
-    menus.value = menuRes.data;
-    newsList.value = newsRes.data;
-    productList.value = productRes.data;
-    profileEmail.value = profileRes.data?.email || "";
-    currentDbInfo.value = dbInfoRes.data;
-    databaseBackups.value = backupRes.data;
+    await sitesStore.refresh();
+    sitesReady.value = true;
+    const contentResults = sitesStore.activeSite ? await Promise.allSettled([
+      getAll().then((res) => { menus.value = res.data; }),
+      getNewsList().then((res) => { newsList.value = res.data; }),
+      getProductList().then((res) => { productList.value = res.data; }),
+    ]) : [];
+    const failed = [...await globalResults, ...contentResults].find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
   } catch (e) {
     ElMessage.error(getErrorMessage(e, "加载首页数据失败"));
   }

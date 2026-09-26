@@ -61,6 +61,12 @@ export class Product {
   @Column({ default: true, comment: 'Visible status' })
   show: boolean;
 
+  @Column({ type: 'boolean', nullable: true, default: null, comment: 'Pinned; null preserves existing PB setting' })
+  isTop: boolean | null;
+
+  @Column({ type: 'boolean', nullable: true, default: null, comment: 'Recommended; null preserves existing PB setting' })
+  isRecommend: boolean | null;
+
   @Column({ default: 0, comment: 'Sort order' })
   orderNum: number;
 

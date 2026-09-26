@@ -10,7 +10,7 @@ module.exports = { apps: applications.map(([name, directory, script, memory]) =>
   name, cwd: path.join(root, directory), script,
   instances: 1, exec_mode: 'fork', interpreter: process.execPath,
   env: {
-    NODE_ENV: 'production', BACKEND_HOST: '127.0.0.1', BACKEND_PORT: '5108',
+    NODE_ENV: 'production', APP_ENVIRONMENT: 'baota', BACKEND_HOST: '127.0.0.1', BACKEND_PORT: '5108',
     SEO_TOOL_HOST: '127.0.0.1', SEO_TOOL_PORT: '5388', FTP_TOOL_PORT: '5389',
   },
   autorestart: true, restart_delay: 10000, kill_timeout: 20000,

@@ -21,6 +21,8 @@ import { BrochureModule } from './brochure/brochure.module';
 import { SiteRequestContextMiddleware } from './sites/site-request-context.service';
 import { SitesModule } from './sites/sites.module';
 import { SeoContentModule } from './seo-content/seo-content.module';
+import { SiteInformationModule } from './site-information/site-information.module';
+import { AreaModule } from './area/area.module';
 
 const entities = [__dirname + '/**/*.entity{.ts,.js}'];
 
@@ -52,6 +54,8 @@ const createDatabaseConfig = (config: ConfigService): TypeOrmModuleOptions =>
       useFactory: createDatabaseConfig,
     }),
     SitesModule,
+    SiteInformationModule,
+    AreaModule,
     SyncGuardModule,
     UserModule,
     AuthModule,

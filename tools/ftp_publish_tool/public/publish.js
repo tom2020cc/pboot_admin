@@ -25,6 +25,7 @@
       password: $("password").value,
       remoteRoot: $("remoteRoot").value || "/",
       secure: $("secure").value === "true",
+      networkInterface: $('networkInterface').value,
       uploadScope: $("uploadScope").value,
       uploadMode: $("uploadMode").value,
       recentImageDays: Number($("recentImageDays").value || 14),
@@ -59,7 +60,23 @@
   async function loadConfig() {
     const result = await api("/api/config");
     const config = result.config || {};
+    const networks = await api('/api/ftp/network');
+    for (const item of networks.interfaces || []) $('networkInterface').add(new Option(`${item.name} (${item.address})`, item.name));
+    if (config.networkInterface && ![...$('networkInterface').options].some(item => item.value === config.networkInterface)) $('networkInterface').add(new Option(`${config.networkInterface}（当前不可用）`, config.networkInterface));
+    $('networkInterface').value = config.networkInterface || '';
     renderNavigation(result.navigation, "ftp");
+    if (result.site) {
+      $("siteStripName").textContent = result.site.name || result.site.code || "-";
+      $("siteStripUrl").textContent = result.site.publicBaseUrl || "";
+    } else {
+      $("siteStripName").textContent = "未选择";
+      $("siteStripUrl").textContent = "请先在管理后台添加网站";
+    }
+    if (result.setupRequired) {
+      setStatus(result.message);
+      document.querySelectorAll('main button, main input, main select').forEach(control => { control.disabled = true; });
+      return false;
+    }
     $("host").value = config.host || "";
     $("port").value = config.port || 21;
     $("user").value = config.user || "";
@@ -75,6 +92,7 @@
     $("backupBeforeOverwrite").checked = config.backupBeforeOverwrite !== false;
     $("backupMaxFileSizeMb").value = config.backupMaxFileSizeMb || 20;
     updateScopeNote();
+    return true;
   }
 
   async function saveConfig() {
@@ -132,6 +150,23 @@
     $("connectionBadge").className = "status-badge safe";
     $("connectionBadge").textContent = "连接正常";
     setStatus("FTP 连接正常");
+  }
+
+  async function useSyncTarget() {
+    setStatus("正在填入宝塔同步目标");
+    const result = await postJson("/api/publish/use-sync-target", {});
+    const config = result.config || {};
+    $('networkInterface').value = config.networkInterface || '';
+    $("host").value = config.host || "";
+    $("port").value = config.port || 21;
+    $("user").value = config.user || "";
+    $("password").value = "";
+    $("password").placeholder = config.passwordSet ? "已保存，留空不修改" : "请输入 FTP 密码";
+    $("remoteRoot").value = config.remoteRoot || "/";
+    $("secure").value = String(Boolean(config.secure));
+    updateScopeNote();
+    await refreshPlan();
+    setStatus(`已填入站点「${result.site?.name || result.site?.code || ""}」的宝塔目标（含密码），可直接开始同步`);
   }
 
   async function startUpload() {
@@ -203,10 +238,14 @@
     setStatus(error.message, true);
   });
   $("uploadBtn").onclick = () => startUpload().catch((error) => setStatus(error.message, true));
+  $("useSyncTargetBtn").onclick = () => useSyncTarget().catch((error) => setStatus(error.message, true));
   $("uploadScope").onchange = updateScopeNote;
+  window.addEventListener('selected-upload-started', () => { refreshUploadStatus().catch(error => setStatus(error.message, true)); scheduleUploadPoll(900); });
 
-  Promise.all([loadConfig(), refreshPlan(), refreshUploadStatus(), refreshSecurityBusy()])
-    .then(() => {
+  loadConfig()
+    .then(async (ready) => {
+      if (!ready) return;
+      await Promise.all([refreshPlan(), refreshUploadStatus(), refreshSecurityBusy()]);
       if (!uploadRunning && !securityRunning) setStatus("就绪");
       if (uploadRunning) scheduleUploadPoll(900);
       scheduleBusyPoll();

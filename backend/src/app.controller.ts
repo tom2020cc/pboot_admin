@@ -1,8 +1,9 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, UseGuards } from '@nestjs/common';
 import { AppService } from './app.service';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { Public } from './auth/public.decorator';
+const { deploymentEnvironment } = require('../../tools/deployment-environment');
 
 @Controller()
 @ApiTags('首页管理')
@@ -22,9 +23,9 @@ export class AppController {
   getHi(): string { return '我是公共页面 不用jwt也可以访问'}
 
   @Get('project-identity')
+  @Header('Cache-Control', 'no-store')
   @Public()
   getProjectIdentity() {
-    return { project: 'pboot-admin-center' };
+    return { project: 'pboot-admin-center', ...deploymentEnvironment() };
   }
 }
-

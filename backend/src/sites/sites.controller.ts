@@ -16,6 +16,12 @@ export class SitesController {
     return this.sitesService.findAll();
   }
 
+  @Get('runtime-defaults')
+  @ApiOperation({ summary: '读取服务器站点环境默认值' })
+  runtimeDefaults() {
+    return this.sitesService.getRuntimeDefaults();
+  }
+
   @Get('static-file')
   @Public()
   @ApiOperation({ summary: '读取指定站点 static 目录文件' })

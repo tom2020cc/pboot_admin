@@ -744,7 +744,7 @@ export class MenuService {
               continue;
             }
           }
-          this.assertPbootMenuSlot(db, menu, pbootKey, parentPcode);
+          this.assertPbootMenuSlot(db, menu, pbootKey, parentPcode, false, menus);
           this.insertMenuToPboot(db, menu, pbootKey, sourceRow, parentPcode, now);
           savedIds.push(menu.id);
           created += 1;
@@ -752,7 +752,7 @@ export class MenuService {
         }
 
         const parentPcode = await this.resolvePbootParentScode(menu, pbootKey.acode);
-        this.assertPbootMenuSlot(db, menu, pbootKey, parentPcode, true);
+        this.assertPbootMenuSlot(db, menu, pbootKey, parentPcode, true, menus);
         if (menu.pbootSyncPending && (String(existing.filename) !== this.hrefToFilename(menu.href)
           || String(existing.mcode) !== String(menu.model) || String(existing.pcode) !== parentPcode)) {
           throw new BadRequestException(`栏目编码 ${menu.code} 已被 PB 其他栏目占用，已停止同步`);
@@ -849,7 +849,8 @@ export class MenuService {
     if (lang !== 'cn' && menu.sourceMenuId && !newObj.sourceMenuId) throw new BadRequestException('不能清除已有中文来源');
     const filename = this.hrefToFilename(newObj.href);
     if (newObj.href !== menu.href && !/^https?:\/\//i.test(newObj.href)
-      && menus.some(item => String(item.id) !== String(id) && this.hrefToFilename(item.href).toLowerCase() === filename.toLowerCase())) {
+      && menus.some(item => String(item.id) !== String(id) && this.hrefToFilename(item.href).toLowerCase() === filename.toLowerCase()
+        && !this.canShareMenuUrl(newObj, item, menus))) {
       throw new BadRequestException('栏目 URL 已被其他栏目使用');
     }
     if (postObj.thumbnail != null) newObj.icon = this.splitMenuImage(postObj.thumbnail);
@@ -1116,7 +1117,16 @@ export class MenuService {
       contenttpl: menu.detailTemplate || model.contenttpl || '', gtype: '4' };
   }
 
-  private assertPbootMenuSlot(db: any, menu: Menu, key: { acode: string; scode: string }, parent: string, existing = false) {
+  private canShareMenuUrl(menu: Menu, other: Menu, menus: Menu[]) {
+    if (menu.siteId !== other.siteId || menu.pendingDelete || other.pendingDelete
+      || menuLanguage(menu, menus) === menuLanguage(other, menus)) return false;
+    const sourceId = Number(menu.sourceMenuId || menu.id);
+    if (sourceId !== Number(other.sourceMenuId || other.id)) return false;
+    return menus.some(source => Number(source.id) === sourceId && source.siteId === menu.siteId
+      && !source.pendingDelete && menuLanguage(source, menus) === 'cn');
+  }
+
+  private assertPbootMenuSlot(db: any, menu: Menu, key: { acode: string; scode: string }, parent: string, existing = false, menus: Menu[] = []) {
     if (!existing && this.queryOne(db, 'select id from ay_content_sort where scode=?', [key.scode])) {
       throw new BadRequestException(`PB 栏目编码 ${key.scode} 已被占用，请检查网站栏目变化`);
     }
@@ -1124,9 +1134,22 @@ export class MenuService {
       throw new BadRequestException(`请先同步「${menu.name}」的父栏目，或使用同步全部`);
     }
     const filename = /^https?:\/\//i.test(menu.href) ? menu.urlName : this.hrefToFilename(menu.href);
-    if (filename && this.queryOne(db,
-      'select id from ay_content_sort where lower(filename)=lower(?) and not (acode=? and scode=?)', [filename, key.acode, key.scode])) {
-      throw new BadRequestException(`栏目「${menu.name}」的 URL 已被 PB 其他栏目使用`);
+    if (!filename) return;
+    const current = existing && this.queryOne<{ filename: string }>(db,
+      'select filename from ay_content_sort where acode=? and scode=?', [key.acode, key.scode]);
+    // PB resolves shared paths in the current language. Linked translations may adopt
+    // their source's URL, while unrelated new collisions still require review.
+    const unchanged = current && current.filename === filename;
+    const familyCodes = new Set(menus
+      .filter(item => this.canShareMenuUrl(menu, item, menus))
+      .map(item => item.code));
+    const collisions = this.queryAll<{ acode: string; scode: string; name: string }>(db,
+      'select acode,scode,name from ay_content_sort where lower(filename)=lower(?) and not (acode=? and scode=?)',
+      [filename, key.acode, key.scode]);
+    const conflict = collisions.find(row => row.acode === key.acode
+      || (!unchanged && !familyCodes.has(`pboot:${row.acode}:${row.scode}`)));
+    if (conflict) {
+      throw new BadRequestException(`栏目「${menu.name}」的 URL「/${filename}」已被 PB 栏目「${conflict.name}」使用（语言 ${conflict.acode}，编码 ${conflict.scode}），请核对后再同步`);
     }
   }
 

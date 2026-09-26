@@ -5,14 +5,24 @@ const { exec, spawn } = require("child_process");
 
 const CONFIG_PATH = path.join(__dirname, "ftp.config.json");
 const RUNTIME_PATH = path.join(__dirname, ".runtime.json");
-const configuredPort = (() => {
+// 项目约定端口优先：backend/.env 的 FTP_TOOL_PORT（默认 5389），与导航/前端端口表保持一致
+const backendEnvPort = (() => {
   try {
-    return Number(JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")).localPort || 5189);
+    const text = fs.readFileSync(path.join(__dirname, "..", "..", "backend", ".env"), "utf8");
+    const match = text.split(/\r?\n/).find((line) => /^\s*FTP_TOOL_PORT\s*=/.test(line));
+    return match ? Number(match.split("=").slice(1).join("=").trim()) : 0;
   } catch (_error) {
-    return 5189;
+    return 0;
   }
 })();
-const BASE_PORT = Number(process.env.FTP_TOOL_PORT || configuredPort);
+const configuredPort = (() => {
+  try {
+    return Number(JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")).localPort || 0);
+  } catch (_error) {
+    return 0;
+  }
+})();
+const BASE_PORT = Number(process.env.FTP_TOOL_PORT || backendEnvPort || configuredPort || 5189);
 const MAX_PORT = BASE_PORT + 40;
 const TOOL_ROOT = __dirname;
 

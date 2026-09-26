@@ -118,6 +118,8 @@
       .google-ready-summary.ok { color: var(--el-color-success); }
       .google-ready-summary.bad { color: var(--text-danger); }
       .google-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 12px; }
+      .google-share-option { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+      .google-share-option input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; flex: 0 0 18px; }
       .inspect-field { min-width: 360px; flex: 1; }
       .google-result { display: none; margin-top: 12px; padding: 12px 14px; border-left: 4px solid var(--el-color-primary); background: var(--el-color-primary-light-9); }
       .google-result[data-tone="success"] { border-left-color: var(--el-color-success); background: var(--el-color-success-light-9); }
@@ -415,7 +417,7 @@
       }
     </style>
     <link rel="stylesheet" href="/seo-shell.css" />
-    <script defer src="/navigation-icons.js"></script>
+    <script src="/navigation-icons.js"></script>
     <script defer src="/seo-pages.js"></script>
   </head>
   <body class="seo-page">
@@ -459,19 +461,12 @@
         <a class="action-link" href="/baidu.html">进入百度</a>
         <a class="action-link" href="/yandex.html">进入 Yandex</a>
       </div>
-      <div class="toolbar engine-commandbar" data-seo-pages="google">
-        <button class="success" id="prepareGoogleBtn">一键准备 Google Sitemap</button>
-        <span>生成、上传并检查公开 Sitemap，然后继续下方 Search Console 工作流。</span>
-      </div>
-      <div class="toolbar" data-seo-pages="audit">
-        <button class="primary" id="auditRefreshBtn">刷新检查</button>
-      </div>
+      <section class="band cn-audit-intro" data-seo-pages="audit">
+        <div><span class="cn-audit-badge">仅 CN 中文版</span><h2>01 检查中文资料</h2><p>以中文资料为基础，先检查，再修改，最后查看页面效果。</p><p class="note">检查不会修改数据。改好中文后，其他语言仍需通过原来的翻译、同步流程更新。</p></div>
+        <button class="primary" id="auditRefreshBtn">重新检查中文资料</button>
+        <div id="auditFeedback" role="status" aria-live="polite"></div>
+      </section>
       <div id="serviceStatus" class="note" role="status" hidden></div>
-      <div class="toolbar engine-commandbar" data-seo-pages="bing">
-        <button id="keyBtn">生成 IndexNow Key</button>
-        <button class="warn" id="pushBtn">推送 IndexNow（Bing 等）</button>
-        <span>IndexNow 会通知 Bing 及其他参与协议的搜索引擎；百度与 Google 使用各自页面。</span>
-      </div>
       <div class="toolbar engine-commandbar" data-seo-pages="settings">
         <button class="success" id="generateBtn">生成 sitemap + robots</button>
         <button id="uploadSeoFtpBtn">上传 SEO 文件到 FTP</button>
@@ -491,34 +486,7 @@
         </div>
       </section>
 
-      <section class="band" id="page-audit" data-seo-pages="audit">
-        <div class="band-title">
-          <div>
-            <h2>页面技术 SEO 体检</h2>
-            <div class="note">实际访问页面并检查响应、标题、描述、Canonical、H1、收录指令、Hreflang、图片 ALT、结构化数据和移动端适配。本地地址适合改版时检查，线上地址适合上线后复核。</div>
-          </div>
-          <span class="note" id="pageAuditMeta">尚未体检</span>
-        </div>
-        <div class="page-audit-form">
-          <label><span>检查环境</span><select id="pageAuditSource"><option value="public">真实线上页面</option><option value="local">本地测试页面</option></select></label>
-          <label><span>完整页面 URL</span><input id="pageAuditUrlInput" list="pageAuditUrls" placeholder="https://shanbo.cc/" /></label>
-          <button class="primary" id="pageAuditBtn">开始体检</button>
-          <datalist id="pageAuditUrls"></datalist>
-        </div>
-        <div class="page-audit-result" id="pageAuditResult">
-          <div class="audit-summary">
-            <div class="audit-score" id="pageAuditScore"><strong>0</strong><span>技术 SEO 得分</span></div>
-            <div class="audit-facts" id="pageAuditFacts"></div>
-            <div class="serp-preview">
-              <div class="serp-preview-label">搜索结果预览</div>
-              <div class="serp-url" id="pageAuditSnippetUrl"></div>
-              <div class="serp-title" id="pageAuditSnippetTitle"></div>
-              <div class="serp-description" id="pageAuditSnippetDescription"></div>
-            </div>
-          </div>
-          <div class="audit-checks" id="pageAuditChecks"></div>
-        </div>
-      </section>
+
 
       <section class="band" data-seo-pages="settings">
         <div class="band-title">
@@ -586,7 +554,7 @@
             <div class="coverage-editor-body">
               <label><span>百度平台索引量</span><input id="baiduCoverageCountInput" type="number" min="0" step="1" placeholder="例如 860" /></label>
               <label><span>记录备注</span><input id="baiduCoverageNoteInput" placeholder="例如：百度搜索资源平台 8 月索引量" /></label>
-              <label class="wide"><span>已收录 URL 明细（可选，每行一个；总数可以大于明细数量）</span><textarea id="baiduCoverageUrlsInput" placeholder="https://cn.shanbo.cc/page-1/&#10;https://cn.shanbo.cc/page-2/"></textarea></label>
+              <label class="wide"><span>已收录 URL 明细（可选，每行一个；总数可以大于明细数量）</span><textarea id="baiduCoverageUrlsInput" placeholder="https://example.com/page-1/&#10;https://example.com/page-2/"></textarea></label>
               <div class="coverage-editor-actions wide">
                 <button class="primary" id="saveBaiduCoverageBtn" type="button">保存百度快照</button>
                 <button id="clearBaiduCoverageBtn" type="button">清除本地快照</button>
@@ -620,11 +588,96 @@
         </div>
       </section>
 
+      <section class="band" id="google-search-console" data-seo-pages="google">
+        <div class="band-title">
+          <div>
+            <h2>按顺序管理 Google 收录</h2>
+            <div class="note">先提交网站地图，再查看收录结果；单个页面请求是可选操作，不需要逐个点完。</div>
+          </div>
+          <span class="note" id="searchConsoleMeta">未配置</span>
+        </div>
+        <div class="gsc-diagnostics">
+          <div class="google-task-grid">
+            <article class="google-task-card" id="google-step-submit">
+              <span class="google-task-number">01</span><h3>提交网站地图</h3>
+              <p>先更新线上地图，再一次把地图中的页面地址交给 Google。</p>
+              <div class="google-task-actions"><button id="prepareGoogleBtn" type="button">先：生成并上传</button><button class="success" id="gscSubmitSitemapBtn" type="button">再：提交网站地图</button></div>
+              <small>地图已更新可直接提交。完成后等待 Google 抓取。</small>
+            </article>
+            <article class="google-task-card google-task-card-primary" id="google-step-check">
+              <span class="google-task-number">02</span><h3>检查收录</h3>
+              <p>查询哪些页面已收录，自动跳过近期查过的页面。</p>
+              <div class="google-task-actions"><label class="google-batch-choice"><span>每次</span><select id="gscBatchLimitInput" aria-label="每次检查数量"><option value="20">20 条</option><option value="50">50 条</option><option value="100" selected>100 条</option></select></label><button class="primary" id="gscInspectBatchBtn" type="button">开始检查</button><button class="warn" id="gscInspectStopBtn" type="button" style="display:none;">停止检查</button></div>
+              <small>检查只查询状态，不会提交收录。结果不会立即变化，可过几天再查。</small>
+            </article>
+            <article class="google-task-card" id="google-step-request">
+              <span class="google-task-number">03</span><h3>请求收录 <small class="google-optional-badge">可选</small></h3>
+              <p>只为首页、重点产品等少量页面，去 Google 单独请求收录。</p>
+              <div class="google-task-actions"><button id="gscOpenNextRequestBtn" type="button">打开 Google 请求收录</button></div>
+              <small>不必把下面几百个页面全部点完；网站地图负责批量提交。</small>
+            </article>
+          </div>
+          <div class="google-next-step" id="googleNextStep" role="status">操作顺序：生成并上传 → 提交网站地图 → 等待 Google 抓取，再检查收录。</div>
+          <div id="searchConsoleResult" class="google-result"></div>
+          <div class="gi-summary gsc-summary">
+            <div class="gi-stat quota"><span class="lbl">检查后未收录</span><span class="num" id="gscAttentionCount">0</span></div>
+            <div class="gi-stat pending"><span class="lbl">等待检查</span><span class="num" id="gscPendingCount">0</span></div>
+            <div class="gi-stat done"><span class="lbl">已确认收录</span><span class="num" id="gscIndexedCount">0</span></div>
+            <div class="gi-stat remaining"><span class="lbl">已检查</span><span class="num" id="gscCachedCount">0</span></div>
+          </div>
+          <div class="gi-progress" id="gscInspectionProgress">
+            <div class="gi-progress-head"><span id="gscInspectionProgressText">准备检查...</span><span id="gscInspectionProgressCount">0 / 0</span></div>
+            <div class="gi-progress-bar"><div class="gi-progress-fill" id="gscInspectionProgressFill"></div></div>
+          </div>
+          <details class="gi-url-panel gsc-inspection-panel">
+            <summary>查看页面检查结果 <span id="gscInspectionSummary"></span></summary>
+            <div class="google-optional-request"><div><strong>这是检查结果，不是必须逐个完成的任务</strong><p>网站地图已提交的话，这些页面不必全部点一遍。只挑首页、重点产品等少量页面，到 Google 点击“请求编入索引”。打开页面不代表已经提交。</p></div></div>
+          <div class="gsc-inspection-filters">
+            <label><span>筛选收录状态</span><select id="gscInspectionFilter"><option value="attention" selected>可单独处理（可选）</option><option value="blocked">先修复问题</option><option value="pending">等待检查</option><option value="indexed">已收录</option><option value="priority">优先队列</option><option value="all">全部</option></select></label>
+            <label><span>搜索 URL 或页面标题</span><input id="gscInspectionSearch" type="search" placeholder="输入域名、路径或标题" /></label>
+          </div>
+
+            <div class="gsc-inspection-list" id="gscInspectionList"></div>
+          </details>
+
+          <details class="gsc-advanced">
+            <summary>更多设置与查询（通常不用改）</summary>
+            <div class="gsc-advanced-body">
+              <div class="google-actions">
+                <label class="inspect-field"><span>Search Console 属性（siteUrl）</span><input id="gscSiteUrlInput" placeholder="sc-domain:example.com 或 https://example.com/" /></label>
+                <label class="inspect-field"><span>Sitemap 地址</span><input id="gscSitemapUrlInput" placeholder="https://example.com/sitemap.xml" /></label>
+                <button class="primary" id="gscSaveBtn">保存属性</button>
+              </div>
+              <div class="gsc-command-bar">
+                <button id="gscLoadSitemapsBtn">读取 Sitemap 状态</button>
+                <label class="gsc-days-field"><span>搜索表现周期</span><select id="gscPerformanceDays"><option value="7">近 7 天</option><option value="28" selected>近 28 天</option><option value="90">近 90 天</option></select></label>
+                <button id="gscLoadPerformanceBtn">读取搜索表现</button>
+                <a class="action-link" id="gscApiEnableLink" href="https://console.cloud.google.com/apis/library/searchconsole.googleapis.com" target="_blank" rel="noopener">打开 Google API 设置</a>
+              </div>
+              <div class="gsc-data-panel" id="gscSitemapPanel"></div>
+              <div class="gsc-data-panel" id="gscPerformancePanel"></div>
+              <div class="google-actions gsc-single-inspect">
+                <label class="inspect-field" style="flex: 1;"><span>检查单个完整 URL</span><input id="gscInspectUrlInput" placeholder="https://example.com/your-page/" /></label>
+                <button id="gscInspectBtn">检查这个 URL</button>
+              </div>
+              <div class="gsc-diagnostic-controls">
+                <label><span>结果有效期</span><select id="gscCacheDaysSelect"><option value="7" selected>7 天</option><option value="14">14 天</option><option value="30">30 天</option><option value="0">每次重新检查</option></select></label>
+                <button id="gscReloadInspectionsBtn">刷新本地记录</button>
+                <button id="gscCopyPendingBtn" type="button">复制待收录 URL</button>
+                <button id="gscClearInspectionsBtn">清除诊断记录</button>
+              </div>
+              <p class="gsc-advanced-note">Google URL Inspection 官方单站配额：2000 次/天、600 次/分钟。这里的设置只影响诊断，不会自动删除或修改线上页面。</p>
+            </div>
+          </details>
+        </div>
+      </section>
+
       <section class="band" id="google-workspace" data-seo-pages="google">
+        <details class="google-fold" id="google-workspace-fold"><summary><strong>网站地图与页面工具</strong><span>查看地址、检查线上文件、查询单个页面</span></summary><div class="google-fold-body">
         <div class="band-title">
           <div>
             <h2>Google 收录</h2>
-            <div class="note">先生成并检查 sitemap.xml、robots.txt；下方已配置的同一份服务账号继续负责 Search Console 数据、Sitemap API、URL Inspection 与 Indexing API。</div>
+            <div class="note">普通产品和新闻使用 Sitemap、Search Console 数据与 URL Inspection。提交成功不等于已收录；Indexing API 仅用于符合条件的招聘或直播页面。</div>
           </div>
           <a class="action-link" id="googleConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener">打开 Search Console</a>
         </div>
@@ -655,13 +708,15 @@
         </div>
         <div class="note" id="googleAccountMeta"></div>
         <div id="googleResult" class="google-result"></div>
+      </div></details>
       </section>
 
       <section class="band" id="google-indexing-workspace" data-seo-pages="google">
+        <details class="google-fold" id="google-indexing-workspace-fold"><summary><strong>账号配置</strong><span>共享服务账号与授权，通常只需设置一次</span></summary><div class="google-fold-body">
         <div class="band-title">
           <div>
-            <h2>Google Search Console 与 Indexing API</h2>
-            <div class="note">同一份服务账号同时用于 Search Console 的 Sitemap/收录查询，以及 Indexing API 的分批通知、每日配额和断点续传。</div>
+            <h2>Google 服务账号与属性权限</h2>
+            <div class="note">服务账号可供本管理项目内的多个网站共用；各网站的 Search Console 属性、授权和 Sitemap 分别设置。</div>
           </div>
           <span class="note" id="googleIndexingMeta">未配置</span>
         </div>
@@ -671,32 +726,40 @@
             <textarea id="googleServiceAccountInput" class="gi-textarea" placeholder='{ "type": "service_account", "client_email": "xxx@project.iam.gserviceaccount.com", "private_key": "-----BEGIN PRIVATE KEY-----\n..." }'></textarea>
           </label>
         </div>
+        <div class="google-actions">
+          <label class="google-share-option"><input type="checkbox" id="googleSaveShared" checked /> 保存为共享账号（没有独立配置的网站自动共用）</label>
+          <span class="note" id="googleSharedAccountMeta">共享账号尚未配置</span>
+          <button id="promoteGoogleSharedBtn">将当前独立账号设为共享</button>
+          <button id="useGoogleSharedBtn">当前网站改用共享账号</button>
+        </div>
         <details class="gi-steps">
           <summary>Google 服务账号 JSON 怎么获取？点开看详细步骤</summary>
           <ol>
             <li>用拥有本网站 Search Console 权限的 Google 账号，打开 <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a>（console.cloud.google.com）。</li>
-            <li>点页面顶部的项目选择器 →「新建项目」，名称随意（例如 shanbo-search-console），创建后切换到该项目。</li>
-            <li>左侧菜单「API 和服务」→「库」，分别启用 <b>Search Console API</b> 和 <b>Indexing API</b>。</li>
+            <li>已有服务账号和 JSON 可以复用；没有时再点顶部项目选择器 →「新建项目」（例如 shanbo-search-console）。共享账号配置完成后，其他网站无需再次粘贴 JSON。</li>
+            <li>左侧菜单「API 和服务」→「库」，启用 <b>Search Console API</b>。普通产品和新闻不需要 Indexing API。</li>
             <li>左侧菜单「IAM 和管理」→「服务账号」→「创建服务账号」。名称随意（例如 shanbocc），角色可以不选，一路「完成」。</li>
             <li>在服务账号列表中点进刚建的账号 →「密钥」标签页 →「添加密钥」→「创建新密钥」→ 类型选 <b>JSON</b> →「创建」。浏览器会自动下载一个 .json 文件，这就是服务账号 JSON。</li>
             <li>打开 <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Search Console</a>，把 JSON 里的 <b>client_email</b> 加入当前属性。Search Console 数据至少需要完整权限；Google 的 Indexing API 官方流程要求该服务账号成为站点所有者。<b>漏掉授权或选错属性通常会报 403。</b></li>
-            <li>用记事本打开下载的 JSON 文件，全选、复制，粘贴到上方输入框，点「保存并验证服务账号」。看到取得 Indexing API 访问令牌即配置成功。</li>
+            <li>打开 JSON 文件，粘贴到上方并保存。选择本网站的 Search Console 属性，点击测试，确认属性权限正常；只有取得令牌不代表有站点权限。</li>
           </ol>
-          <div class="note">密钥只保存在本工具目录的 seo.config.json 里，不要提交到代码仓库或发给他人；若怀疑泄露，回到 Google Cloud 服务账号的「密钥」页删除该密钥再重新创建即可。当前账号：<span id="giStepsAccount">-</span></div>
+          <div class="note">共享密钥在当前管理项目中统一保存，独立密钥按网站保存，页面不回显私钥。共享账号不会自动获得其他网站权限，需要分别添加至对应 Search Console 属性。当前账号：<span id="giStepsAccount">-</span></div>
         </details>
         <div class="google-actions">
           <button class="primary" id="saveGoogleServiceAccountBtn">保存并验证服务账号</button>
-          <button id="testGoogleIndexingBtn">测试 Indexing API 连接</button>
-          <button class="warn" id="clearGoogleServiceAccountBtn">清除服务账号</button>
+          <button id="testGoogleIndexingBtn">测试 Search Console 属性权限</button>
+          <button class="warn" id="clearGoogleServiceAccountBtn">停用当前网站账号</button>
           <a class="action-link" id="googleIndexingHelpLink" href="https://developers.google.com/search/apis/indexing-api/v3/using-api" target="_blank" rel="noopener">Indexing API 文档</a>
           <a class="action-link" id="googleIndexingConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener">打开 Search Console</a>
         </div>
         <div class="gi-policy-note">
           <strong>使用范围提示</strong>
-          <span>Google 官方当前说明 Indexing API 主要用于带 JobPosting 或直播 BroadcastEvent 结构化数据的页面。工具按你的需求恢复完整提交能力，但普通产品和新闻页仍应同时维护 Sitemap。</span>
+          <span>普通产品和新闻使用下方 Sitemap 提交与收录诊断。Indexing API 仅限真实招聘或直播页面，HTTP 200 不代表已收录。</span>
         </div>
+        <details class="gsc-advanced">
+          <summary>特殊页面通知：Indexing API（招聘 / 直播）</summary>
         <div class="google-actions gi-controls">
-          <button class="success" id="googleIndexingSubmitAllBtn">继续提交待处理 URL</button>
+          <button id="googleIndexingSubmitAllBtn">检查适用页面并通知</button>
           <button class="warn" id="googleIndexingStopBtn" style="display: none;">停止提交</button>
           <button id="googleIndexingReloadBtn">刷新提交状态</button>
           <button id="googleIndexingClearBtn">清除提交记录</button>
@@ -718,235 +781,145 @@
           <div class="gi-progress-bar"><div class="gi-progress-fill" id="googleIndexingProgressFill"></div></div>
         </div>
         <div class="google-actions">
-          <label class="inspect-field"><span>手动提交单个 URL（不必在 sitemap 列表中）</span><input id="googleIndexingManualUrl" placeholder="https://shanbo.cc/your-page/" /></label>
+          <label class="inspect-field"><span>当前网站的招聘 / 直播页面 URL</span><input id="googleIndexingManualUrl" placeholder="https://example.com/jobs/example/" /></label>
           <button id="googleIndexingManualSubmitBtn">提交该 URL</button>
-          <button id="googleIndexingManualMetaBtn">查询该 URL 状态</button>
+          <button id="googleIndexingManualMetaBtn">查询通知记录（非收录）</button>
         </div>
         <details class="gi-url-panel" open>
           <summary>URL 提交明细 <span id="giUrlSummary"></span></summary>
           <div id="googleIndexingUrlList" class="gi-list"></div>
         </details>
+        </details>
         <div id="googleIndexingResult" class="google-result"></div>
-      </section>
-
-      <section class="band" id="google-search-console" data-seo-pages="google">
-        <div class="band-title">
-          <div>
-            <h2>Google Search Console 收录中心</h2>
-            <div class="note">更新未收录名单、重新通知 Google，并逐条处理真正需要请求收录的页面。</div>
-          </div>
-          <span class="note" id="searchConsoleMeta">未配置</span>
-        </div>
-        <div class="gsc-diagnostics">
-          <div class="gsc-diagnostic-head">
-            <div>
-              <h3>未收录推进队列</h3>
-              <div class="note">默认只显示已经确认、可以进入 Google 官方页面请求收录的 URL。</div>
-            </div>
-          </div>
-          <div class="gsc-push-panel">
-            <div class="gsc-push-copy">
-              <strong>主动推进收录</strong>
-              <span>Sitemap 负责批量通知，网址检查负责少量重要页面。普通产品页没有可合法批量强推的 Google API。</span>
-            </div>
-            <div class="gsc-push-actions">
-              <button class="primary" id="gscInspectBatchBtn" type="button">更新未收录队列</button>
-              <button class="success" id="gscSubmitSitemapBtn" type="button">重新提交 Sitemap</button>
-              <button class="primary" id="gscOpenNextRequestBtn" type="button">打开下一条请求收录</button>
-              <button class="warn" id="gscInspectStopBtn" type="button" style="display:none;">停止检查</button>
-            </div>
-          </div>
-          <div id="searchConsoleResult" class="google-result"></div>
-          <div class="gi-summary gsc-summary">
-            <div class="gi-stat quota"><span class="lbl">今日待处理</span><span class="num" id="gscAttentionCount">0</span></div>
-            <div class="gi-stat pending"><span class="lbl">等待检查</span><span class="num" id="gscPendingCount">0</span></div>
-            <div class="gi-stat done"><span class="lbl">已确认收录</span><span class="num" id="gscIndexedCount">0</span></div>
-            <div class="gi-stat remaining"><span class="lbl">已有诊断</span><span class="num" id="gscCachedCount">0</span></div>
-          </div>
-          <div class="gi-progress" id="gscInspectionProgress">
-            <div class="gi-progress-head"><span id="gscInspectionProgressText">准备检查...</span><span id="gscInspectionProgressCount">0 / 0</span></div>
-            <div class="gi-progress-bar"><div class="gi-progress-fill" id="gscInspectionProgressFill"></div></div>
-          </div>
-          <div class="gsc-inspection-filters">
-            <label><span>筛选收录状态</span><select id="gscInspectionFilter"><option value="attention" selected>今日待处理</option><option value="blocked">先修复问题</option><option value="pending">等待检查</option><option value="indexed">已收录</option><option value="priority">优先队列</option><option value="all">全部</option></select></label>
-            <label><span>搜索 URL 或页面标题</span><input id="gscInspectionSearch" type="search" placeholder="输入域名、路径或标题" /></label>
-          </div>
-          <details class="gi-url-panel gsc-inspection-panel" open>
-            <summary>待请求收录页面 <span id="gscInspectionSummary"></span></summary>
-            <div class="gsc-inspection-list" id="gscInspectionList"></div>
-          </details>
-
-          <details class="gsc-advanced">
-            <summary>高级设置与查询</summary>
-            <div class="gsc-advanced-body">
-              <div class="google-actions">
-                <label class="inspect-field"><span>Search Console 属性（siteUrl）</span><input id="gscSiteUrlInput" placeholder="sc-domain:example.com 或 https://example.com/" /></label>
-                <label class="inspect-field"><span>Sitemap 地址</span><input id="gscSitemapUrlInput" placeholder="https://example.com/sitemap.xml" /></label>
-                <button class="primary" id="gscSaveBtn">保存属性</button>
-              </div>
-              <div class="gsc-command-bar">
-                <button id="gscLoadSitemapsBtn">读取 Sitemap 状态</button>
-                <label class="gsc-days-field"><span>搜索表现周期</span><select id="gscPerformanceDays"><option value="7">近 7 天</option><option value="28" selected>近 28 天</option><option value="90">近 90 天</option></select></label>
-                <button id="gscLoadPerformanceBtn">读取搜索表现</button>
-                <a class="action-link" id="gscApiEnableLink" href="https://console.cloud.google.com/apis/library/searchconsole.googleapis.com" target="_blank" rel="noopener">打开 Google API 设置</a>
-              </div>
-              <div class="gsc-data-panel" id="gscSitemapPanel"></div>
-              <div class="gsc-data-panel" id="gscPerformancePanel"></div>
-              <div class="google-actions gsc-single-inspect">
-                <label class="inspect-field" style="flex: 1;"><span>检查单个完整 URL</span><input id="gscInspectUrlInput" placeholder="https://example.com/your-page/" /></label>
-                <button id="gscInspectBtn">检查这个 URL</button>
-              </div>
-              <div class="gsc-diagnostic-controls">
-                <label><span>每次检查数量</span><input id="gscBatchLimitInput" type="number" min="1" max="100" step="1" value="20" /></label>
-                <label><span>结果有效期</span><select id="gscCacheDaysSelect"><option value="7" selected>7 天</option><option value="14">14 天</option><option value="30">30 天</option><option value="0">每次重新检查</option></select></label>
-                <button id="gscReloadInspectionsBtn">刷新本地记录</button>
-                <button id="gscCopyPendingBtn" type="button">复制待收录 URL</button>
-                <button id="gscClearInspectionsBtn">清除诊断记录</button>
-              </div>
-              <p class="gsc-advanced-note">Google URL Inspection 官方单站配额：2000 次/天、600 次/分钟。这里的设置只影响诊断，不会自动删除或修改线上页面。</p>
-            </div>
-          </details>
-        </div>
+      </div></details>
       </section>
 
       <section class="band" id="yandex-workspace" data-seo-pages="yandex">
-        <div class="band-title">
-          <div>
-            <h2>Yandex 收录</h2>
-            <div class="note">Yandex 是 IndexNow 的官方支持方：点「推送到 Yandex（IndexNow）」会把全部真实线上 URL 直提给 yandex.com/indexnow。要在 Yandex Webmaster 里查看收录状态，需先完成下面的网站验证。</div>
-          </div>
-          <span class="note" id="yandexMeta">未配置</span>
+        <div class="band-title"><div><h2>按顺序管理 Yandex 收录</h2><div class="note">专注俄语站：提交网站地图，有更新时通知，过几天查看结果。</div></div><span class="note" id="yandexMeta">正在读取配置…</span></div>
+        <div class="google-task-grid">
+          <article class="google-task-card"><span class="google-task-number">01</span><h3>提交网站地图</h3><p>把俄语站的页面地址一次交给 Yandex。</p><div class="google-task-actions"><button id="prepareYandexBtn">先：生成并上传</button><button class="success" id="submitYandexSitemapBtn">再：提交网站地图</button></div><small>首次使用先展开下方配置，验证网站并保存 Token。</small></article>
+          <article class="google-task-card google-task-card-primary"><span class="google-task-number">02</span><h3>主动通知更新</h3><p>俄语页面新增或修改后，通过 IndexNow 批量通知。</p><div class="google-task-actions"><button class="primary" id="pushYandexBtn">通知俄语站页面</button></div><small>先完成文件上传。通知被接收不代表已经收录。</small></article>
+          <article class="google-task-card"><span class="google-task-number">03</span><h3>查看结果 <small class="google-optional-badge">按需</small></h3><p>在 Yandex 查看索引情况、抓取问题和搜索表现。</p><div class="google-task-actions"><a class="action-link" id="yandexDashboardLink" href="https://webmaster.yandex.com/sites/" target="_blank" rel="noopener">打开 Yandex 查看 ↗</a></div><small>无需每天重复提交或检查。抓取与收录需要时间。</small></article>
         </div>
-        <div class="google-workflow">
-          <div class="google-step"><strong>1. 添加站点</strong><span>打开 Yandex Webmaster，添加真实线上域名 shanbo.cc（各语言子域名可分别添加）。</span></div>
-          <div class="google-step"><strong>2. 验证网站</strong><span>验证方式选「HTML 文件」，把文件名和内容粘贴到下方保存，再点「上传 SEO 文件到 FTP」。</span></div>
-          <div class="google-step"><strong>3. 提交 Sitemap</strong><span>验证通过后，在 Yandex Webmaster「索引 → 站点地图」提交 sitemap 地址。</span></div>
-          <div class="google-step"><strong>4. 推送页面</strong><span>点「推送到 Yandex（IndexNow）」，Yandex 会尽快来抓取新推送的页面。</span></div>
-        </div>
-        <div class="google-actions">
-          <label style="flex: 0 0 300px;"><span>Yandex 验证文件名（Yandex 页面给出的 yandex_xxxxxxxx.html）</span><input id="yandexVerificationFilenameInput" placeholder="yandex_1a2b3c4d.html" /></label>
-          <label class="inspect-field"><span>验证文件内容（Yandex 给出的整段内容，粘贴到上传框为止）</span><input id="yandexVerificationContentInput" placeholder="<html>...Verification: xxxxxxxx...</html>" /></label>
-          <button class="primary" id="saveYandexVerificationBtn">保存验证文件</button>
-          <button id="clearYandexVerificationBtn">清除配置</button>
-        </div>
-        <div class="google-actions">
-          <button id="checkYandexBtn">检查线上验证 / IndexNow Key</button>
-          <button class="warn" id="pushYandexBtn">推送到 Yandex（IndexNow）</button>
-          <a class="action-link" id="yandexAddSiteLink" href="https://webmaster.yandex.com/sites/add/" target="_blank" rel="noopener">打开 Yandex Webmaster</a>
-          <a class="action-link" id="yandexIndexNowHelpLink" href="https://yandex.com/support/webmaster/indexnow.html" target="_blank" rel="noopener">IndexNow 说明</a>
-        </div>
-        <div class="google-actions">
-          <label class="inspect-field" style="flex: 1;"><span>Yandex OAuth token（用于 sitemap 提交，在 Yandex OAuth 里获取，需有 Webmaster API 权限）</span><input id="yandexOauthTokenInput" type="password" placeholder="粘贴 OAuth token" /></label>
-          <button id="saveYandexTokenBtn">保存 token</button>
-          <button id="clearYandexTokenBtn">清除</button>
-        </div>
-        <div class="google-actions">
-          <button id="testYandexApiBtn">测试 Yandex API 连接</button>
-          <button class="warn" id="submitYandexSitemapBtn">提交 Sitemap 到 Yandex</button>
-          <a class="action-link" href="https://yandex.com/dev/webmaster/" target="_blank" rel="noopener">Yandex Webmaster API 文档</a>
-        </div>
+        <div class="google-next-step" id="yandexNextStep">首次使用：先配置俄语站，再从第 1 步开始。</div>
         <div id="yandexResult" class="google-result"></div>
       </section>
-
-      <section class="band tutorial-section" data-seo-pages="yandex">
-        <div class="tutorial-heading">
-          <div><span class="tutorial-kicker">Yandex 配置教程</span><h2>验证、OAuth、Sitemap 和 IndexNow 分清使用场景</h2></div>
-          <a class="action-link" href="https://yandex.com/dev/webmaster/doc/en/" target="_blank" rel="noopener">官方 Webmaster API 文档</a>
+      <details class="band google-fold" id="yandexSettingsPanel" data-seo-pages="yandex">
+        <summary><strong>账号与俄语站配置</strong><span>账号可共享 · 每个网站单独验证</span></summary>
+        <div class="google-fold-body yandex-config-grid">
+          <div><h3>共享账号</h3><p class="note">配置一次，其他网站可直接复用。请使用管理网站的同一个 Yandex 账号授权。</p><label><span>Yandex OAuth Token</span><input id="yandexOauthTokenInput" type="password" autocomplete="off" placeholder="粘贴 Token" /></label><div class="google-actions"><button class="primary" id="saveYandexTokenBtn">保存配置</button><button id="testYandexApiBtn">测试俄语站权限</button></div><div class="google-actions"><label><input type="checkbox" id="yandexSaveShared" checked /> 保存为共享账号，供其他网站使用</label><button id="yandexUseSharedBtn" hidden>使用已有共享账号</button><button id="yandexPromoteSharedBtn" hidden>将当前专用账号设为共享</button><button id="clearYandexTokenBtn">停用当前网站 API</button></div><p class="note" id="yandexSharedMeta"></p><p class="note">Token 只保存在服务端；网站域名、验证文件各自保存。停用当前网站不影响其他网站。</p></div>
+          <div><h3>网站验证 <small class="google-optional-badge">已验证可跳过</small></h3><p class="note" id="yandexScopeNote"></p><p class="note">添加完整 HTTPS 俄语域名。可使用 HTML 文件验证，DNS 或网页标签已验证则无需重做。</p><a class="action-link" id="yandexAddSiteLink" href="https://webmaster.yandex.com/sites/add/" target="_blank" rel="noopener">打开 Yandex 添加 / 验证网站 ↗</a><details class="yandex-verification"><summary>使用 HTML 验证文件</summary><label><span>验证文件名</span><input id="yandexVerificationFilenameInput" placeholder="yandex_xxxxxxxx.html" /></label><label><span>完整文件内容</span><textarea id="yandexVerificationContentInput" rows="3" placeholder="粘贴 Yandex 提供的 HTML 内容"></textarea></label><div class="google-actions"><button id="saveYandexVerificationBtn">保存验证文件</button><button id="checkYandexBtn">检查线上文件</button><button id="clearYandexVerificationBtn">清除文件配置</button></div><p class="note">保存 → 第 1 步生成并上传 → 回到 Yandex 点击检查。</p></details></div>
         </div>
-        <figure class="tutorial-figure"><img src="/tutorials/yandex-workflow.svg" alt="Yandex Webmaster 配置与主动提交流程图" /><figcaption>Webmaster 负责所有权与数据，IndexNow 负责向参与协议的搜索引擎发送页面更新通知。</figcaption></figure>
-        <div class="tutorial-steps-grid">
-          <article><span>01</span><h3>添加与验证</h3><p>在 Yandex Webmaster 添加真实线上域名，选择 HTML 文件验证。把平台提供的文件名和完整内容填入上方，再上传 SEO 文件到 FTP。</p></article>
-          <article><span>02</span><h3>检查公开文件</h3><p>点击“检查线上验证 / IndexNow Key”，确认验证 HTML 与 key 文本均能从公网直接访问；403、404 或超时都要先处理。</p></article>
-          <article><span>03</span><h3>连接 Webmaster API</h3><p>OAuth token 用于读取站点列表、索引数据和提交 Sitemap。保存后先测试 API 连接，再执行 Sitemap 提交。</p></article>
-          <article><span>04</span><h3>日常主动通知</h3><p>页面新增、更新或删除后使用 IndexNow。成功响应只表示已接收通知，最终抓取与收录仍由搜索引擎判断。</p></article>
-        </div>
-      </section>
+      </details>
+      <details class="band google-fold" id="yandexTutorial" data-seo-pages="yandex"><summary><strong>使用教程</strong><span>新网站复用账号：按 7 步操作</span></summary><div class="google-fold-body">
+          <h3>以后添加新网站，照这 7 步做</h3>
+          <p><strong>共享账号</strong>：本系统已经存好 Yandex 的通行凭证（Token），新网站不用再申请、复制一份。<strong>单独验证</strong>：每加一个新域名，要向 Yandex 证明这个网站是你的。</p>
+          <p class="note">例如：山博的 ru.shanbo-rig.com 已经做好了；以后新增 ru.example.com（仅为示例），共享同一个账号，但新域名仍要验证一次。日常更新内容不用重复验证。</p>
+          <ol>
+            <li><strong>先切换到新网站。</strong>在管理后台选中要操作的网站，设置好“区域管理”中 RU 的线上域名，再打开这个网站的“SEO 检查 → Yandex”。新网站需已上线，发布连接也已配置。</li>
+            <li><strong>确认已经共用账号。</strong>展开本页“账号与俄语站配置”，看到“共享账号已配置”就不用填 Token，也不用再点“保存配置”。如果该站原来用专用账号，点击“使用已有共享账号”。</li>
+            <li><strong>去 Yandex 添加新域名。</strong>点击“打开 Yandex 添加 / 验证网站”，用取得共享 Token 的同一个账号登录，点击 Add，填写新网站完整地址，例如 https://ru.example.com/。不要填旧网站地址，HTTP 与 HTTPS 也要一致。</li>
+            <li><strong>保存这个新网站的验证文件。</strong>在 Yandex 选择 HTML file 验证方式，下载并打开它提供的文件。回到本页展开“使用 HTML 验证文件”，填入文件名和完整文件内容，点击“保存验证文件”。使用新网站这次给出的内容，不要直接照抄山博的示例。</li>
+            <li><strong>上传后回 Yandex 验证。</strong>点击第 1 步“先：生成并上传”，等上传完成，再回 Yandex 点击 Verify / Check。看到验证通过或 Owner 才算完成。如果已用 DNS 或标签验证通过，第 4、5 步可跳过。</li>
+            <li><strong>回本页测试权限。</strong>点击“测试俄语站权限”，应显示“俄语站权限已通过”。如果提示没有网站或未验证，先核对登录账号、完整域名和上一步结果，不要反复申请 Token。</li>
+            <li><strong>开始提交。</strong>文件未生成上传时先点“先：生成并上传”，然后点“再：提交网站地图”。内容有更新时点“通知俄语站页面”。成功后等待抓取，过几天再看结果，不必逐个提交页面。</li>
+          </ol>
+          <p class="note"><strong>如果显示“共享账号尚未配置”：</strong>确认打开的是原来配置过的这套管理系统。另一台电脑或线上管理后台不会自动获得本地密钥；线上可在“网站发布 → 代码与配置同步 → 项目配置同步”勾选“Google / Bing / Yandex 共享账号”后同步，再刷新页面。</p>
+          <details><summary>第一次使用本系统、还没有共享 Token 时</summary><p>在 <a href="https://oauth.yandex.com/" target="_blank" rel="noopener">Yandex OAuth</a> 创建 API 应用，选择 webmaster:hostinfo 和 webmaster:verify 权限。确认授权账号与 Webmaster 管理网站的账号相同，授权后在本页粘贴 Token，勾选“保存为共享账号”，点击“保存配置”。配置一次即可，后续新网站按上面 7 步操作。</p></details>
+<figure class="tutorial-figure"><img src="/tutorials/yandex-ru-verified.png" alt="Yandex HTTPS 俄语站通过 HTML 文件所有权验证" loading="lazy" /><figcaption>验证通过后，俄语站显示 Owner。</figcaption></figure><figure class="tutorial-figure"><img src="/tutorials/yandex-account-authorization.png" alt="核对网站所有者账号后授权本地应用" loading="lazy" /><figcaption>授权前核对账号：应与 Webmaster 的网站所有者一致。</figcaption></figure><figure class="tutorial-figure"><img src="/tutorials/yandex-shared-account.png" alt="Yandex 共享账号设置与单独网站验证" loading="lazy" /><figcaption>共享 Token，分别验证网站；已有专用账号可手动改为共享。</figcaption></figure><figure class="tutorial-figure"><img src="/tutorials/yandex-sitemap-success.png" alt="共享账号已配置，俄语站网站地图提交成功" loading="lazy" /><figcaption>实际提交成功：等待 Yandex 抓取，接收不代表已收录。</figcaption></figure><p class="note">当前功能只提交 RU 站，其他语言站不会混入。OAuth 账号可能管理多个站点，每个项目仍需分别验证。</p><a class="action-link" id="yandexIndexNowHelpLink" href="https://yandex.com/support/webmaster/indexnow.html" target="_blank" rel="noopener">IndexNow 官方说明 ↗</a></div></details>
 
+      <dialog id="bingConfirmDialog" aria-labelledby="bingConfirmTitle">
+        <h3 id="bingConfirmTitle">确认操作</h3><p id="bingConfirmMessage"></p>
+        <div class="google-actions"><button id="bingConfirmCancel" type="button">取消</button><button id="bingConfirmAccept" class="primary" type="button">确认继续</button></div>
+      </dialog>
       <section class="band" id="bing-workspace" data-seo-pages="bing">
-        <div class="band-title">
-          <div>
-            <h2>Bing 收录</h2>
-            <div class="note">Bing 的 URL 提交已经通过 IndexNow 在做（点上面的「推送 IndexNow」）。这个面板补三件事：Bing 站点验证（BingSiteAuth.xml）、sitemap 提交、查询 URL 是否被 Bing 收录。后两件需要 Bing Webmaster API Key（Bing Webmaster → 设置 → API 访问 里生成）。</div>
-          </div>
-          <span class="note" id="bingMeta">未配置</span>
+        <div class="band-title"><div><h2>按顺序管理 Bing 收录</h2><div class="note">先提交网站地图，有更新时主动通知，过几天再查看收录。</div></div><span class="note" id="bingMeta">正在读取账号配置</span></div>
+        <div class="google-task-grid">
+          <article class="google-task-card" id="bing-step-submit">
+            <span class="google-task-number">01</span><h3>提交网站地图</h3>
+            <p>把当前网站的页面地址一次交给 Bing，便于发现内容。</p>
+            <div class="google-task-actions"><button id="prepareBingBtn">先：生成并上传</button><button class="success" id="bingSubmitSitemapBtn">再：提交网站地图</button></div>
+            <small>首次使用或新增页面时更新地图。地图已更新可直接提交。</small>
+          </article>
+          <article class="google-task-card google-task-card-primary" id="bing-step-push">
+            <span class="google-task-number">02</span><h3>主动通知更新</h3>
+            <p>通过 IndexNow 批量通知 Bing 等搜索引擎，无需逐条点击。</p>
+            <div class="google-task-actions"><button class="primary" id="pushBtn">通知当前网站的页面</button></div>
+            <small>覆盖当前项目各语言网址。先完成第 1 步的生成并上传；通知成功不代表已收录。</small>
+          </article>
+          <article class="google-task-card" id="bing-step-inspect">
+            <span class="google-task-number">03</span><h3>查看收录 <small class="google-optional-badge">按需</small></h3>
+            <p>打开 Bing 查看结果，或输入一个重要页面查询抓取记录。</p>
+            <div class="google-task-actions"><a class="action-link" id="bingDashboardLink" href="https://www.bing.com/webmasters/home" target="_blank" rel="noopener">打开 Bing 查看</a><button id="bingShowInspectBtn">查询单个页面</button></div>
+            <small>查询只查看状态，不会提交页面；无需每天反复检查。</small>
+          </article>
         </div>
-        <div class="google-actions">
-          <label class="inspect-field"><span>Bing 验证码（Bing Webmaster 添加站点 → XML 文件验证 给出的那串码）</span><input id="bingVerificationCodeInput" placeholder="粘贴 Bing 验证码" /></label>
-          <button class="primary" id="saveBingVerificationBtn">保存并生成 BingSiteAuth.xml</button>
-          <button id="clearBingVerificationBtn">清除配置</button>
-        </div>
-        <div class="google-actions">
-          <label class="inspect-field" style="flex: 1;"><span>Bing Webmaster API Key（设置 → API 访问 → 生成 API 密钥）</span><input id="bingApiKeyInput" type="password" placeholder="粘贴 API Key" /></label>
-          <button id="saveBingApiKeyBtn">保存 API Key</button>
-          <button id="clearBingApiKeyBtn">清除</button>
-        </div>
-        <div class="google-actions">
-          <button id="checkBingBtn">检查线上验证 / 状态</button>
-          <button class="warn" id="bingSubmitSitemapBtn">提交 Sitemap 到 Bing</button>
-          <label class="inspect-field" style="flex: 1;"><span>查询收录状态（要查的完整 URL）</span><input id="bingInspectUrlInput" placeholder="https://example.com/your-page/" /></label>
-          <button id="bingInspectBtn">查询收录状态</button>
-        </div>
-        <div class="google-actions">
-          <a class="action-link" id="bingAddSiteLink" href="https://www.bing.com/webmasters/home/addsite" target="_blank" rel="noopener">打开 Bing Webmaster</a>
-          <a class="action-link" id="bingApiKeyLink" href="https://www.bing.com/webmasters/settings/apikey" target="_blank" rel="noopener">生成 API Key</a>
-        </div>
-        <div id="bingResult" class="google-result"></div>
+        <div id="bingNextStep" class="google-next-step" role="status">操作顺序：生成并上传 → 提交网站地图 → 主动通知更新 → 等待抓取。首次使用请先展开下方账号配置。</div>
+        <div id="bingResult" class="google-result" role="status"></div>
+        <details id="bingInspectPanel" class="google-fold"><summary><strong>查询一个页面的抓取记录</strong><span>只查询，不提交</span></summary><div class="google-fold-body google-actions"><label class="inspect-field" style="flex:1"><span>页面完整网址</span><input id="bingInspectUrlInput" placeholder="https://example.com/your-page/" /></label><button id="bingInspectBtn">查询抓取记录</button></div></details>
       </section>
-
-      <section class="band tutorial-section" data-seo-pages="bing">
-        <div class="tutorial-heading">
-          <div><span class="tutorial-kicker">Bing 配置教程</span><h2>验证站点后，用 Sitemap 管全站、IndexNow 管更新</h2></div>
-          <a class="action-link" href="https://learn.microsoft.com/en-us/bingwebmaster/" target="_blank" rel="noopener">官方 Bing Webmaster API 文档</a>
+      <details class="band google-fold" id="bing-account-settings" data-seo-pages="bing">
+        <summary><strong>账号配置</strong><span id="bingAccountSummary">配置一次，多网站共用</span></summary>
+        <div class="google-fold-body">
+          <div class="note">共享同一个 Bing 账号的 API Key。每个网站仍需在该账号下添加并验证；域名、验证文件和 IndexNow Key 按网站独立保存。</div>
+          <div class="google-actions"><label class="inspect-field" style="flex:1"><span>Bing Webmaster API Key</span><input id="bingApiKeyInput" type="password" autocomplete="off" placeholder="粘贴 API Key" /></label><button class="primary" id="saveBingApiKeyBtn">保存配置</button><button id="testBingAccountBtn">测试当前网站权限</button></div>
+          <div class="google-actions"><label><input type="checkbox" id="bingSaveShared" checked /> 保存为共享配置，供其他网站使用</label><button id="bingUseSharedBtn">使用已有共享配置</button><button id="bingPromoteSharedBtn" hidden>将当前专用配置改为共享</button><button id="clearBingApiKeyBtn">停用当前网站 API</button></div>
+          <div class="google-actions"><a class="action-link" id="bingAddSiteLink" href="https://www.bing.com/webmasters/home/addsite" target="_blank" rel="noopener">添加 / 验证网站</a><a class="action-link" id="bingApiKeyLink" href="https://www.bing.com/webmasters/settings/apikey" target="_blank" rel="noopener">获取 API Key</a></div>
+          <details class="bing-advanced"><summary>验证文件与高级设置（已验证的网站无需重复配置）</summary>
+            <div class="google-actions"><label class="inspect-field"><span>XML 验证码</span><input id="bingVerificationCodeInput" placeholder="Bing 提供的 XML 验证码" /></label><button id="saveBingVerificationBtn">保存并生成验证文件</button><button id="clearBingVerificationBtn">清除验证码配置</button></div>
+            <div class="google-actions"><button id="checkBingBtn">检查线上验证文件</button><button id="keyBtn">生成 IndexNow 验证文件</button></div>
+            <p class="note">文件生成后，用第 1 步“生成并上传”传到当前网站。DNS 验证或从 Google 导入成功后，不需要再用 XML 验证。</p>
+          </details>
         </div>
-        <figure class="tutorial-figure"><img src="/tutorials/bing-workflow.svg" alt="Bing Webmaster 配置、Sitemap 与 IndexNow 提交流程图" /><figcaption>API Key 用于本工具调用 Bing Webmaster；IndexNow key 文件用于证明 URL 通知属于当前站点。</figcaption></figure>
-        <div class="tutorial-steps-grid">
-          <article><span>01</span><h3>添加站点</h3><p>登录 Bing Webmaster，添加真实线上域名。已有 Search Console 的站点也可以按平台提示导入，但仍要确认域名完全一致。</p></article>
-          <article><span>02</span><h3>生成验证文件</h3><p>选择 XML 文件验证，复制验证码到上方面板，生成 BingSiteAuth.xml 后通过 FTP 上传并检查线上状态。</p></article>
-          <article><span>03</span><h3>保存 API Key</h3><p>进入设置中的 API 访问页面生成密钥。保存后可从本工具提交 Sitemap，并查询单个 URL 的 Bing 状态。</p></article>
-          <article><span>04</span><h3>持续提交更新</h3><p>首次上线提交 Sitemap；日常内容变更使用 IndexNow。一次通知会按协议共享给参与的搜索引擎，无需重复点多个入口。</p></article>
+      </details>
+      <details class="band google-fold" id="bing-permission-tutorial" data-seo-pages="bing"><summary><strong>使用教程</strong><span>API Key 配置实拍 · 第一次使用时查看</span></summary><div class="google-fold-body">
+        <ol class="bing-guide"><li><strong>连接账号：</strong>在 Bing 添加并验证网站。进入设置 → API 访问，复制 API Key，在这里保存为共享配置，再测试当前网站权限。</li><li><strong>首次提交：</strong>先生成并上传，再提交网站地图，接着通知当前网站的页面。</li><li><strong>日常更新：</strong>新增页面后更新网站地图，再主动通知。仅修改已有页面时，可直接通知更新。</li><li><strong>切换项目：</strong>新项目默认使用共享账号。先确认域名和 FTP 配置，再在 Bing 验证该网站，按相同步骤提交。</li><li><strong>查看结果：</strong>提交后等待抓取，过几天再查看。Bing 自行决定是否收录，接收通知不等于收录。</li></ol>
+        <h3>获取并共享 Bing API Key</h3>
+        <p class="note">在已经登录的 Bing 后台按下图操作。已有 Key 时直接使用，不需要重新生成。</p>
+        <div class="tutorial-image-grid">
+          <figure class="tutorial-shot"><a href="/tutorials/bing-api-settings-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/bing-api-settings-live.png" alt="Bing 右上角设置中的 API 访问入口" /></a><figcaption><strong>1. 设置 → API 访问</strong><span>点击 Bing 右上角齿轮，再点击“API 访问”。</span></figcaption></figure>
+          <figure class="tutorial-shot"><a href="/tutorials/bing-api-access-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/bing-api-access-live.png" alt="Bing API 访问面板的 API 密钥选项" /></a><figcaption><strong>2. 选择 API 密钥</strong><span>进入“API 密钥”卡片。本工具使用 API Key，无需配置 OAuth 客户端。</span></figcaption></figure>
+          <figure class="tutorial-shot"><a href="/tutorials/bing-api-generate-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/bing-api-generate-live.png" alt="Bing 生成 API 密钥按钮" /></a><figcaption><strong>3. 生成并复制完整 Key</strong><span>没有 Key 时点击“生成 API 密钥”。已有 Key 时直接复制；不要为了添加另一个网站而重新生成。</span></figcaption></figure>
         </div>
-      </section>
+        <p class="note"><strong>4. 保存并测试：</strong>展开本页“账号配置”，粘贴 Key，勾选“保存为共享配置，供其他网站使用”，点击“保存配置”，再点“测试当前网站权限”。显示通过后，按上方三步卡片操作。</p>
+        <div class="tutorial-image-grid">
+          <figure class="tutorial-shot"><a href="/tutorials/bing-shared-permission-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/bing-shared-permission-live.png" alt="共享 Bing 账号已配置且当前网站权限通过" /></a><figcaption><strong>4. 共享配置与网站权限通过</strong><span>保存 Key 后输入框自动清空，显示“已配置”。以“当前网站权限已通过”的实际返回为准。</span></figcaption></figure>
+          <figure class="tutorial-shot"><a href="/tutorials/bing-upload-success-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/bing-upload-success-live.png" alt="网站地图与验证文件实际上传完成" /></a><figcaption><strong>5. 先生成并上传</strong><span>等待明确显示“上传完成、失败 0 个”，再继续提交地图。</span></figcaption></figure>
+          <figure class="tutorial-shot"><a href="/tutorials/bing-sitemap-api-success-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/bing-sitemap-api-success-live.png" alt="本地工具提交网站地图后 Bing 已接收的结果" /></a><figcaption><strong>6. 网站地图已提交</strong><span>点击“再：提交网站地图”，等页面明确显示 Bing 已接收，再继续通知更新。</span></figcaption></figure>
+          <figure class="tutorial-shot"><a href="/tutorials/bing-indexnow-result-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/bing-indexnow-result-live.png" alt="IndexNow 各语言域名批量通知的实际返回结果" /></a><figcaption><strong>7. 主动通知更新</strong><span>点击“通知当前网站的页面”，查看各域名结果。“平台验证中”可稍后重试未完成域名；已接收也不等于已收录。</span></figcaption></figure>
+          <figure class="tutorial-shot"><a href="/tutorials/bing-url-query-success-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/bing-url-query-success-live.png" alt="Bing 返回首页真实抓取时间" /></a><figcaption><strong>查询抓取记录（按需）</strong><span>接口返回的抓取时间仅证明 Bing 抓取过。最终收录状态到 Bing 的“URL 检查”查看。</span></figcaption></figure>
+        </div>
+        <p class="note">API Key 是账号凭据；IndexNow Key 是各网站公开的验证文件，两者用途不同。</p>
+        <div class="google-actions"><a class="action-link" href="https://learn.microsoft.com/en-us/bingwebmaster/getting-access" target="_blank" rel="noopener">共享账号说明</a><a class="action-link" href="https://www.indexnow.org/documentation" target="_blank" rel="noopener">IndexNow 官方说明</a></div>
+      </div></details>
 
       <section class="band" id="baidu-workspace" data-seo-pages="baidu">
-        <div class="band-title">
-          <div>
-            <h2>百度收录（中文站）</h2>
-            <div class="note">百度不认 IndexNow，是中文站 cn.shanbo.cc 最大的独立入口。百度提供「主动推送」实时 API：把 token 填进来即可一键推送全部中文站 URL，重复推送会被当作内容更新。注意：未备案的 .cc 域名百度收录会偏慢，推送能提交上去但不保证立即收录。</div>
-          </div>
-          <span class="note" id="baiduMeta">未配置</span>
+        <div class="band-title"><div><h2>按顺序管理百度收录</h2><div class="note">只提交当前项目的中文站。主动提交后等待百度抓取，不用逐条点击。</div></div><span class="note" id="baiduMeta">读取中文站配置中</span></div>
+        <div class="google-task-grid">
+          <article class="google-task-card"><span class="google-task-number">01</span><h3>配置中文站</h3><p>在百度验证中文域名，保存这个站点的推送 Token。</p>
+            <div class="google-task-actions"><button id="baiduShowSettingsBtn">配置 / 检查中文站</button></div><small id="baiduSiteLabel">正在读取 CN 线上域名</small></article>
+          <article class="google-task-card google-task-card-primary"><span class="google-task-number">02</span><h3>主动提交页面</h3><p>直接把中文站页面交给百度，自动跳过本工具已确认接收的页面。</p>
+            <div class="google-task-actions"><label class="google-batch-choice">每次 <select id="baiduBatchSize"><option value="20">20 条</option><option value="50">50 条</option><option value="100" selected>100 条</option></select></label><button class="primary" id="baiduPushBtn">提交中文站页面</button></div>
+            <small>一次最多 100 条；实际额度以百度返回为准。提交成功不等于已收录。</small></article>
+          <article class="google-task-card"><span class="google-task-number">03</span><h3>查看结果 <small class="google-optional-badge">按需</small></h3><p>提交后等待抓取，过几天到百度查看索引量与抓取情况。</p>
+            <div class="google-task-actions"><a class="action-link" id="baiduPlatformLink" href="https://ziyuan.baidu.com/" target="_blank" rel="noopener">打开百度查看</a></div><small>查看结果不会提交页面，无需每天重复操作。</small></article>
         </div>
-        <div class="google-workflow">
-          <div class="google-step"><strong>1. 添加站点</strong><span>打开百度搜索资源平台(ziyuan.baidu.com)，添加 cn.shanbo.cc 并完成验证。</span></div>
-          <div class="google-step"><strong>2. 获取 token</strong><span>进入「普通收录 → 主动推送」，复制接口地址里的 token，粘贴到下方保存。</span></div>
-          <div class="google-step"><strong>3. 推送 URL</strong><span>点「推送中文站全部 URL」，工具会把中文站 URL 直提给 data.zz.baidu.com。</span></div>
-          <div class="google-step"><strong>4. 每日运行</strong><span>可每日运行一次 auto-submit-baidu.js，或在这里手动点推送。</span></div>
-        </div>
-        <div class="google-actions">
-          <label class="inspect-field" style="flex: 1;"><span>百度推送 token（ziyuan.baidu.com → 普通收录 → 主动推送 接口地址里的 token）</span><input id="baiduTokenInput" type="password" placeholder="粘贴百度推送 token" /></label>
-          <button class="primary" id="saveBaiduBtn">保存 token</button>
-          <button id="clearBaiduBtn">清除</button>
-        </div>
-        <div class="google-actions">
-          <label class="inspect-field"><span>推送站点（site，默认中文站）</span><input id="baiduSiteInput" placeholder="https://cn.shanbo.cc" /></label>
-          <button class="warn" id="baiduPushBtn">推送中文站全部 URL</button>
-          <a class="action-link" id="baiduPlatformLink" href="https://ziyuan.baidu.com/" target="_blank" rel="noopener">打开百度搜索资源平台</a>
-        </div>
-        <div id="baiduResult" class="google-result"></div>
+        <div id="baiduNextStep" class="google-next-step" role="status">先配置中文站，再主动提交页面。</div>
+        <div id="baiduResult" class="google-result" role="status"></div>
+        <details class="google-fold"><summary><strong>待提交页面</strong><span id="baiduQueueSummary">正在读取</span></summary><div class="google-fold-body"><p class="note">这里只列当前中文站，其他语言不会混入。已接收记录仅用于避免重复提交，不是收录结果。</p><pre id="baiduQueue" style="max-height:280px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere"></pre></div></details>
       </section>
-
-      <section class="band tutorial-section" data-seo-pages="baidu">
-        <div class="tutorial-heading">
-          <div><span class="tutorial-kicker">百度配置教程</span><h2>中文站使用百度自己的普通收录 API</h2></div>
-          <a class="action-link" href="https://ziyuan.baidu.com/" target="_blank" rel="noopener">打开百度搜索资源平台</a>
+      <details class="band google-fold" id="baidu-account-settings" data-seo-pages="baidu"><summary><strong>中文站配置</strong><span>每个网站独立保存，不共用其他域名的 Token</span></summary><div class="google-fold-body">
+        <div class="baidu-config-grid">
+          <div class="baidu-config-field"><label for="baiduSiteInput">中文站域名 <span>自动读取，无需修改</span></label><input id="baiduSiteInput" readonly /><a class="action-link" id="baiduSubmitPlatformLink" href="https://ziyuan.baidu.com/" target="_blank" rel="noopener">百度普通收录 / 获取 Token ↗</a></div>
+          <div class="baidu-config-field"><label for="baiduTokenInput">百度推送 Token <span>仅用于当前中文站</span></label><input id="baiduTokenInput" type="password" autocomplete="off" placeholder="只粘贴接口地址中的 Token 值" /><div class="baidu-config-actions"><button class="primary" id="saveBaiduBtn">保存配置</button><button id="baiduTestBtn">提交首页测试</button><button class="baidu-disable" id="clearBaiduBtn">停用推送</button></div></div>
         </div>
-        <figure class="tutorial-figure"><img src="/tutorials/baidu-workflow.svg" alt="百度搜索资源平台普通收录 API 主动推送流程图" /><figcaption>百度 token 与已验证站点绑定；推送的 URL 必须属于同一 host，不能混入其他语言子域名。</figcaption></figure>
-        <div class="tutorial-steps-grid">
-          <article><span>01</span><h3>添加中文站</h3><p>在百度搜索资源平台添加并验证中文站，例如 cn 子域名。站点协议、域名和推送 URL 必须完全匹配。</p></article>
-          <article><span>02</span><h3>复制主动推送 token</h3><p>进入“普通收录 → API 提交”，从接口调用地址中复制 token。只把 token 填入上方，不要粘贴整条接口 URL。</p></article>
-          <article><span>03</span><h3>保存并主动推送</h3><p>确认 site 是中文站后保存配置，再推送全部中文 URL。结果会显示成功数量、剩余额度和平台返回信息。</p></article>
-          <article><span>04</span><h3>看懂提交结果</h3><p>提交成功表示百度已接收 URL，不等于已经收录。索引量应以百度平台数据为准，重复推送可用于通知内容更新。</p></article>
-        </div>
-      </section>
+        <p class="baidu-config-note">保存不会提交页面。“提交首页测试”会真实提交 1 条，使用百度当日额度。</p>
+      </div></details>
+      <details class="band google-fold" id="baidu-permission-tutorial" data-seo-pages="baidu"><summary><strong>使用教程</strong><span>首次配置时查看</span></summary><div class="google-fold-body">
+        <ol class="bing-guide"><li><strong>验证中文站：</strong>打开百度搜索资源平台，在当前账号下添加并验证本页显示的 CN 域名。</li><li><strong>保存 Token：</strong>进入“资源提交 → 普通收录 → API 提交”，复制接口地址中 token= 后面的值，在本页保存。不要重新生成已有密钥。</li><li><strong>先测试，再提交：</strong>点击“提交首页测试”，百度确认接收后，再点第 2 步批量提交。还有待提交页面时继续下一批。</li><li><strong>等待抓取：</strong>接收成功不等于已收录。不要每天全量重复提交；新增页面再提交，已有页面更新可在百度平台按需处理。</li><li><strong>额度或权限不足：</strong>按错误提示到百度平台检查；当日额度用完后等次日。不会自动反复重试。</li></ol>
+        <figure class="tutorial-shot"><a href="/tutorials/baidu-cn-workflow-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/baidu-cn-workflow-live.png" alt="百度中文站三步操作与接口失败时的停止提示" /></a><figcaption><strong>中文站范围与真实提交反馈</strong><span>按上方三步操作。接口报错时先处理平台状态，不能当作提交成功。</span></figcaption></figure>
+        <p class="note"><a href="https://ziyuan.baidu.com/college/courseinfo?id=267&amp;page=2" target="_blank" rel="noopener">百度官方普通收录说明</a> · 百度 Token 按验证站点保存，不能像 Google / Bing 的账号配置一样跨网站共用。</p>
+      </div></details>
 
       <section class="band" data-seo-pages="engines">
         <div class="band-title">
@@ -960,8 +933,9 @@
       </section>
 
       <section class="band tutorial-section google-tutorial" data-seo-pages="google">
+        <details class="google-fold" id="google-tutorial-fold"><summary><strong>使用教程</strong><span>账号授权、操作截图与常见问题</span></summary><div class="google-fold-body">
         <div class="tutorial-heading">
-          <div><span class="tutorial-kicker">Google 完整配置教程</span><h2>一份服务账号，连接 Search Console 与 Indexing API</h2><p>功能逻辑保持不变：Sitemap、URL Inspection、搜索表现、分批通知、每日配额和断点续传仍使用当前同一份服务账号。</p></div>
+          <div><span class="tutorial-kicker">Google 完整配置教程</span><h2>产品与新闻：配置 Search Console 和 Sitemap</h2><p>先验证网站属性，再配置服务账号权限。普通产品和新闻不需要 Indexing API；URL Inspection 只查询 Google 已知的索引状态，不提交收录请求。</p></div>
           <div class="guide-actions">
             <a class="action-link" id="googleSitemapHelpLink" href="https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap" target="_blank" rel="noopener">Google Sitemap 文档</a>
             <a class="action-link" id="googleInspectionHelpLink" href="https://support.google.com/webmasters/answer/9012289" target="_blank" rel="noopener">网址检查说明</a>
@@ -969,9 +943,9 @@
         </div>
         <div class="tutorial-rail" aria-label="Google 配置步骤">
           <div><b>1</b><span>创建 Cloud 项目</span></div><i></i>
-          <div><b>2</b><span>启用两个 API</span></div><i></i>
+          <div><b>2</b><span>启用 Search Console API</span></div><i></i>
           <div><b>3</b><span>创建服务账号 JSON</span></div><i></i>
-          <div><b>4</b><span>授予站点所有者权限</span></div><i></i>
+          <div><b>4</b><span>授予网站完整权限</span></div><i></i>
           <div><b>5</b><span>导入并测试</span></div>
         </div>
         <section class="google-official-panel" aria-labelledby="googleOfficialHeading">
@@ -979,100 +953,96 @@
             <div>
               <span class="tutorial-kicker">按顺序打开</span>
               <h3 id="googleOfficialHeading">Google 官方配置页面快捷入口</h3>
-              <p>Cloud Console 页面会使用当前选中的项目。每次打开后先核对页面顶部项目名称，保证两个 API、服务账号和配额都属于同一项目。</p>
+              <p>Cloud Console 页面会使用当前选中的项目。核对 Search Console API 与服务账号属于同一项目；各网站分别核对属性和 Sitemap，避免串站。</p>
             </div>
             <span class="google-project-warning">先确认 Cloud 项目，再开始配置</span>
           </div>
           <div class="google-link-grid">
             <a class="google-link-card tone-blue" href="https://console.cloud.google.com/projectselector2/home/dashboard" target="_blank" rel="noopener"><span>01</span><strong>选择或创建 Cloud 项目</strong><small>所有 API、凭据与配额的归属项目</small><code>console.cloud.google.com/projectselector2</code></a>
             <a class="google-link-card tone-blue" href="https://console.cloud.google.com/apis/library/searchconsole.googleapis.com" target="_blank" rel="noopener"><span>02</span><strong>启用 Search Console API</strong><small>Sitemap、网址检查和搜索表现所需</small><code>searchconsole.googleapis.com</code></a>
-            <a class="google-link-card tone-red" href="https://console.cloud.google.com/apis/library/indexing.googleapis.com" target="_blank" rel="noopener"><span>03</span><strong>启用 Web Search Indexing API</strong><small>分批通知、配额统计和断点续传所需</small><code>indexing.googleapis.com</code></a>
+            <a class="google-link-card tone-red" href="https://console.cloud.google.com/apis/library/indexing.googleapis.com" target="_blank" rel="noopener"><span>可选</span><strong>招聘 / 直播：Indexing API</strong><small>普通产品与新闻不启用此接口</small><code>indexing.googleapis.com</code></a>
             <a class="google-link-card tone-green" href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener"><span>04</span><strong>创建并管理服务账号</strong><small>创建账号后进入“密钥”生成 JSON</small><code>console.cloud.google.com/iam-admin</code></a>
             <a class="google-link-card tone-green" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener"><span>05</span><strong>查看 API 凭据</strong><small>核对服务账号与当前项目是否一致</small><code>console.cloud.google.com/apis/credentials</code></a>
             <a class="google-link-card tone-yellow" id="googleTutorialConsoleLink" href="https://search.google.com/search-console" target="_blank" rel="noopener"><span>06</span><strong>打开 Search Console</strong><small>选择站点属性，添加 JSON 中的 client_email</small><code>search.google.com/search-console</code></a>
-            <a class="google-link-card tone-red" href="https://console.cloud.google.com/apis/api/indexing.googleapis.com/quotas" target="_blank" rel="noopener"><span>07</span><strong>查看 Indexing API 配额</strong><small>核对每日发布量与每分钟请求限制</small><code>indexing.googleapis.com/quotas</code></a>
-            <a class="google-link-card tone-yellow" href="https://developers.google.com/search/apis/indexing-api/v3/prereqs" target="_blank" rel="noopener"><span>08</span><strong>阅读 Google 官方前置条件</strong><small>项目、服务账号、站点所有者和授权说明</small><code>developers.google.com/search/apis</code></a>
+            <a class="google-link-card tone-red" href="https://console.cloud.google.com/apis/api/indexing.googleapis.com/quotas" target="_blank" rel="noopener"><span>可选</span><strong>招聘 / 直播通知配额</strong><small>仅适用于已启用的 Indexing API</small><code>indexing.googleapis.com/quotas</code></a>
+            <a class="google-link-card tone-yellow" href="https://developers.google.com/search/docs/crawling-indexing/ask-google-to-recrawl" target="_blank" rel="noopener"><span>07</span><strong>普通页面的重新抓取</strong><small>Sitemap 与 Search Console 手动请求</small><code>developers.google.com/search/docs</code></a>
           </div>
         </section>
         <div class="google-subheading google-visual-heading">
-          <div><span class="tutorial-kicker">图解操作</span><h3>照着四张图完成整条授权链路</h3><p>每张图对应一个实际配置阶段。图中绿色状态表示可以继续，红色提示表示当前步骤尚未完成。</p></div>
+          <div><span class="tutorial-kicker">图解操作</span><h3>配置流程与服务账号授权</h3><p>下图为操作示意，不代表当前网站已经授权或收录。实际结果以上方属性权限测试为准。</p></div>
         </div>
         <div class="google-svg-grid">
-          <figure class="google-guide-visual"><img src="/tutorials/google-cloud-project-api.svg" alt="选择 Google Cloud 项目并启用两个 API 的步骤图" /><figcaption><strong>1. 项目与 API</strong><span>先选定项目，再分别启用 Search Console API 和 Web Search Indexing API。</span></figcaption></figure>
+          <figure class="google-guide-visual"><img src="/tutorials/google-sitemap-workflow.svg" alt="Search Console 授权、Sitemap 提交和收录检查流程图" /><figcaption><strong>1. 普通产品与新闻的流程</strong><span>只需 Search Console API；Sitemap 收到、通知收到和网页已收录是不同状态。</span></figcaption></figure>
           <figure class="google-guide-visual"><img src="/tutorials/google-service-account-key.svg" alt="创建 Google 服务账号并下载 JSON 密钥的步骤图" /><figcaption><strong>2. 服务账号与 JSON</strong><span>项目角色可以跳过；密钥类型选择 JSON，并妥善保存唯一下载文件。</span></figcaption></figure>
           <figure class="google-guide-visual"><img src="/tutorials/google-search-console-owner.svg" alt="在 Google Search Console 中给服务账号授予站点权限的步骤图" /><figcaption><strong>3. Search Console 站点权限</strong><span>复制 JSON 的 client_email，添加到目标属性的用户和权限中。</span></figcaption></figure>
-          <figure class="google-guide-visual"><img src="/tutorials/google-tool-connection.svg" alt="在本工具导入服务账号并测试 Google API 的步骤图" /><figcaption><strong>4. 导入、验证与继续任务</strong><span>保存 JSON 后按顺序测试连接、读取 Sitemap，再继续未完成队列。</span></figcaption></figure>
         </div>
         <div class="google-subheading google-screenshot-heading">
-          <div><span class="tutorial-kicker">真实页面核对</span><h3>配置完成后，页面状态应与下图一致</h3></div>
+          <div><span class="tutorial-kicker">历史界面参考</span><h3>API 与属性配置页面示例</h3></div>
         </div>
         <div class="tutorial-image-grid">
-          <figure class="tutorial-shot"><img src="/tutorials/google-enable-search-console-api.png" alt="Google Cloud 中 Search Console API 已启用的页面" /><figcaption><strong>图 1：确认 Search Console API 已启用</strong><span>页面顶部应显示“停用 API”，这表示当前项目已经启用。Indexing API 也要用同样方式启用。</span></figcaption></figure>
+          <figure class="tutorial-shot"><img src="/tutorials/google-enable-search-console-api.png" alt="Google Cloud 中 Search Console API 已启用的页面" /><figcaption><strong>图 1：确认 Search Console API 已启用</strong><span>页面显示“停用 API”表示当前项目已启用。普通产品和新闻不需要另启用 Indexing API。</span></figcaption></figure>
           <figure class="tutorial-shot"><img src="/tutorials/google-search-console-workspace.png" alt="本工具 Google Search Console 收录中心页面" /><figcaption><strong>图 2：回到本工具验证完整链路</strong><span>保存服务账号后先测试连接，再读取 Sitemap 或执行少量 URL Inspection，确认权限与属性匹配。</span></figcaption></figure>
+        </div>
+        <div class="google-subheading google-screenshot-heading" id="google-permission-tutorial">
+          <div><span class="tutorial-kicker">Chrome 实际操作截图 · 2026-09-23</span><h3>服务账号授权：设置 → 用户和权限 → 添加用户</h3><p>先选自己的网站属性。以下以 shanbo-rig.com 为例；其他网站请使用自己的属性和当前共享账号邮箱。</p></div>
+        </div>
+        <div class="tutorial-image-grid">
+          <figure class="tutorial-shot"><a href="/tutorials/google-search-console-settings-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/google-search-console-settings-live.png" alt="Search Console 设置中的使用者和权限入口" /></a><figcaption><strong>1. 打开用户和权限</strong><span>进入 Search Console，左上选择目标属性，再点击左下“设置”和“使用者和权限”。简体界面可能显示“用户和权限”。</span></figcaption></figure>
+          <figure class="tutorial-shot"><a href="/tutorials/google-search-console-add-user-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/google-search-console-add-user-live.png" alt="新增使用者表单填写服务账号邮箱并选择完整权限" /></a><figcaption><strong>2. 添加服务账号，选择完整权限</strong><span>点击“新增使用者／添加用户”，填写 JSON 中的 client_email，权限选“完整”，再点击“新增”。这里填写邮箱，不是密钥 ID，也不是 JSON 私钥。</span></figcaption></figure>
+          <figure class="tutorial-shot"><a href="/tutorials/google-search-console-user-granted-live.png" target="_blank" rel="noopener"><img loading="lazy" src="/tutorials/google-search-console-user-granted-live.png" alt="授权成功后用户列表显示服务账号及完整权限" /></a><figcaption><strong>3. 核对授权结果，回工具测试</strong><span>用户列表应出现服务账号和“完整”权限。回到上方点击“测试 Search Console 属性权限”。域名属性 sc-domain:shanbo-rig.com 覆盖其语言子域名；独立的其他网站仍须分别授权。点击截图可查看原图。</span></figcaption></figure>
         </div>
         <div class="tutorial-steps-grid google-steps">
           <article><span>01</span><h3>创建或选择 Cloud 项目</h3><p>用拥有网站 Search Console 权限的 Google 账号登录 Cloud Console。新建项目后切换到该项目，后续服务账号、API 和配额都必须在同一项目内。</p></article>
-          <article><span>02</span><h3>启用两个 API</h3><p>打开上方两个 API 直达页，确认项目名正确后点击“启用”。配置完成时页面按钮会变成“管理”或“停用 API”；只启用其中一个会导致部分按钮返回 403。</p></article>
+          <article><span>02</span><h3>启用 Search Console API</h3><p>打开 Search Console API 官方入口，核对项目名后点击“启用”。页面显示“管理”或“停用 API”即已启用。钻机、挖掘机产品及一般新闻不需要 Indexing API。</p></article>
           <article><span>03</span><h3>创建服务账号与 JSON</h3><p>进入“服务账号”，点击“创建服务账号”。项目角色可以跳过；创建后依次进入“密钥 → 添加密钥 → 创建新密钥 → JSON”，密钥文件只会下载一次。</p></article>
-          <article><span>04</span><h3>给站点授予权限</h3><p>打开 Search Console 并选中目标属性，进入“设置 → 用户和权限”，添加 JSON 中的 <b>client_email</b>。若 Indexing API 仍返回 403，再核对该账号的所有者状态。</p></article>
+          <article><span>04</span><h3>给站点授予权限</h3><p>网站所有者先在 Search Console 验证目标属性，再到“设置 → 用户和权限”添加 JSON 的 <b>client_email</b> 并授予完整权限。受限用户只能读取部分信息，不能提交 Sitemap。</p></article>
           <article><span>05</span><h3>导入 JSON 并验证</h3><p>用记事本打开 JSON，全选复制到上方服务账号输入框，点击“保存并验证服务账号”。成功后账号邮箱会显示在页面右侧，输入框会自动清空。</p></article>
           <article><span>06</span><h3>配置 Search Console 属性</h3><p>域名属性填写 <b>sc-domain:example.com</b>；网址前缀属性必须包含协议和末尾斜杠。Sitemap 地址必须属于同一属性，保存后先读取 Sitemap 状态。</p></article>
           <article><span>07</span><h3>按正确方式推进收录</h3><p>普通产品页以 Sitemap、内部链接和 Search Console 手动请求为主。Indexing API 官方仅支持含 JobPosting，或 VideoObject 中 BroadcastEvent 的页面，不应把普通产品页当作批量强推接口。</p></article>
-          <article><span>08</span><h3>配额与断点续传</h3><p>Indexing API 初始默认发布配额为 200 次/项目/天，并在太平洋时间零点重置。本工具会记录成功 URL 和今日用量，恢复网络或配额后只处理剩余列表。</p></article>
+          <article><span>08</span><h3>验证结果与日常优化</h3><p>检查线上 Sitemap 和 robots，提交 Sitemap 后读取处理状态，再抽查重要 URL 的索引状态。优先修复 noindex、重复 canonical、失效链接和语言对应关系；增加真实产品信息，不堆砌关键词。</p></article>
         </div>
         <div class="tutorial-troubleshoot">
           <strong>常见问题快速判断</strong>
-          <div><b>API 未启用</b><span>回到当前 Cloud 项目确认两个 API 都显示已启用，启用后等待几分钟再试。</span></div>
+          <div><b>API 未启用</b><span>确认服务账号所在 Cloud 项目已启用 Search Console API，启用后稍候再试。普通网页无需开启 Indexing API。</span></div>
           <div><b>403 / 权限不足</b><span>检查服务账号邮箱是否被添加到当前 Search Console 属性，并具有所有者或完整权限。</span></div>
           <div><b>属性不匹配</b><span>域名属性使用 sc-domain:，网址前缀属性要严格匹配协议、子域名和末尾斜杠。</span></div>
-          <div><b>达到配额或断网</b><span>停止后不要清除提交记录；恢复网络或配额后点击“继续提交待处理 URL”即可。</span></div>
+          <div><b>达到配额或断网</b><span>保留已有检查记录，等待配额恢复后继续诊断。提交 Sitemap 没有“立即收录”保证，不要用重复通知代替内容与可抓取性优化。</span></div>
         </div>
+        </div></details>
       </section>
 
       <div class="metrics" id="content-audit" data-seo-pages="audit">
         <div class="metric"><span>SEO 健康度</span><strong id="healthScore">0</strong><div class="health-detail" id="healthDetail"></div></div>
-        <div class="metric"><span>可收录 URL</span><strong id="urlCount">0</strong></div>
-        <div class="metric"><span>内容数量</span><strong id="contentCount">0</strong></div>
-        <div class="metric"><span>栏目数量</span><strong id="menuCount">0</strong></div>
+        <div class="metric"><span>中文页面</span><strong id="urlCount">0</strong><div class="health-detail">内容 <span id="contentCount">0</span> · 栏目 <span id="menuCount">0</span></div></div>
+        <div class="metric"><span>待处理提示</span><strong id="auditIssueCount">0</strong></div>
         <div class="metric"><span>高风险问题</span><strong id="highCount">0</strong></div>
       </div>
 
-      <div class="content-grid" data-seo-pages="audit">
-        <section class="band">
-          <h2>站点信息</h2>
+      <div class="content-grid cn-audit-content" data-seo-pages="audit">
+        <details class="band cn-site-details">
+          <summary>查看当前网站与数据来源</summary>
           <div id="siteMeta" class="site-meta"></div>
           <div id="chips" class="chips"></div>
-        </section>
+        </details>
         <section class="band">
           <div class="band-title">
-            <h2>SEO 问题</h2>
+            <h2>02 修正中文资料</h2>
             <div style="display: flex; align-items: center; gap: 12px;">
-              <a class="action-link" href="/models.html">模型总览</a>
-              <a class="action-link" href="/models-config.html">模型配置</a>
               <span id="issueTotal" class="note"></span>
             </div>
           </div>
+          <p class="note">先处理高风险问题，点击对应的“编辑”修改资料；完成并同步到 PB 后，再点上方“重新检查中文资料”。下列提示不等于页面无法收录。</p>
+          <details class="cn-ai-panel"><summary><strong>AI 辅助优化</strong><span>可选 · 只优化中文 · 执行前先确认范围</span></summary>
+          <div class="cn-ai-links"><a href="/models.html">模型总览</a><a href="/models-config.html">模型配置</a></div>
           <div class="ai-fix-bar">
             <label>
-              <span>AI 模型（可选模型列表）</span>
+              <span>选择优化模型</span>
               <select id="aiModelSelect">
                 <option value="">加载中...</option>
               </select>
             </label>
-            <label>
-              <span>选择语言</span>
-              <select id="aiLanguageSelect">
-                <option value="all">全部语言（量大）</option>
-                <option value="cn">中文 (cn)</option>
-                <option value="en">English (en)</option>
-                <option value="es">Español (es)</option>
-                <option value="fr">Français (fr)</option>
-                <option value="ru">Русский (ru)</option>
-                <option value="ar">العربية (ar)</option>
-                <option value="pt">Português (pt)</option>
-              </select>
-            </label>
-            <button class="success" id="aiFixBtn">开始 / 继续直接修复</button>
+            <select id="aiLanguageSelect" hidden aria-label="优化语言"><option value="cn">中文 (cn)</option></select>
+            <button class="success" id="aiFixBtn">预览并优化中文</button>
             <button class="warn" id="aiStopBtn" style="display: none;">停止修复</button>
             <button id="aiTestBtn">测试模型连接</button>
           </div>
@@ -1094,12 +1064,12 @@
           <div class="ai-problem-filter" id="aiProblemFilter">
             <span class="ai-quota-label">只修：</span>
             <label><input type="checkbox" value="title" checked /> 标题</label>
-            <label><input type="checkbox" value="subtitle" checked /> 副标题</label>
-            <label><input type="checkbox" value="slug" checked /> URL名称</label>
+            <label><input type="checkbox" value="subtitle" /> 副标题</label>
+            <label><input type="checkbox" value="slug" /> URL名称</label>
             <label><input type="checkbox" value="keywords" checked /> 关键词</label>
             <label><input type="checkbox" value="description" checked /> 描述缺失</label>
             <label><input type="checkbox" value="description-too-long" checked /> 描述过长</label>
-            <label><input type="checkbox" value="content-too-short" checked /> 正文过短</label>
+            <label><input type="checkbox" value="content-too-short" /> 正文过短</label>
           </div>
           <details class="gi-steps" id="aiKeyConfig">
             <summary>配置 AI API Key（未配置的模型会置灰，可在这里补填，保存即生效）</summary>
@@ -1114,6 +1084,7 @@
             <div class="ai-fix-logs" id="aiFixLogs"></div>
           </div>
           <div id="aiFixResult" class="google-result"></div>
+          </details>
           <div class="issue-tools">
             <select id="severityFilter">
               <option value="">全部级别</option>
@@ -1121,7 +1092,7 @@
               <option value="medium">中风险</option>
               <option value="low">提示</option>
             </select>
-            <select id="languageFilter"><option value="">全部语言</option></select>
+            <select id="languageFilter" hidden aria-label="检测语言"><option value="cn">中文 (cn)</option></select>
             <select id="typeFilter"><option value="">全部类型</option></select>
             <input id="issueSearchInput" placeholder="搜索标题、栏目、URL 或问题内容" />
           </div>
@@ -1139,6 +1110,35 @@
           </div>
         </section>
       </div>
+
+      <details class="band cn-page-audit" id="page-audit" data-seo-pages="audit"><summary><strong>03 检查实际中文页面</strong><span>修改后按需检查 · 本地或线上</span></summary><div class="cn-page-body">
+        <div class="band-title">
+          <div>
+            <h2>检查页面效果</h2>
+            <div class="note">从当前网站的 CN 列表选择页面，检查标题、描述、链接、图片等实际显示结果。页面跳转到其他语言时会停止。</div>
+          </div>
+          <span class="note" id="pageAuditMeta">尚未体检</span>
+        </div>
+        <div class="page-audit-form">
+          <label><span>检查环境</span><select id="pageAuditSource"><option value="local">本地中文页面</option><option value="public">线上中文页面</option></select></label>
+          <label><span>中文页面地址（可从列表选择）</span><input id="pageAuditUrlInput" list="pageAuditUrls" placeholder="选择当前网站的中文页面" /></label>
+          <button class="primary" id="pageAuditBtn">检查此页面</button>
+          <datalist id="pageAuditUrls"></datalist>
+        </div>
+        <div class="page-audit-result" id="pageAuditResult">
+          <div class="audit-summary">
+            <div class="audit-score" id="pageAuditScore"><strong>0</strong><span>技术 SEO 得分</span></div>
+            <div class="audit-facts" id="pageAuditFacts"></div>
+            <div class="serp-preview">
+              <div class="serp-preview-label">搜索结果预览</div>
+              <div class="serp-url" id="pageAuditSnippetUrl"></div>
+              <div class="serp-title" id="pageAuditSnippetTitle"></div>
+              <div class="serp-description" id="pageAuditSnippetDescription"></div>
+            </div>
+          </div>
+          <div class="audit-checks" id="pageAuditChecks"></div>
+        </div>
+      </div></details>
 
       <section class="band migration-panel" id="config-migration" data-seo-pages="settings">
         <div class="migration-head">
@@ -1201,12 +1201,13 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
+      const isCnAudit = document.documentElement.dataset.seoPage === "audit";
       let busy = false;
       let currentReport = null;
       let currentIssues = [];
       let currentUrls = [];
       let issuePage = 1;
-      const issuePageSize = 30;
+      const issuePageSize = 12;
       let indexNowRetryHosts = [];
       let googleStatus = {};
       let googleIndexingStatus = {};
@@ -1247,6 +1248,10 @@
       }
 
       function setStatus(text, isError = false) {
+        if (isCnAudit && $('auditFeedback')) {
+          $('auditFeedback').textContent = text;
+          $('auditFeedback').className = isError ? 'cn-audit-feedback error' : 'cn-audit-feedback';
+        }
         $("status").textContent = text;
         $("status").className = isError ? "status error" : "status";
         const panel = $("statusPanel");
@@ -1256,6 +1261,7 @@
       function setBusy(value) {
         busy = value;
         document.querySelectorAll("button").forEach((button) => (button.disabled = value));
+        renderGoogleAccountButtons();
         if (!value) renderGiSummary();
       }
 
@@ -1284,7 +1290,14 @@
           await action();
         } catch (error) {
           setStatus(error.message || String(error), true);
-          alert(error.message || String(error));
+          if (document.documentElement.dataset.seoPage === 'bing') {
+            renderFlowStatus('操作未完成', error.message || String(error));
+            showBingResult('操作未完成', [error.message || String(error)], 'warning');
+          } else if (document.documentElement.dataset.seoPage === 'baidu') {
+            showBaiduResult('操作未完成', [error.message || String(error)], 'warning');
+          } else if (document.documentElement.dataset.seoPage === 'yandex') {
+            showYandexResult('操作未完成', [error.message || String(error)], 'warning');
+          } else if (!isCnAudit) alert(error.message || String(error));
         } finally {
           setBusy(false);
           renderIssues();
@@ -1401,7 +1414,8 @@
       function renderPageAuditOptions() {
         const source = $("pageAuditSource").value;
         const field = source === "local" ? "localUrl" : "url";
-        const options = currentUrls
+        const home = source === 'local' ? currentReport?.audit?.localHome : currentReport?.audit?.publicHome;
+        const options = (home ? [{ [field]: home, lang: 'cn', title: '中文首页' }, ...currentUrls] : currentUrls)
           .filter((item) => item[field])
           .slice(0, 500)
           .map((item) => `<option value="${escapeHtml(item[field])}">${escapeHtml(`${item.lang || ""} · ${item.type || item.kind || ""} · ${item.title || item.id || ""}`)}</option>`)
@@ -1427,13 +1441,19 @@
         $("pageAuditSnippetTitle").textContent = result.snippet?.title || "页面标题缺失";
         $("pageAuditSnippetDescription").textContent = result.snippet?.description || "Meta Description 缺失，搜索引擎可能从正文中自动截取摘要。";
         const statusLabels = { pass: "通过", warn: "提醒", fail: "失败", info: "参考" };
-        $("pageAuditChecks").innerHTML = (result.checks || []).map((item) => `
+        const renderCheck = (item) => `
           <div class="audit-check ${escapeHtml(item.status)}">
             <div class="audit-check-head"><strong>${escapeHtml(item.label)}</strong><span class="audit-check-status">${escapeHtml(statusLabels[item.status] || item.status)}</span></div>
             <div class="audit-check-summary">${escapeHtml(item.summary || "")}</div>
             ${item.detail ? `<div class="audit-check-detail">${escapeHtml(item.detail)}</div>` : ""}
           </div>
-        `).join("");
+        `;
+        const checks = result.checks || [];
+        const attention = checks.filter(item => ["fail", "warn"].includes(item.status));
+        const passed = checks.filter(item => !["fail", "warn"].includes(item.status));
+        $("pageAuditChecks").innerHTML = isCnAudit
+          ? attention.map(renderCheck).join("") + (passed.length ? `<details class="cn-passed-checks"><summary>查看已通过与参考项（${passed.length}）</summary><div class="audit-checks">${passed.map(renderCheck).join("")}</div></details>` : "")
+          : checks.map(renderCheck).join("");
         $("pageAuditResult").style.display = "block";
       }
 
@@ -1442,13 +1462,19 @@
         if (!url) throw new Error("请输入要体检的完整页面 URL。");
         setStatus(`正在抓取并体检 ${url} ...`);
         $("pageAuditMeta").textContent = "正在检查";
-        const result = await api("/api/page-audit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
-        });
-        renderPageAudit(result);
-        setStatus(`页面体检完成：${result.score} 分，${result.summary?.fail || 0} 项失败，${result.summary?.warn || 0} 项提醒`);
+        $("pageAuditResult").style.display = "none";
+        try {
+          const result = await api(isCnAudit ? "/api/audit/page" : "/api/page-audit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+          });
+          renderPageAudit(result);
+          setStatus(`页面体检完成：${result.score} 分，${result.summary?.fail || 0} 项失败，${result.summary?.warn || 0} 项提醒`);
+        } catch (error) {
+          $("pageAuditMeta").textContent = error.message;
+          throw error;
+        }
       }
 
       function renderNavigation(items) {
@@ -1468,9 +1494,16 @@
         $("siteBaseUrlInput").value = config.siteBaseUrl || "";
         $("runtime").textContent = `${config.siteName || "-"} · 端口 ${instance.port || location.port} · ${instance.databasePath || ""}`;
         renderNavigation(result.navigation || []);
+        if (result.setupRequired) {
+          renderWarning(result.message);
+          setStatus(result.message);
+          document.querySelectorAll('main button, main input, main select, main textarea').forEach(control => { control.disabled = true; });
+          return false;
+        }
         document.title = `${config.siteName || "PbootCMS"} · ${$("workspaceTitle")?.textContent || "SEO 检查"}`;
         renderWarning(result.publicUrlWarning ? "真实线上地址看起来仍是本地/测试域名，已禁止向搜索引擎提交。" : "");
         renderProjectIdentity();
+        return true;
       }
 
       function projectIdentityRows(identity = googleStatus.projectIdentity || {}) {
@@ -1567,10 +1600,10 @@
         }
         const meta = $("googleIndexingMeta");
         if (googleIndexingStatus.enabled) {
-          meta.textContent = `已配置：${googleIndexingStatus.clientEmail}`;
+          meta.textContent = `${googleIndexingStatus.accountSource === 'shared' ? '使用共享账号' : '使用独立账号'}：${googleIndexingStatus.clientEmail}`;
           meta.style.color = "#176b3a";
         } else {
-          meta.textContent = "未配置服务账号";
+          meta.textContent = googleIndexingStatus.accountSource === 'disabled' ? "当前网站已停用" : "未配置服务账号";
           meta.style.color = "#d94b35";
         }
         const quotaInput = $("googleDailyQuotaInput");
@@ -1579,7 +1612,15 @@
         }
         $("googleIndexingSubmitAllBtn").disabled = busy || !googleIndexingStatus.enabled;
         $("giStepsAccount").textContent = googleIndexingStatus.clientEmail || "尚未配置";
+        const shared = googleIndexingStatus.sharedAccount || {};
+        $("googleSharedAccountMeta").textContent = shared.configured ? `共享账号：${shared.clientEmail}` : '共享账号尚未配置';
+        renderGoogleAccountButtons();
         await loadGoogleSubmittedState();
+      }
+
+      function renderGoogleAccountButtons() {
+        $("promoteGoogleSharedBtn").disabled = busy || !googleIndexingStatus.enabled || googleIndexingStatus.accountSource !== 'site';
+        $("useGoogleSharedBtn").disabled = busy || !googleIndexingStatus.sharedAccount?.configured || googleIndexingStatus.accountSource === 'shared';
       }
 
       async function loadGoogleSubmittedState() {
@@ -1595,19 +1636,19 @@
         try {
           yandexStatus = await api("/api/yandex/status");
         } catch (_error) {
-          yandexStatus = {};
+          yandexStatus = { scopeError: "读取 Yandex 配置失败，请刷新后重试。" };
         }
         const meta = $("yandexMeta");
-        if (yandexStatus.verification?.filename) {
-          meta.textContent = `验证文件：${yandexStatus.verification.filename}${yandexStatus.webmasterTokenConfigured ? " + OAuth token" : ""}`;
-          meta.style.color = "#176b3a";
-          if (!$("yandexVerificationFilenameInput").value) {
-            $("yandexVerificationFilenameInput").value = yandexStatus.verification.filename;
-          }
-        } else {
-          meta.textContent = yandexStatus.webmasterTokenConfigured ? "OAuth token 已配置" : "未配置";
-          meta.style.color = yandexStatus.webmasterTokenConfigured ? "#176b3a" : "#d94b35";
-        }
+        meta.textContent = yandexStatus.scopeError || ((yandexStatus.host || 'RU') + (yandexStatus.webmasterTokenConfigured ? (yandexStatus.accountSource === 'shared' ? ' · 共享账号已配置' : ' · 专用账号已配置') : ' · 请先配置账号'));
+        $('yandexSharedMeta').textContent = yandexStatus.sharedAccount?.configured ? '共享账号已配置；新网站未设置专用账号时自动共用。' : '共享账号尚未配置。';
+        $('yandexSaveShared').checked = yandexStatus.accountSource !== 'site';
+        $('yandexUseSharedBtn').hidden = !yandexStatus.sharedAccount?.configured || yandexStatus.accountSource === 'shared';
+        $('yandexPromoteSharedBtn').hidden = !(yandexStatus.accountSource === 'site' && yandexStatus.webmasterTokenConfigured);
+        meta.style.color = !yandexStatus.scopeError && yandexStatus.webmasterTokenConfigured ? '#176b3a' : '#b45309';
+        $('yandexScopeNote').textContent = yandexStatus.scopeError || ('仅处理：' + yandexStatus.baseUrl + '/ · ' + yandexStatus.urlCount + ' 个俄语页面');
+        $('yandexNextStep').textContent = yandexStatus.scopeError || (yandexStatus.webmasterTokenConfigured ? '先测试俄语站权限。通过后按 1 → 2 → 3 操作，无需逐页提交。' : '首次使用：展开“俄语站配置”，完成网站验证并保存 Token。');
+        if (!yandexStatus.webmasterTokenConfigured || yandexStatus.scopeError) $('yandexSettingsPanel').open = true;
+        if (yandexStatus.verification?.filename) $('yandexVerificationFilenameInput').value = yandexStatus.verification.filename;
         $("yandexOauthTokenInput").value = "";
         $("yandexOauthTokenInput").placeholder = yandexStatus.webmasterTokenConfigured
           ? "已配置（留空则不修改）"
@@ -1616,20 +1657,24 @@
         $("yandexIndexNowHelpLink").href = yandexStatus.links?.indexNowHelp || "https://yandex.com/support/webmaster/indexnow.html";
       }
 
-      $("saveYandexTokenBtn").onclick = () => runAction(async () => {
-        const token = $("yandexOauthTokenInput").value.trim();
-        if (!token) throw new Error("请粘贴 Yandex OAuth token。");
+      async function saveYandexAccount(body) {
+        if ((body.shared || body.promoteToShared) && yandexStatus.sharedAccount?.configured
+          && !await confirmBingAction('替换共享 Yandex 账号会影响所有使用它的网站。确认替换？')) return;
         const result = await api("/api/yandex/token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify(body),
         });
         await loadYandexStatus();
         setStatus(result.message);
-      });
+        showYandexResult('账号配置已保存', [result.message, '请测试当前俄语站权限，确认账号与网站对应。'], 'success');
+      }
+      $("saveYandexTokenBtn").onclick = () => runAction(() => saveYandexAccount({ token: $("yandexOauthTokenInput").value.trim(), shared: $('yandexSaveShared').checked }));
+      $('yandexUseSharedBtn').onclick = () => runAction(() => saveYandexAccount({ useShared: true }));
+      $('yandexPromoteSharedBtn').onclick = () => runAction(() => saveYandexAccount({ promoteToShared: true }));
 
       $("clearYandexTokenBtn").onclick = () => runAction(async () => {
-        if (!confirm("确定清除 Yandex OAuth token 吗？")) return;
+        if (!await confirmBingAction("停用当前网站的 Yandex API？共享账号、其他网站及当前验证文件都会保留。")) return;
         const result = await api("/api/yandex/token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1640,22 +1685,27 @@
       });
 
       $("testYandexApiBtn").onclick = () => runAction(async () => {
+        showYandexResult("正在检查俄语站权限", ["正在连接 Yandex 并核对 HTTPS 网站所有权，请稍候。"]);
+        setStatus("正在检查俄语站权限…");
         const result = await api("/api/yandex/hosts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({}),
         });
-        showYandexResult("Yandex API 连接正常", [result.message || ""], "success");
+        showYandexResult("俄语站权限已通过", [result.message || "", "下一步：生成并上传，再提交网站地图。"], "success");
+        $('yandexNextStep').textContent = '权限已通过。继续第 1 步生成并上传网站地图。';
         setStatus(result.message || "");
       });
 
       $("submitYandexSitemapBtn").onclick = () => runAction(async () => {
+        showYandexResult('正在提交俄语站地图', ['正在核对权限与线上地图，请等待确认结果。']);
         const result = await api("/api/yandex/sitemap", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({}),
         });
         showYandexResult(result.ok ? "Sitemap 已提交给 Yandex" : "Sitemap 提交失败", [result.message || ""], result.ok ? "success" : "warning");
+        $('yandexNextStep').textContent = result.ok ? '地图已提交。内容更新时做第 2 步，之后等待抓取，过几天查看结果。' : '请处理下面的提示，再继续。';
         setStatus(result.message || "");
       });
 
@@ -1865,15 +1915,15 @@
         const pending = candidates.filter((item) => item.stale);
         $("gscPendingCount").textContent = pending.length;
         $("gscIndexedCount").textContent = indexed.length;
-        $("gscAttentionCount").textContent = requestable.length;
+        $("gscAttentionCount").textContent = cached.filter((item) => item.inspection?.ok && !item.inspection?.diagnosis?.indexed).length;
         $("gscCachedCount").textContent = cached.length;
 
         const openNextButton = $("gscOpenNextRequestBtn");
         if (openNextButton) {
           openNextButton.disabled = !requestable.length;
           openNextButton.textContent = requestable.length
-            ? `打开下一条请求收录（${requestable.length}）`
-            : "暂无可请求页面";
+            ? "打开 Google 请求收录"
+            : "暂无可单独处理的页面";
         }
         if ($("gscCopyPendingBtn")) $("gscCopyPendingBtn").disabled = !requestable.length;
 
@@ -1909,7 +1959,7 @@
             <div class="gsc-inspection-action">${escapeHtml(diagnosis?.nextAction || `优先原因：${item.reason}`)}</div>
             <div class="gsc-inspection-buttons">
               <button data-gsc-inspect type="button">${item.inspection ? "重新检查" : "检查"}</button>
-              ${requestable && !opened ? '<button class="primary" data-gsc-request type="button">请求收录</button>' : opened ? '<span class="note">今日已打开</span>' : ""}
+              ${requestable && !opened ? '<button data-gsc-request type="button">去 Google 处理（可选）</button>' : opened ? '<span class="note">今日已打开，未验证提交</span>' : ""}
             </div>
           </div>`;
         }).join("") : '<div class="gsc-empty">没有符合当前筛选条件的 URL。</div>';
@@ -1956,6 +2006,11 @@
         showSearchConsoleResult(`收录状态：${result.inspectionUrl}`, lines, diagnosis.indexed ? "success" : diagnosis.tone === "danger" ? "warning" : "info");
       }
 
+      function showGoogleNextStep(stepId, message) {
+        document.querySelectorAll(".google-task-card").forEach((card) => card.classList.toggle("google-task-card-primary", card.id === stepId));
+        $("googleNextStep").textContent = message;
+      }
+
       async function submitGscSitemap() {
         const result = await api("/api/search-console/sitemap", {
           method: "POST",
@@ -1966,12 +2021,13 @@
           }),
         });
         showSearchConsoleResult(
-          result.ok ? "Sitemap 已重新提交" : "Sitemap 提交失败",
+          result.ok ? "第 1 步完成：网站地图已提交" : "网站地图提交失败",
           result.ok
-            ? [result.message || "", "Google 已收到整站 URL 清单。接下来只需对最重要的未收录页面逐条请求编入索引。"]
+            ? [result.message || "", "接下来等待 Google 抓取，可过几天做第 2 步查看收录情况。不需要逐个点击下面的页面，提交成功也不代表全部已收录。"]
             : [result.message || "", result.action ? `下一步：${result.action}` : ""],
           result.ok ? "success" : "warning",
         );
+        if (result.ok) showGoogleNextStep("google-step-check", "第 1 步已完成。接下来等待 Google 抓取，过几天做第 2 步检查收录；第 3 步可选，不必全部点完。");
         setStatus(result.message || "");
         return result;
       }
@@ -2004,7 +2060,7 @@
           else window.open(target, "_blank", "noopener");
           showSearchConsoleResult(
             "已打开 Google 请求收录入口",
-            [url, "页面 URL 已复制。Google 页面打开后，点击“请求编入索引”；完成后回到这里继续下一条。"],
+            [url, "页面 URL 已复制。如需优先处理，在 Google 中点击“请求编入索引”。这是可选操作，不必把列表全部点完；打开入口不代表已提交。"],
             "info",
           );
           renderGscInspectionDashboard();
@@ -2083,7 +2139,7 @@
 
       $("gscInspectBatchBtn").onclick = () => runAction(async () => {
         if (!searchConsoleStatus.enabled) throw new Error("请先配置 Google 服务账号。");
-        const limit = Math.max(1, Math.min(100, Math.floor(Number($("gscBatchLimitInput").value || 20))));
+        const limit = Math.max(1, Math.min(100, Math.floor(Number($("gscBatchLimitInput").value || 100))));
         $("gscBatchLimitInput").value = String(limit);
         const targets = gscInspectionCandidates().filter((item) => item.stale).slice(0, limit);
         if (!targets.length) {
@@ -2091,12 +2147,12 @@
           setStatus("没有需要重新检查的 URL");
           return;
         }
-        if (!confirm(`将调用 Google URL Inspection 检查 ${targets.length} 个 URL。\n\n结果会逐条保存，可随时停止并在以后继续。继续吗？`)) return;
+        // Read-only queries start directly; results are saved individually and can be stopped.
         gscInspectionStopRequested = false;
         const stopButton = $("gscInspectStopBtn");
         stopButton.style.display = "";
         stopButton.disabled = false;
-        stopButton.textContent = "停止诊断";
+        stopButton.textContent = "停止检查";
         let done = 0;
         let succeeded = 0;
         let failed = 0;
@@ -2130,7 +2186,7 @@
         }
         await loadGscInspectionState();
         const stopped = gscInspectionStopRequested || stoppedByGoogle;
-        const title = stopped ? "批量诊断已停止" : "批量诊断完成";
+        const title = stopped ? "检查已停止" : "检查完成";
         const lines = [
           `本次完成 ${done} / ${targets.length}，成功 ${succeeded}，失败 ${failed}。`,
           googleStopResult?.reason === "api-disabled" ? "Search Console API 刚启用时可能需要几分钟生效；页面显示已启用后，稍等再继续即可。" : "",
@@ -2142,6 +2198,7 @@
         ].filter(Boolean);
         renderGscInspectionProgress(done, targets.length, succeeded, failed, title);
         showSearchConsoleResult(title, lines, failed || stopped ? "warning" : "success");
+        showGoogleNextStep("google-step-check", "本批检查结束。有剩余页面时可继续检查下一批；尚未收录不等于必须逐条提交。网站地图提交后等待 Google 抓取即可。");
         setStatus(`${title}：成功 ${succeeded}，失败 ${failed}`);
       });
 
@@ -2202,23 +2259,77 @@
         `;
       }
 
+      function confirmBingAction(message) {
+        return new Promise(resolve => {
+          const dialog = $("bingConfirmDialog");
+          $("bingConfirmMessage").textContent = message;
+          $("bingConfirmCancel").disabled = false;
+          $("bingConfirmAccept").disabled = false;
+          dialog.returnValue = 'cancel';
+          dialog.onclose = () => { dialog.onclose = null; resolve(dialog.returnValue === 'accept'); };
+          $("bingConfirmCancel").onclick = () => dialog.close('cancel');
+          $("bingConfirmAccept").onclick = () => dialog.close('accept');
+          dialog.showModal();
+          $("bingConfirmCancel").focus();
+        });
+      }
+      let bingStatus = {};
+      function showBingNextStep(message) { $("bingNextStep").textContent = message; }
       async function loadBingStatus() {
         try {
           const data = await api("/api/bing/status");
+          bingStatus = data;
           $("bingApiKeyInput").value = "";
-          $("bingApiKeyInput").placeholder = data.apiKeyConfigured ? "已配置（留空则不修改）" : "粘贴 Bing Webmaster API Key";
-          if (data.verification?.code) {
-            $("bingVerificationCodeInput").value = data.verification.code;
-            $("bingMeta").textContent = `验证码已配置（${data.host}）${data.apiKeyConfigured ? " + API Key" : ""}`;
-            $("bingMeta").style.color = "#176b3a";
-          } else {
-            $("bingMeta").textContent = data.apiKeyConfigured ? "API Key 已配置" : "未配置";
-            $("bingMeta").style.color = data.apiKeyConfigured ? "#176b3a" : "#d94b35";
-          }
-        } catch (_error) {
-          $("bingMeta").textContent = "加载失败";
-        }
+          $("bingApiKeyInput").placeholder = data.apiKeyConfigured ? "已配置（留空不修改）" : "粘贴 Bing Webmaster API Key";
+          $("bingVerificationCodeInput").value = data.verification?.code || "";
+          const source = data.accountSource === 'shared' ? '共享账号' : '当前网站专用账号';
+          $("bingMeta").textContent = `${data.host || '未设置域名'} · ${data.apiKeyConfigured ? source + '已配置' : '请先配置账号'}`;
+          $("bingMeta").style.color = data.apiKeyConfigured ? "#176b3a" : "#b46a17";
+          $("bingAccountSummary").textContent = data.apiKeyConfigured ? source + ' · 可在此测试网站权限' : '首次配置一次，其他网站可共用';
+          $("bingSaveShared").checked = data.accountSource !== 'site';
+          $("bingUseSharedBtn").hidden = !data.sharedAccount?.configured || data.accountSource === 'shared';
+          $("bingPromoteSharedBtn").hidden = !(data.accountSource === 'site' && data.apiKeyConfigured);
+          $("bingDashboardLink").href = `https://www.bing.com/webmasters/home?siteUrl=${encodeURIComponent(data.siteUrl || '')}`;
+          if (!$("bingInspectUrlInput").value) $("bingInspectUrlInput").value = data.siteUrl || '';
+        } catch (_error) { $("bingMeta").textContent = "配置读取失败，请刷新重试"; }
       }
+      function requireBingAccount() {
+        if (bingStatus.apiKeyConfigured) return;
+        $("bing-account-settings").open = true;
+        $("bing-account-settings").scrollIntoView({ block: 'center' });
+        throw new Error('请先在账号配置中保存 API Key，或使用已有共享配置。');
+      }
+      async function saveBingAccount(body) {
+        if ((body.shared || body.promoteToShared) && bingStatus.sharedAccount?.configured
+          && !confirm('将更新共享 API Key，使用共享配置的网站都会使用新值。确定保存吗？')) return;
+        const result = await api('/api/bing/apikey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        await loadBingStatus();
+        showBingResult('账号配置已保存', [result.message, '下一步：点击“测试当前网站权限”。'], 'success');
+        setStatus(result.message);
+      }
+      $("bingUseSharedBtn").onclick = () => runAction(() => saveBingAccount({ useShared: true }));
+      $("bingPromoteSharedBtn").onclick = () => runAction(() => saveBingAccount({ promoteToShared: true }));
+      $("testBingAccountBtn").onclick = () => runAction(async () => {
+        requireBingAccount();
+        const result = await api('/api/bing/test', { method: 'POST' });
+        showBingResult(result.ok ? '当前网站权限已通过' : '当前网站权限未通过', [result.message], result.ok ? 'success' : 'warning');
+        showBingNextStep(result.ok ? '账号已就绪。接下来从第 1 步生成并上传网站地图。' : result.message);
+        setStatus(result.message);
+      });
+      $("bingShowInspectBtn").onclick = () => {
+        $("bingInspectPanel").open = true;
+        $("bingInspectUrlInput").focus();
+      };
+      $("prepareBingBtn").onclick = () => runAction(async () => {
+        if (!await confirmBingAction('将为当前网站生成网站地图、robots 和验证文件。本地通过已保存的 FTP 配置上传；宝塔线上直接写入当前网站目录。')) return;
+        await api('/api/indexnow-key', { method: 'POST' });
+        const state = await startSeoUploadAndWait();
+        const check = await api('/api/google/check-public', { method: 'POST' });
+        if (!check.sitemap?.status || check.sitemap.status !== 200) throw new Error('上传结束，但线上网站地图还无法正常访问，请检查网站地址和 FTP 目录。');
+        showBingResult('网站地图及验证文件已更新', [state.mode === 'direct' ? `已直接生成 ${state.published} 个文件到当前线上网站，无需 FTP。下一步：点击“再：提交网站地图”。` : `上传 ${state.uploaded || 0} 个文件。下一步：点击“再：提交网站地图”。`], 'success');
+        showBingNextStep('线上文件已准备完成。继续点击“再：提交网站地图”，把页面地址交给 Bing。');
+        setStatus('文件更新完成，继续提交网站地图');
+      });
 
       $("saveBingVerificationBtn").onclick = () => runAction(async () => {
         const code = $("bingVerificationCodeInput").value.trim();
@@ -2243,27 +2354,10 @@
         setStatus(result.message);
       });
 
-      $("saveBingApiKeyBtn").onclick = () => runAction(async () => {
-        const apiKey = $("bingApiKeyInput").value.trim();
-        if (!apiKey) throw new Error("请粘贴 Bing Webmaster API Key。");
-        const result = await api("/api/bing/apikey", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ apiKey }),
-        });
-        await loadBingStatus();
-        setStatus(result.message);
-      });
-
+      $("saveBingApiKeyBtn").onclick = () => runAction(() => saveBingAccount({ apiKey: $("bingApiKeyInput").value.trim(), shared: $("bingSaveShared").checked }));
       $("clearBingApiKeyBtn").onclick = () => runAction(async () => {
-        if (!confirm("确定清除 Bing Webmaster API Key 吗？")) return;
-        const result = await api("/api/bing/apikey", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clear: true }),
-        });
-        await loadBingStatus();
-        setStatus(result.message);
+        if (!confirm('停用当前网站的 Bing API？共享配置和其他网站不受影响。')) return;
+        await saveBingAccount({ clear: true });
       });
 
       $("checkBingBtn").onclick = () => runAction(async () => {
@@ -2275,20 +2369,23 @@
         const lines = [...(result.parts || [])];
         if (result.verification) lines.push(`${result.verification.filename} → HTTP ${result.verification.status}${result.verification.ok ? "" : `（${result.verification.reason}）`}`);
         showBingResult("Bing 状态检查", lines, result.ok ? "success" : "warning");
-        setStatus(result.ok ? "Bing 验证文件线上正常" : "Bing 检查未通过");
+        setStatus(result.parts?.join("；") || "检查完成");
       });
 
       $("bingSubmitSitemapBtn").onclick = () => runAction(async () => {
+        requireBingAccount();
         const result = await api("/api/bing/sitemap", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({}),
         });
+        if (result.ok) showBingNextStep("网站地图已提交。可以继续第 2 步主动通知更新，然后等待 Bing 抓取。");
         showBingResult(result.ok ? "Sitemap 已提交给 Bing" : "Sitemap 提交失败", [result.message || ""], result.ok ? "success" : "warning");
         setStatus(result.message || "");
       });
 
       $("bingInspectBtn").onclick = () => runAction(async () => {
+        requireBingAccount();
         const url = $("bingInspectUrlInput").value.trim();
         if (!url) throw new Error("请输入要查询收录状态的完整 URL。");
         const result = await api("/api/bing/inspect", {
@@ -2306,89 +2403,84 @@
           result.lastCrawled ? `上次抓取：${result.lastCrawled}` : "",
           result.httpCode ? `HTTP 状态码：${result.httpCode}` : "",
         ].filter(Boolean);
-        showBingResult(`Bing 收录状态：${url}`, lines, result.indexed ? "success" : "info");
+        showBingResult(`Bing 页面记录：${url}`, lines, result.indexed ? "success" : "info");
         setStatus(result.message || "");
       });
 
       function showBaiduResult(title, lines = [], tone = "info") {
-        const result = $("baiduResult");
-        const safeLines = (Array.isArray(lines) ? lines : [lines]).filter((line) => line !== undefined && line !== null && line !== "");
-        result.style.display = "block";
+        const result = $('baiduResult');
+        const safeLines = (Array.isArray(lines) ? lines : [lines]).filter(line => line !== undefined && line !== null && line !== '').map(String);
+        const initFailed = tone === 'warning' && safeLines.some(line => /site init fail/i.test(line));
+        result.style.display = 'block';
         result.dataset.tone = tone;
-        result.innerHTML = `
-          <div class="google-result-title">${escapeHtml(title)}</div>
-          ${safeLines.length ? `<pre>${escapeHtml(safeLines.join("\n"))}</pre>` : ""}
-        `;
+        $('baiduNextStep').style.display = 'none';
+        result.innerHTML = initFailed ? `
+          <div class="google-result-title">百度暂未接收提交</div>
+          <p class="baidu-result-copy">百度接口返回“站点初始化失败”。请先在百度后台检查中文站状态，稍后再测试首页。</p>
+          <div class="baidu-result-actions"><a class="action-link" href="${escapeHtml($('baiduSubmitPlatformLink').href)}" target="_blank" rel="noopener">查看百度站点 ↗</a><button type="button" id="baiduResultConfigBtn">查看配置 / 首页测试</button></div>
+          <details class="baidu-error-detail"><summary>查看错误详情</summary><pre>${escapeHtml(safeLines.join('\n'))}</pre></details>`
+          : `<div class="google-result-title">${escapeHtml(title)}</div>${safeLines.length ? `<div class="baidu-result-copy">${safeLines.map(line => `<p>${escapeHtml(line)}</p>`).join('')}</div>` : ''}`;
+        if ($('baiduResultConfigBtn')) $('baiduResultConfigBtn').onclick = () => $('baiduShowSettingsBtn').click();
       }
 
+      let baiduStatus = {};
       async function loadBaiduStatus() {
         try {
-          const data = await api("/api/baidu/status");
-          $("baiduSiteInput").value = data.site || "https://cn.shanbo.cc";
-          $("baiduTokenInput").value = "";
-          $("baiduTokenInput").placeholder = data.tokenConfigured ? "已配置（留空则不修改）" : "粘贴百度推送 token";
-          $("baiduMeta").textContent = data.tokenConfigured ? `token 已配置（站点：${data.site || "未填"}）` : "未配置 token";
-          $("baiduMeta").style.color = data.tokenConfigured ? "#176b3a" : "#d94b35";
-        } catch (_error) {
-          $("baiduMeta").textContent = "加载失败";
+          const data = await api('/api/baidu/status');
+          baiduStatus = data;
+          $('baiduSiteInput').value = data.site;
+          $('baiduSiteLabel').textContent = '仅处理：' + data.site + '/';
+          $('baiduTokenInput').value = '';
+          $('baiduTokenInput').placeholder = data.tokenConfigured && data.configuredSite === data.site ? '已配置（留空不修改）' : '粘贴此中文站的 Token';
+          $('baiduMeta').textContent = data.ready ? '中文站配置已保存' : '请先配置当前中文站';
+          $('baiduMeta').style.color = data.ready ? '#176b3a' : '#d94b35';
+          $('baiduPlatformLink').href = data.links.platform;
+          $('baiduSubmitPlatformLink').href = data.links.submit;
+          $('baiduQueueSummary').textContent = `待提交 ${data.pending} · 本工具已接收 ${data.accepted} · 中文站共 ${data.total}`;
+          $('baiduQueue').textContent = data.urls.join('\n') || '没有新的待提交页面。';
+          $('baiduNextStep').textContent = !data.ready ? '第 1 步：先保存当前中文站的 Token，再提交首页测试。'
+            : data.lastResult?.site === data.site && !data.lastResult.ok ? '百度尚未确认接收。先到普通收录检查站点状态，稍后用“提交首页测试”确认恢复，再批量提交。'
+            : data.pending ? `第 2 步：还有 ${data.pending} 个中文页面可提交。每批最多 100 条，遇到额度或权限问题会停止。`
+            : '本工具已记录全部中文页面接收成功。接下来等待百度抓取；新增页面后再来提交。';
+          if (!data.ready && document.documentElement.dataset.seoPage === 'baidu') $('baidu-account-settings').open = true;
+          if (data.lastResult && data.lastResult.site === data.site && !$('baiduResult').textContent.trim()) {
+            showBaiduResult('最近一次提交', [data.lastResult.message, '时间：' + new Date(data.lastResult.at).toLocaleString()], data.lastResult.ok ? 'success' : 'warning');
+          }
+        } catch (error) {
+          baiduStatus = {};
+          $('baiduMeta').textContent = '中文站配置读取失败';
+          if (document.documentElement.dataset.seoPage === 'baidu') showBaiduResult('请先检查中文站', [error.message], 'warning');
         }
       }
-
-      $("saveBaiduBtn").onclick = () => runAction(async () => {
-        const token = $("baiduTokenInput").value.trim();
-        if (!token) throw new Error("请粘贴百度推送 token。");
-        const result = await api("/api/baidu/config", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token, site: $("baiduSiteInput").value.trim() }),
-        });
+      $('baiduShowSettingsBtn').onclick = () => { $('baidu-account-settings').open = true; $('baidu-account-settings').scrollIntoView({block:'center',behavior:'smooth'}); };
+      $('saveBaiduBtn').onclick = () => runAction(async () => {
+        const result = await api('/api/baidu/config', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:$('baiduTokenInput').value.trim(),site:baiduStatus.site})});
         await loadBaiduStatus();
+        showBaiduResult('配置已保存', [result.message], 'success');
         setStatus(result.message);
       });
-
-      $("clearBaiduBtn").onclick = () => runAction(async () => {
-        if (!confirm("确定清除百度推送配置吗？")) return;
-        const result = await api("/api/baidu/config", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clear: true }),
-        });
+      $('clearBaiduBtn').onclick = () => runAction(async () => {
+        if (!await confirmBingAction('停用当前中文站的百度主动提交？已有配置和记录会保留。')) return;
+        const result = await api('/api/baidu/config', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clear:true})});
         await loadBaiduStatus();
-        setStatus(result.message);
+        showBaiduResult('已停用推送', [result.message]);
       });
-
-      $("baiduPushBtn").onclick = () => runAction(async () => {
-        const site = ($("baiduSiteInput").value || "https://cn.shanbo.cc").trim().replace(/\/+$/, "");
-        if (!site) throw new Error("请填写推送站点，例如 https://cn.shanbo.cc。");
-        let host = "";
-        try {
-          host = new URL(site).hostname;
-        } catch (_error) {
-          throw new Error("推送站点地址格式不正确。");
-        }
-        const urls = currentUrls
-          .map((item) => item.url)
-          .filter((u) => {
-            if (!u) return false;
-            try {
-              return new URL(u).hostname === host;
-            } catch (_error) {
-              return false;
-            }
-          });
-        const all = [...new Set([`${site}/`, ...urls])];
-        if (!all.length) throw new Error(`report 中没有 ${host} 的 URL，请先点「刷新检查」。`);
-        const result = await api("/api/baidu/push", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ urls: all, site }),
-        });
-        const lines = [result.message || ""];
-        if (result.notSameSite && result.notSameSite.length) lines.push(`不在当前站点下：${result.notSameSite.length} 个（已忽略）`);
-        if (result.notValid && result.notValid.length) lines.push(`格式无效：${result.notValid.length} 个（已忽略）`);
-        showBaiduResult(result.ok ? "百度推送结果" : "百度推送失败", lines, result.ok ? "success" : "warning");
-        setStatus(result.message || "");
-      });
+      async function runBaiduSubmission(homeOnly) {
+        await loadBaiduStatus();
+        if (!baiduStatus.ready) throw new Error('请先完成第 1 步，保存当前中文站的 Token。');
+        if (!homeOnly && baiduStatus.lastResult?.site === baiduStatus.site && !baiduStatus.lastResult.ok) throw new Error('上次提交未成功。请先到百度平台检查，再用“提交首页测试”确认恢复后批量提交。');
+        const urls = homeOnly ? (baiduStatus.lastResult?.site === baiduStatus.site && !baiduStatus.lastResult.ok ? [baiduStatus.site + '/'] : baiduStatus.urls.filter(url => url === baiduStatus.site + '/').slice(0,1))
+          : baiduStatus.urls.slice(0, Math.min(100, Number($('baiduBatchSize').value) || 100));
+        if (!urls.length) { showBaiduResult('无需重复提交', [homeOnly ? '首页已记录为接收成功，可继续批量提交其他页面。' : '当前中文站没有新的待提交页面。']); return; }
+        if (!await confirmBingAction(`即将向百度真实提交 ${urls.length} 个页面，仅限 ${baiduStatus.site}/。会使用百度当日额度；接收不等于收录。`)) return;
+        showBaiduResult('正在提交', [`中文站：${baiduStatus.site}/ · 本批 ${urls.length} 条`]);
+        const result = await api('/api/baidu/push', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({urls,site:baiduStatus.site,test:homeOnly})});
+        await loadBaiduStatus();
+        showBaiduResult(result.ok ? '百度已接收本批页面' : '提交未全部完成', [result.message], result.ok ? 'success' : 'warning');
+        setStatus(result.message, !result.ok);
+      }
+      $('baiduPushBtn').onclick = () => runAction(() => runBaiduSubmission(false));
+      $('baiduTestBtn').onclick = () => runAction(() => runBaiduSubmission(true));
 
       async function loadChineseEngines() {
         try {
@@ -2690,7 +2782,7 @@
             body: JSON.stringify({ inspectionUrl: url }),
           });
           if (b.ok) {
-            lines.push(`【Bing】${b.indexed ? "已收录" : "未收录或未知"}`);
+            lines.push(`【Bing】${b.message || "收录状态未知，请到 Bing 查看"}`);
             if (b.lastCrawled) lines.push(`  上次抓取：${b.lastCrawled}`);
             if (b.httpCode) lines.push(`  HTTP 状态：${b.httpCode}`);
             if (b.indexed) overallTone = "success";
@@ -2720,21 +2812,30 @@
       });
 
       async function runIndexNowPush(triggerButton) {
+        const onBing = document.documentElement.dataset.seoPage === "bing";
         const retrying = indexNowRetryHosts.length > 0;
-        if (!confirm(retrying ? `只重试失败域名：${indexNowRetryHosts.join("、")}？` : "把全部真实线上 URL 推送给 IndexNow（Bing 等）和 Yandex 吗？\n不会提交给 Google。")) return;
+        const question = retrying ? `只重试未完成域名：${indexNowRetryHosts.join("、")}？` : "将当前网站各语言的页面地址批量通知给 IndexNow 参与的搜索引擎（含 Bing）。接收通知不代表已收录。";
+        if (!(onBing ? await confirmBingAction(question) : confirm(question))) return;
+        setStatus('正在检查各语言域名的验证文件并通知更新，请稍候…');
+        if (onBing) showBingResult('正在通知更新', ['逐个检查域名并提交。请等待结果，不要重复点击。'], 'info');
         const result = await api("/api/indexnow-push", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ onlyHosts: indexNowRetryHosts }),
+          body: JSON.stringify({ onlyHosts: indexNowRetryHosts, ...(onBing ? { engine: "bing" } : {}) }),
         });
         indexNowRetryHosts = result.retryHosts || [];
-        const buttonText = indexNowRetryHosts.length ? `重试失败域名（${indexNowRetryHosts.length}）` : "";
+        const buttonText = indexNowRetryHosts.length ? `重试未完成域名（${indexNowRetryHosts.length}）` : "";
         if (triggerButton) {
           triggerButton.textContent = buttonText
-            || (triggerButton.id === "pushYandexBtn" ? "推送到 Yandex（IndexNow）" : "推送 IndexNow + Yandex");
+            || (onBing ? "通知当前网站的页面" : triggerButton.id === "pushYandexBtn" ? "推送到 Yandex（IndexNow）" : "推送 IndexNow + Yandex");
         }
         setStatus(result.message);
-        renderIndexNowResult(result);
+        if (onBing) {
+          showBingResult(result.ok ? '更新通知已接收' : '部分通知尚未完成', [result.message,
+            ...(result.groups || []).map(item => `${item.host}：${item.pending ? '平台验证中' : item.ok ? '已接收' : '失败'}${item.skipped ? '；请先生成并上传验证文件' : ''}`),
+            '接下来等待搜索引擎抓取，不需要逐条请求收录。'], result.ok ? 'success' : 'warning');
+          showBingNextStep(result.ok ? '通知完成。等待抓取，过几天再查看收录；内容有更新时再通知。' : '请查看下方结果。平台验证中可稍后重试；验证文件缺失时先生成并上传，再重试未完成域名。');
+        } else renderIndexNowResult(result);
         if (!result.ok) {
           const keyIssue = (result.groups || []).filter((item) => item.skipped);
           if (keyIssue.length) {
@@ -2915,7 +3016,7 @@
         const typeValue = $("typeFilter").value;
         const languages = [...new Set(currentIssues.map((item) => item.acode).filter(Boolean))].sort();
         const types = [...new Set(currentIssues.map((item) => item.type).filter(Boolean))].sort();
-        $("languageFilter").innerHTML = `<option value="">全部语言</option>${languages.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
+        $("languageFilter").innerHTML = isCnAudit ? '<option value="cn">中文 (cn)</option>' : `<option value="">全部语言</option>${languages.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
         $("typeFilter").innerHTML = `<option value="">全部类型</option>${types.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
         if (languages.includes(languageValue)) $("languageFilter").value = languageValue;
         if (types.includes(typeValue)) $("typeFilter").value = typeValue;
@@ -3173,6 +3274,7 @@
       function getSelectedProblems() {
         const boxes = [...document.querySelectorAll("#aiProblemFilter input[type=checkbox]")];
         const selected = boxes.filter((b) => b.checked).map((b) => b.value);
+        if (!selected.length) throw new Error("请至少选择一种要优化的内容。");
         const allChecked = boxes.length > 0 && boxes.every((b) => b.checked);
         return allChecked ? [] : selected;
       }
@@ -3182,7 +3284,7 @@
           throw new Error("已有 AI 修复任务正在运行，请等待当前任务完成。");
         }
         const model = $("aiModelSelect").value;
-        const language = $("aiLanguageSelect").value;
+        const language = isCnAudit ? "cn" : $("aiLanguageSelect").value;
         const modelDef = aiModels.find((item) => item.value === model);
         if (!modelDef) throw new Error("请先选择一个 AI 模型。");
         if (!modelDef.available) throw new Error(`所选模型「${modelDef.label}」未配置 API Key，请先在 backend/.env 中配置。`);
@@ -3191,28 +3293,28 @@
         const targetAcode = mode === "fix-language" && language !== "all" ? language : "";
         const languageLabel = $("aiLanguageSelect").selectedOptions[0]?.textContent || language;
 
-        const preview = await api("/api/ai/preview", {
+        const preview = await api(isCnAudit ? "/api/audit/ai/preview" : "/api/ai/preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ mode, targetAcode, problems: getSelectedProblems() }),
         });
         const total = Number(preview.totalRecords || 0);
         if (!total) {
-          setStatus("当前所选语言没有需要 AI 修复的问题");
+          setStatus(isCnAudit ? "当前勾选项没有需要 AI 修复的问题。长度建议等提示可手动评估，无需全部改完。" : "当前所选语言没有需要 AI 修复的问题");
           return;
         }
         const fieldSummary = Object.entries(preview.fieldCounts || {})
           .map(([key, value]) => `${key}: ${value}`)
           .join("，");
         if (
-          !confirm(
-            `将对【${languageLabel}】使用 ${modelDef.label} 修复约 ${total} 条 SEO 问题。\n\n问题分布：${fieldSummary}\n\n修复前会自动备份数据库，继续吗？`,
+          !await confirmBingAction(
+            `将使用 ${modelDef.label} 优化【${languageLabel}】约 ${total} 条资料。问题分布：${fieldSummary}。确认后会调用模型并逐批写入当前 PB 数据库；完成后请核对内容。是否开始？`
           )
         ) {
           return;
         }
 
-        const job = await api("/api/ai/start", {
+        const job = await api(isCnAudit ? "/api/audit/ai/start" : "/api/ai/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ mode, model, targetAcode, problems: getSelectedProblems() }),
@@ -3241,6 +3343,7 @@
         $("contentCount").textContent = report.stats.contents;
         $("menuCount").textContent = report.stats.menus;
         $("highCount").textContent = report.stats.highIssues;
+        $("auditIssueCount").textContent = report.stats.issues;
         $("siteMeta").innerHTML = `
           <div><b>站点：</b>${escapeHtml(report.config.siteName)}</div>
           <div><b>本地测试地址：</b>${escapeHtml(report.config.localTestBaseUrl)}</div>
@@ -3263,8 +3366,8 @@
         const auditField = $("pageAuditSource").value === "local" ? "localUrl" : "url";
         if (!$("pageAuditUrlInput").value) {
           $("pageAuditUrlInput").value = $("pageAuditSource").value === "local"
-            ? report.config.localTestBaseUrl || currentUrls.find((item) => item[auditField])?.[auditField] || ""
-            : report.config.siteBaseUrl || currentUrls.find((item) => item[auditField])?.[auditField] || "";
+            ? (isCnAudit ? report.audit?.localHome : report.config.localTestBaseUrl) || currentUrls.find((item) => item[auditField])?.[auditField] || ""
+            : (isCnAudit ? report.audit?.publicHome : report.config.siteBaseUrl) || currentUrls.find((item) => item[auditField])?.[auditField] || "";
         }
         renderGoogleIndexingUrls();
         renderGscInspectionDashboard();
@@ -3274,9 +3377,9 @@
 
       async function refresh() {
         setStatus("正在检查 PB 数据库...");
-        const report = await api("/api/report");
+        const report = await api(isCnAudit ? "/api/audit/report" : "/api/report");
         renderReport(report);
-        setStatus(`检查完成：${report.stats.urls} 个 URL，${report.stats.issues} 个问题`);
+        setStatus(`${isCnAudit ? "中文检查" : "检查"}完成：${report.stats.urls} 个页面，${report.stats.issues} 条提示${isCnAudit ? "；未修改数据" : ""}`);
         if (location.hash) {
           const anchor = document.getElementById(decodeURIComponent(location.hash.slice(1)));
           if (anchor) requestAnimationFrame(() => anchor.scrollIntoView({ block: "start" }));
@@ -3287,17 +3390,29 @@
         const startedAt = Date.now();
         let state = initialState || {};
         let observedCurrentRun = Boolean(state.running);
+        let statusFailures = 0;
         while (Date.now() - startedAt < timeoutMilliseconds) {
           if (!state.running && (observedCurrentRun || state.finishedAt)) {
             if (state.error) throw new Error(`SEO 文件上传失败：${state.error}`);
             if (Number(state.failed || 0) > 0) throw new Error(`SEO 文件上传未完全成功：失败 ${state.failed} 个文件。请打开 FTP 发布页查看日志。`);
+            renderFlowStatus("SEO 文件上传完成", `已上传 ${state.uploaded || 0} 个，跳过 ${state.skipped || 0} 个，失败 0 个。`);
             return state;
           }
           const done = Number(state.uploaded || 0) + Number(state.skipped || 0) + Number(state.failed || 0);
           renderFlowStatus("正在上传 SEO 文件", `${done}/${Number(state.total || 0)} ${state.current || ""}`.trim());
           setStatus(`SEO 文件上传中：${done}/${Number(state.total || 0)} ${state.current || ""}`.trim());
           await sleep(1200);
-          const result = await api("/api/publish/online/status");
+          let result;
+          try {
+            result = await api("/api/publish/online/status");
+            statusFailures = 0;
+          } catch (_error) {
+            statusFailures += 1;
+            if (statusFailures >= 3) throw new Error("暂时无法读取上传进度，上传可能仍在后台进行。请到网站发布页查看结果，不要重复上传。");
+            renderFlowStatus("正在重新读取上传进度", "上传仍在后台进行，正在重试状态查询。");
+            await sleep(2000);
+            continue;
+          }
           state = result.state || {};
           observedCurrentRun = observedCurrentRun || Boolean(state.running);
         }
@@ -3306,6 +3421,11 @@
 
       async function startSeoUploadAndWait() {
         const result = await api("/api/publish/online", { method: "POST" });
+        if (result.mode === 'direct') {
+          renderFlowStatus('线上 SEO 文件已生成', result.message);
+          setStatus(result.message);
+          return result.state;
+        }
         renderFlowStatus("SEO 文件已重新生成", "正在通过 FTP 上传 sitemap、robots 和验证文件。");
         setStatus(result.message);
         return waitForSeoUpload(result.state || {});
@@ -3360,7 +3480,25 @@
         alert(result.message);
       });
       $("pushBtn").onclick = () => runAction(() => runIndexNowPush($("pushBtn")));
-      $("pushYandexBtn").onclick = () => runAction(() => runIndexNowPush($("pushYandexBtn")));
+      $('prepareYandexBtn').onclick = () => runAction(async () => {
+        await loadYandexStatus();
+        if (yandexStatus.scopeError) throw new Error(yandexStatus.scopeError);
+        if (!await confirmBingAction('将生成俄语站 sitemap-ru.xml，并通过当前网站发布配置上传 SEO 文件。其他搜索引擎现有配置会保留。')) return;
+        await api('/api/indexnow-key', { method: 'POST' });
+        await startSeoUploadAndWait();
+        showYandexResult('文件已更新', ['首次使用请先回到 Yandex 完成网站验证；已验证则继续提交网站地图。'], 'success');
+        $('yandexNextStep').textContent = '线上文件已更新。完成网站验证后，继续点击“再：提交网站地图”。';
+        setStatus('俄语站地图与验证文件上传完成');
+      });
+      $('pushYandexBtn').onclick = () => runAction(async () => {
+        await loadYandexStatus();
+        if (yandexStatus.scopeError) throw new Error(yandexStatus.scopeError);
+        if (!await confirmBingAction('只向 Yandex 通知 ' + yandexStatus.baseUrl + '/ 的俄语页面，接收通知不代表已收录。')) return;
+        showYandexResult('正在通知俄语站页面', ['请等待检查验证文件和提交结果，不要重复点击。']);
+        const result = await api('/api/indexnow-push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine: 'yandex' }) });
+        showYandexResult(result.ok ? '俄语站通知已接收' : '通知尚未完成', [result.message, '文件不可用时先生成并上传；已接收则等待抓取。'], result.ok ? 'success' : 'warning');
+        setStatus(result.message);
+      });
       $("saveYandexVerificationBtn").onclick = () => runAction(async () => {
         const filename = $("yandexVerificationFilenameInput").value.trim();
         const content = $("yandexVerificationContentInput").value.trim();
@@ -3377,7 +3515,7 @@
         setStatus(result.message);
       });
       $("clearYandexVerificationBtn").onclick = () => runAction(async () => {
-        if (!confirm("确定清除 Yandex 验证文件配置吗？（线上已上传的文件不会删除）")) return;
+        if (!await confirmBingAction("清除本地验证文件配置？Token 会保留，已上传的文件不会删除。")) return;
         const result = await api("/api/yandex/verification", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3417,24 +3555,42 @@
       $("saveGoogleServiceAccountBtn").onclick = () => runAction(async () => {
         const value = $("googleServiceAccountInput").value.trim();
         if (!value) throw new Error("请粘贴服务账号 JSON。");
+        const shared = $("googleSaveShared").checked;
+        if (shared && googleIndexingStatus.sharedAccount?.configured
+          && !confirm('将更新共享账号，所有使用共享账号的网站会同时使用新密钥。确定保存吗？')) return;
         const result = await api("/api/google-indexing/config", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ serviceAccount: value, dailyQuota: Number($("googleDailyQuotaInput").value || 200) }),
+          body: JSON.stringify({ serviceAccount: value, shared, dailyQuota: Number($("googleDailyQuotaInput").value || 200) }),
         });
         $("googleServiceAccountInput").value = "";
         await loadGoogleIndexingStatus();
-        showGoogleIndexingResult(result.message, ["正在验证 Indexing API 连通性..."], "info");
-        setStatus("已保存，正在验证 Indexing API...");
-        const testResult = await api("/api/google-indexing/test", { method: "POST" });
+        await loadSearchConsoleStatus();
+        showGoogleIndexingResult(result.message, ["正在验证当前 Search Console 属性权限..."], "info");
+        setStatus("已保存，正在验证属性权限...");
+        const testResult = await api("/api/search-console/test", { method: "POST", headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: $("gscSiteUrlInput").value.trim() }) });
         showGoogleIndexingResult(testResult.message, [], testResult.ok ? "success" : "warning");
         setStatus(testResult.message);
       });
       $("testGoogleIndexingBtn").onclick = () => runAction(async () => {
-        const result = await api("/api/google-indexing/test", { method: "POST" });
+        const result = await api("/api/search-console/test", { method: "POST", headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: $("gscSiteUrlInput").value.trim() }) });
         showGoogleIndexingResult(result.message, [], result.ok ? "success" : "warning");
         setStatus(result.message);
       });
+      for (const [id, action] of [['promoteGoogleSharedBtn', 'promoteToShared'], ['useGoogleSharedBtn', 'useShared']]) {
+        $(id).onclick = () => runAction(async () => {
+          if (action === 'promoteToShared' && googleIndexingStatus.sharedAccount?.configured
+            && !confirm('将替换共享账号，所有使用共享账号的网站都会受到影响。确定继续吗？')) return;
+          const result = await api('/api/google-indexing/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [action]: true }) });
+          await loadGoogleIndexingStatus();
+          await loadSearchConsoleStatus();
+          showGoogleIndexingResult(result.message, ['请测试当前网站的 Search Console 属性权限。'], 'info');
+          setStatus(result.message);
+        });
+      }
       $("saveGoogleQuotaBtn").onclick = () => runAction(async () => {
         const dailyQuota = Number($("googleDailyQuotaInput").value);
         if (!Number.isInteger(dailyQuota) || dailyQuota < 1 || dailyQuota > 100000) {
@@ -3473,13 +3629,14 @@
         setStatus(result.message || `状态：${url}`);
       });
       $("clearGoogleServiceAccountBtn").onclick = () => runAction(async () => {
-        if (!confirm("确定清除已保存的 Google 服务账号吗？")) return;
+        if (!confirm("确定停用当前网站的 Google 服务账号吗？共享账号及其他网站不会受影响，可随时改用共享账号。")) return;
         const result = await api("/api/google-indexing/config", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ clear: true }),
         });
         await loadGoogleIndexingStatus();
+        await loadSearchConsoleStatus();
         setStatus(result.message);
       });
       $("googleIndexingSubmitAllBtn").onclick = () => runAction(async () => {
@@ -3711,15 +3868,16 @@
       };
       $("prepareGoogleBtn").onclick = () => runAction(async () => {
         if (!googleStatus.ready) throw new Error(`当前项目配置未通过：${(googleStatus.issues || []).join("；") || "请检查站点身份。"}`);
-        if (!confirm("将重新生成当前站点的 sitemap.xml 和 robots.txt，通过 FTP 上传，并检查真实网站上的文件。继续吗？")) return;
+        if (!confirm("将更新当前站点的 sitemap.xml 和 robots.txt。本地通过 FTP 上传；宝塔线上直接写入网站目录，然后检查公网文件。继续吗？")) return;
         renderFlowStatus("步骤 1/3：生成 SEO 文件", "正在读取当前 PbootCMS 数据库。");
         const uploadState = await startSeoUploadAndWait();
         renderFlowStatus("步骤 3/3：验证真实网站", "正在检查公网 sitemap.xml 与 robots.txt。");
         const publicResult = await performGooglePublicCheck();
-        const message = `Google 提交材料已准备完成：线上 sitemap 共 ${publicResult.recordCount} 条记录；FTP 上传 ${uploadState.uploaded || 0} 个、跳过 ${uploadState.skipped || 0} 个。下一步请打开 Search Console 提交 Sitemap 或检查重要 URL。此结果不代表页面已经被 Google 收录。`;
+        const message = `线上网站地图已更新，共 ${publicResult.recordCount} 条记录；${uploadState.mode === 'direct' ? '已直接生成到线上网站目录，无需 FTP' : `上传 ${uploadState.uploaded || 0} 个、跳过 ${uploadState.skipped || 0} 个`}。下一步点击第一张卡片里的“再：提交网站地图”，把地图交给 Google。`;
+        showGoogleNextStep("google-step-submit", "生成并上传已完成。继续点击“再：提交网站地图”，一次提交地图中的页面地址。");
+        showSearchConsoleResult("网站地图已更新，继续提交给 Google", [message], "success");
         renderFlowStatus("Google 提交材料已准备完成", message);
         setStatus(message);
-        alert(message);
       });
       async function copyText(value, label) {
         const text = String(value || "").trim();
@@ -3747,8 +3905,8 @@
         const local = $("pageAuditSource").value === "local";
         renderPageAuditOptions();
         $("pageAuditUrlInput").value = local
-          ? currentReport?.config?.localTestBaseUrl || currentUrls.find((item) => item.localUrl)?.localUrl || ""
-          : currentReport?.config?.siteBaseUrl || currentUrls.find((item) => item.url)?.url || "";
+          ? (isCnAudit ? currentReport?.audit?.localHome : currentReport?.config?.localTestBaseUrl) || currentUrls.find((item) => item.localUrl)?.localUrl || ""
+          : (isCnAudit ? currentReport?.audit?.publicHome : currentReport?.config?.siteBaseUrl) || currentUrls.find((item) => item.url)?.url || "";
       };
       $("severityFilter").onchange = () => { issuePage = 1; renderIssues(); };
       $("languageFilter").onchange = () => { issuePage = 1; renderIssues(); };
@@ -3824,12 +3982,20 @@
           setStatus("模型连接测试通过");
         });
 
-      Promise.allSettled([loadConfig(), loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus(), loadBaiduStatus(), loadChineseEngines(), loadOverview(), loadIndexCoverage(), loadConfigBackupStatus()]).then((results) => {
+      loadConfig().then(async (ready) => {
+        if (!ready) return;
+        if (isCnAudit) { await refresh(); return; }
+        api('/deployment-environment').then(info => {
+          if (info.environment === 'baota') {
+            $('prepareBingBtn').textContent = '先：生成线上文件';
+            $('prepareGoogleBtn').textContent = '先：生成线上文件';
+          }
+        }).catch(() => {});
+        const results = await Promise.allSettled([loadGoogleStatus(), loadGoogleIndexingStatus(), loadYandexStatus(), loadSearchConsoleStatus(), loadBingStatus(), loadBaiduStatus(), loadChineseEngines(), loadOverview(), loadIndexCoverage(), loadConfigBackupStatus(), refresh()]);
         const failed = results.filter(result => result.status === 'rejected');
         $("serviceStatus").hidden = !failed.length;
         $("serviceStatus").textContent = failed.length ? `${failed.length} 项辅助服务状态未加载` : '';
-      });
-      refresh().catch((error) => {
+      }).catch((error) => {
         setStatus(error.message || String(error), true);
       });
       loadAiStatus();

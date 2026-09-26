@@ -188,7 +188,13 @@
   async function loadShell() {
     const result = await api("/api/config");
     configReady = Boolean(result.config?.host && result.config?.user && result.config?.passwordSet);
-    renderNavigation(result.navigation, "ftp-security");
+    renderNavigation(result.navigation, "ftp");
+    if (result.setupRequired) {
+      setStatus(result.message);
+      document.querySelectorAll('main button, main input, main select').forEach(control => { control.disabled = true; });
+      return false;
+    }
+    return true;
   }
 
   async function refreshSecurityStatus() {
@@ -303,8 +309,12 @@
     if (button) captureEvidence(button.dataset.path).catch((error) => setStatus(error.message, true));
   };
 
-  Promise.all([loadShell(), refreshUploadBusy()])
-    .then(refreshSecurityStatus)
-    .then((state) => schedulePoll(state.running ? 1200 : 9000))
+  loadShell()
+    .then(async (ready) => {
+      if (!ready) return;
+      await refreshUploadBusy();
+      const state = await refreshSecurityStatus();
+      schedulePoll(state.running ? 1200 : 9000);
+    })
     .catch((error) => setStatus(error.message, true));
 }());

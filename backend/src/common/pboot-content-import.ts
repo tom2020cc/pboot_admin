@@ -33,6 +33,8 @@ export type PbootContentRow = {
   description: string;
   sorting: number;
   status: string;
+  istop?: string | number;
+  isrecommend?: string | number;
   create_time: string;
   update_time: string;
   picstitle: string;

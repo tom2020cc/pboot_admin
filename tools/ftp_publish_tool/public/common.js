@@ -40,7 +40,6 @@
     models: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M19 9h4M1 15h4M19 15h4"/>',
     'models-config': '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
     ftp: '<path d="M12 13V3M8 7l4-4 4 4"/><path d="M20 13v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6"/>',
-    'ftp-security': '<path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3z"/><path d="m9 12 2 2 4-4"/>',
   };
 
   function navIcon(id) {
@@ -68,4 +67,17 @@
   }
 
   window.FtpTool = { $, api, escapeAttr, escapeHtml, formatBytes, formatDate, postJson, renderNavigation, setStatus };
+
+  // 宝塔线上环境：隐藏仅本地可用的功能入口（本地网站同步 / 宝塔同步）
+  (async () => {
+    try {
+      const response = await fetch("/deployment-environment");
+      const data = await response.json();
+      if (data.environment === "baota") {
+        document.querySelectorAll('.page-switch a[href="/"], .page-switch a[href="/sync.html"], .page-switch a[href="/domain-check.html"]').forEach((link) => { link.style.display = "none"; });
+      }
+    } catch (_error) {
+      // 环境探测失败时保持入口原样
+    }
+  })();
 }());

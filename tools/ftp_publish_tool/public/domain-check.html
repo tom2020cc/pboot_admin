@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="/site-context.js"></script><title>域名上线检测 · 网站发布</title><link rel="stylesheet" href="/styles.css"><style>
+.domain-table { min-width: 1120px; width:100%; border-collapse:collapse; }
+.domain-table th,.domain-table td { padding:14px 12px; text-align:left; vertical-align:top; border-bottom:1px solid #e5eaf2; }
+.domain-table th { background:#f5f7fb; }
+.check-badge { display:inline-block; border-radius:4px; padding:3px 7px; font-size:12px; font-weight:600; }
+.check-pass { background:#e9f8f0;color:#187544; }.check-fail { background:#fff0ef;color:#b92d28; }
+.check-warn { background:#fff5de;color:#805800; }.check-unknown { background:#eef1f5;color:#576376; }
+.check-detail { font-size:12px; line-height:1.6; margin-top:7px; overflow-wrap:anywhere; max-width:230px; }
+.domain-table small { display:block; margin-top:6px; color:#526482; }
+.summary-line { margin:16px 0; font-weight:600; }
+</style></head>
+<body>
+<header class="app-header"><div class="brand">域名上线检测</div><div id="status" class="header-status">正在读取</div></header>
+<nav id="toolNav" class="tool-nav"></nav>
+<main>
+  <nav class="page-switch"><a href="/sync.html">代码与配置同步</a><a href="/">当前网站文件</a><a href="/databases.html">数据库</a><a class="active" href="/domain-check.html">域名上线检测</a></nav>
+  <section class="card">
+    <h2>当前网站 · <span id="siteName">正在读取</span></h2>
+    <p class="subtitle">从宝塔服务器检查各语言的 DNS、站点绑定、HTTPS 证书、PB 授权、模板和首页。只检测，不自动修改解析、证书、授权或业务数据。</p>
+    <div class="toolbar"><button id="startCheck" class="primary" disabled>检测全部语言</button><span id="checkedAt" class="subtitle"></span></div>
+    <p id="checkMessage" role="status" class="subtitle">等待检测。</p>
+    <p class="subtitle">首次通常需要 30–120 秒。绑定检查读取宝塔配置，授权检查使用网站 PHP 生成首页；首页检查使用正常 DNS 和有效证书访问。通过不代表产品页、翻译内容和所有访问地区都已验收。</p>
+    <div id="summary" class="summary-line"></div>
+    <div style="overflow-x:auto"><table class="domain-table"><thead><tr><th>语言 / 域名</th><th>解析</th><th>宝塔 / PB 绑定</th><th>HTTPS 证书</th><th>PB 授权</th><th>模板</th><th>首页访问</th></tr></thead><tbody id="checkRows"><tr><td colspan="7">点击“检测全部语言”查看结果。</td></tr></tbody></table></div>
+  </section>
+</main><script src="/common.js"></script><script src="/domain-check.js"></script>
+</body></html>

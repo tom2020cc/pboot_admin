@@ -54,6 +54,8 @@ export type ProductItem = {
   author: string;
   source: string;
   show: boolean;
+  isTop?: boolean | null;
+  isRecommend?: boolean | null;
   orderNum: number;
   lang?: string;
   translations?: ProductTranslation[];
@@ -62,6 +64,17 @@ export type ProductItem = {
 };
 
 export type ProductForm = Omit<ProductItem, "id" | "createTime" | "updateTime" | "translationProgress">;
+
+export type ProductBatchAction = 'show' | 'top' | 'recommend' | 'sort' | 'move' | 'copy' | 'delete' | 'sync';
+export type ProductBatchPayload = {
+  action: ProductBatchAction; ids: number[]; value?: boolean; menuId?: number; lang?: string;
+  allLanguages?: boolean; deletePboot?: boolean; confirmed?: boolean; orders?: { id: number; orderNum: number }[];
+};
+export type ProductBatchRow = { id: number; title: string; status: 'success' | 'partial' | 'failed' | 'uncertain'; message: string; newId?: number };
+export type ProductBatchResult = { siteId: number; action: ProductBatchAction; total: number; succeeded: number; failed: number; results: ProductBatchRow[] };
+export const batchManageProducts = (data: ProductBatchPayload, siteId: number) => request<ProductBatchResult>({
+  method: 'POST', url: '/products/batch', data, headers: { 'X-Pboot-Site-Id': String(siteId) }, timeout: LONG_REQUEST_TIMEOUT,
+});
 
 export type ProductTranslationProgress = {
   status: 'complete' | 'partial' | 'untranslated' | 'not-required';
@@ -213,7 +226,7 @@ export type ProductFolderScanItem = {
   detailImages: string[];
   duplicate: boolean;
   warnings: string[];
-  parameterType: 'core' | 'water-well' | 'unknown';
+  parameterType: 'core' | 'water-well' | 'custom' | 'unknown';
   parameterFiles: string[];
   parameters: { key: string; label: string; unit: string; value: string; fieldName?: string; fieldLabel?: string; create?: boolean }[];
   errors: string[];
@@ -370,20 +383,38 @@ export const uploadProductThumbnail = (file: File, options: {
   return request<{ url: string; width: number; height: number }>({ method: 'POST', url: '/products/thumbnail', data, timeout: 60000 });
 };
 
-export const scanProductFolderImport = (postObj: { sourceDirectory: string; menuId: number; parameterType?: 'auto' | 'core' | 'water-well' }) => {
+export type ProductDirectoryListing = {
+  siteId: number; siteName: string; rootPath: string; currentPath: string;
+  relativePath: string; parentPath: string | null;
+  directories: Array<{ name: string; path: string }>;
+};
+
+export const browseProductDirectory = (siteId: number, directory?: string) => request<ProductDirectoryListing>({
+  method: 'GET', url: '/products/folder-import/directories', params: { siteId, directory },
+  headers: { 'X-Pboot-Site-Id': String(siteId) }, timeout: 15000,
+});
+
+export type ProductFolderImportPayload = {
+  sourceDirectory: string; menuId: number; parameterType?: 'auto' | 'core' | 'water-well';
+  thumbnailWidth?: number; thumbnailHeight?: number;
+};
+
+export const scanProductFolderImport = (postObj: ProductFolderImportPayload, siteId?: number) => {
   return request<ProductFolderScanResult>({
     method: "POST",
     url: "/products/folder-import/scan",
     data: postObj,
+    headers: siteId ? { 'X-Pboot-Site-Id': String(siteId) } : undefined,
     timeout: LONG_REQUEST_TIMEOUT,
   });
 };
 
-export const importProductFolders = (postObj: { sourceDirectory: string; menuId: number; parameterType?: 'auto' | 'core' | 'water-well' }) => {
+export const importProductFolders = (postObj: ProductFolderImportPayload, siteId?: number) => {
   return request<ProductFolderImportResult>({
     method: "POST",
     url: "/products/folder-import",
     data: postObj,
+    headers: siteId ? { 'X-Pboot-Site-Id': String(siteId) } : undefined,
     timeout: 10 * 60 * 1000,
   });
 };

@@ -1,0 +1,32 @@
+html, body { margin: 0; background: #eef1f5; }
+.quotation-document { width: min(calc(100% - 24px), 1600px); margin: 12px auto 24px; padding: 38px 44px; border: 1px solid #d8dee7; background: #fff; box-shadow: 0 10px 30px #1f2d3d1c; }
+.q-product-grid { align-items: stretch; min-height: 220px; }
+.q-product-photo { display: grid; align-content: center; }
+.q-product-specs { display: flex; }
+.q-specs { height: 100%; }
+.q-specs th, .q-specs td { vertical-align: middle; }
+.q-product-price { display: grid; grid-template-rows: auto 1fr; }
+.q-price-values { min-height: 0; }
+.q-photo-gallery img { max-height: none; }
+.q-photo-count-3 img:first-child { max-height: none; }
+@media (max-width: 760px) {
+  .quotation-document { width: 100%; margin: 0; padding: 18px 12px; border: 0; box-shadow: none; }
+  .q-company-heading { flex-wrap: wrap; }
+  .q-company h1 { font-size: 17pt; }
+  .q-document-title { grid-template-columns: 1fr; text-align: center; }
+  .q-document-title span:last-child { text-align: center; }
+  .q-meta-row { grid-template-columns: 32% 68%; }
+  .q-column-head { display: none; }
+  .q-product-grid { display: flex; flex-direction: column; }
+  .q-product-photo { max-height: none; }
+  .q-product-specs { order: 1; border: 0; border-top: 1px solid var(--q-line); }
+  .q-product-price { order: 2; min-height: 110px; border-top: 1px solid var(--q-line); }
+  .q-photo-gallery { max-width: 400px; margin: auto; }
+  .q-logistics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .q-section-heading small { display: none; }
+  .q-footer { flex-wrap: wrap; }
+}
+@media print {
+  html, body { background: #fff; }
+  .quotation-document { width: 100%; margin: 0; padding: 0; border: 0; box-shadow: none; }
+}

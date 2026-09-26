@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><script src="/site-context.js"></script><title>数据库同步 · 网站发布</title><link rel="stylesheet" href="/styles.css" /></head>
+<body>
+  <header class="app-header"><div class="brand">数据库操作</div><div id="status" class="header-status">正在读取</div></header>
+  <nav id="toolNav" class="tool-nav"></nav>
+  <main>
+    <nav class="page-switch"><a href="/sync.html">代码与配置同步</a><a href="/">当前网站文件</a><a class="active" href="/databases.html">数据库</a><a href="/domain-check.html">域名上线检测</a></nav>
+    <p id="environmentMessage" class="subtitle"></p>
+    <div id="databaseCards" hidden>
+      <section class="card" data-scope="manager">
+        <h2>管理后台数据库</h2><p class="subtitle">将本地全部站点、全部语言的产品、新闻、栏目等管理数据覆盖到线上管理后台，空值也会覆盖。保留线上账号、站点连接、自动任务设置及站点与公司信息草稿。改名会更新 backend/.env 并重启后台。</p>
+        <p class="subtitle">同步完成后可在在线管理后台查看；前台网站内容仍需同步到 PB。区域管理、产品字段数据在 PB 库；站点与公司信息、系统授权码继续使用各自的专用同步按钮。</p>
+        <div class="toolbar"><button data-read>读取线上数据库</button></div><p data-info class="subtitle">先读取，核对本地源库与线上目标库。</p>
+        <label class="field">线上数据库文件名<input data-name placeholder="例如 pboot-admin.sqlite" /></label>
+        <div class="toolbar"><button data-rename disabled>重命名线上数据库</button><button class="primary" data-sync disabled>同步数据库到线上</button></div>
+      </section>
+      <section class="card" data-scope="site">
+        <h2>当前 PB 网站数据库 · <span id="databaseSiteName"></span></h2><p class="subtitle">同步当前网站的内容数据，空值也会覆盖。同步已有表单的字段配置，并补齐缺少的可空文本字段；保留线上客户留言、旧字段数据、域名、授权码、账号和系统配置。改名会同时更新 PB 与管理后台的读取路径。</p>
+        <div class="toolbar"><button data-read>读取线上数据库</button></div><p data-info class="subtitle">先读取，核对本地源库与线上目标库。</p>
+        <label class="field">线上数据库文件名<input data-name placeholder="例如 website.db" /></label>
+        <div class="toolbar"><button data-rename disabled>重命名线上数据库</button><button class="primary" data-sync disabled>同步数据库到线上</button></div>
+      </section>
+      <section class="card"><h2>区域配置</h2><p class="subtitle">只更新当前网站的语言名称、绑定域名和默认语言，无需覆盖整个数据库。</p><a id="areaSyncLink" class="button" href="/area-sync.html">同步区域配置到线上</a></section>
+      <p class="subtitle">数据库同步不包含图片和模板文件；这些文件仍使用“当前网站文件”上传。除已有表单缺少的可空文本字段可自动补齐外，其他表结构不一致时会停止。</p>
+    </div>
+    <section class="result-banner" id="databaseResult"><h2 id="databaseResultTitle">等待操作</h2><p id="databaseResultMessage"></p><p id="databaseCounts"></p></section>
+    <section class="card"><h2>操作日志</h2><pre class="log" id="databaseLogs">等待操作。</pre></section>
+  </main>
+  <script src="/common.js"></script><script src="/databases.js"></script>
+</body></html>

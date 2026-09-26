@@ -110,5 +110,19 @@ test('database inspection detects category SEO and preserves PB data and video s
     assert.equal(report.stats.health.totalRecords, 1); assert.equal(report.stats.health.affectedRecords, 1);
     assert.equal(report.urls.length, 3, 'Video URLs remain in sitemap inputs');
     assert(fs.readFileSync(dbPath).equals(before), 'Inspection must not write PB data');
+    db.run("insert into ay_area values('en','English','0'); insert into ay_content_sort values(102,'en','25','0','','rigs','3','1',1,'','','','');");
+    fs.writeFileSync(dbPath, Buffer.from(db.export()));
+    const multiBefore = fs.readFileSync(dbPath);
+    const site = { id: 900001, directory: root, isDefault: false };
+    const cn = await siteRuntime.runForSite(site, () => inspectSite({ acode: 'cn' }));
+    const all = await siteRuntime.runForSite(site, () => inspectSite());
+    assert(cn.urls.every(row => row.lang === 'cn'));
+    assert(cn.issues.every(row => row.acode === 'cn'));
+    assert.equal(cn.stats.menus, 2);
+    assert.equal(cn.stats.health.totalRecords, 1);
+    assert.equal(cn.audit.localHome, 'http://fixture.test/');
+    assert(all.issues.some(row => row.acode === 'en'), 'Search-engine reports keep all languages');
+    assert.equal(all.stats.menus, 3);
+    assert(fs.readFileSync(dbPath).equals(multiBefore), 'CN audit must remain read-only');
   } finally { db.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });

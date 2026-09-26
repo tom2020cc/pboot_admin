@@ -3,6 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const ftp = require("basic-ftp");
+const { createFtpClient } = require('./ftp-client');
 const siteRuntime = require("../site-runtime");
 
 const TOOL_ROOT = __dirname;
@@ -250,7 +251,7 @@ function isRetryableFtpError(error) {
 async function connectFtp(config, clientFactory) {
   const client = clientFactory
     ? clientFactory()
-    : new ftp.Client(Number(config.securityTimeoutMs || config.timeoutMs || 60000));
+    : createFtpClient(config, Number(config.securityTimeoutMs || config.timeoutMs || 60000));
   if (client.ftp) client.ftp.verbose = Boolean(config.verbose);
   await client.access({
     host: config.host,

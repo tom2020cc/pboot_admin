@@ -32,6 +32,11 @@ export const useSitesStore = defineStore("managedSites", () => {
 
   const refreshLanguages = async () => {
     if (languagesLoading.value) return;
+    if (!activeSiteId.value) {
+      siteLanguages.value = [];
+      languagesLoaded.value = true;
+      return;
+    }
     languagesLoading.value = true;
     try {
       siteLanguages.value = (await getCurrentSiteLanguages()).data || [];

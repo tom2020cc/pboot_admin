@@ -12,10 +12,10 @@ export function prepareBrochurePdfHtml(input: string) {
   let pageCount = 0;
   const clean = sanitizeHtml(input, {
     nonTextTags: ['script', 'style', 'textarea', 'option', 'title', 'noscript', 'iframe', 'template'],
-    allowedTags: ['style', 'main', 'nav', 'article', 'section', 'header', 'footer', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'strong', 'small', 'b', 'em', 'i', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'colgroup', 'col', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'figure', 'figcaption', 'img', 'a'],
+    allowedTags: ['style', 'main', 'nav', 'article', 'section', 'header', 'footer', 'div', 'span', 'bdi', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'small', 'b', 'em', 'i', 'u', 's', 'sub', 'sup', 'blockquote', 'pre', 'code', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'caption', 'colgroup', 'col', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'figure', 'figcaption', 'img', 'a'],
     allowedAttributes: {
-      '*': ['class', 'id', 'style', 'data-*', 'aria-*', 'role'], img: ['src', 'alt', 'width', 'height'],
-      a: ['href'], th: ['colspan', 'rowspan', 'scope'], td: ['colspan', 'rowspan'], col: ['span'],
+      '*': ['class', 'id', 'style', 'data-*', 'aria-*', 'role', 'lang', 'dir'], img: ['src', 'alt', 'width', 'height'],
+      a: ['href'], ol: ['start'], th: ['colspan', 'rowspan', 'scope'], td: ['colspan', 'rowspan'], col: ['span'],
     },
     allowedSchemes: ['http', 'https', 'mailto'], allowedSchemesByTag: { img: ['data'] },
     allowProtocolRelative: false, allowVulnerableTags: true,
@@ -67,12 +67,18 @@ export class BrochurePdfService {
           await Promise.all(Array.from(document.images).map(image => image.decode()));
         });
         const pageBoxes = await page.locator('.pagedjs_page').evaluateAll(pages => pages.map(page => ({
-          width: (page as HTMLElement).offsetWidth, height: (page as HTMLElement).offsetHeight,
+          width: parseFloat(getComputedStyle(page).width), height: parseFloat(getComputedStyle(page).height),
         })));
-        if (pageBoxes.length !== prepared.pageCount || pageBoxes.some(box => Math.abs(box.width - 794) > 2 || Math.abs(box.height - 1123) > 2)) {
-          throw new BadRequestException('页面尺寸不是 A4，请刷新产品介绍后重新导出');
+        const expected = pageBoxes[0];
+        const pixels = (mm: number) => mm * 96 / 25.4;
+        if (pageBoxes.length !== prepared.pageCount || !expected || pageBoxes.some(box =>
+          !Number.isFinite(box.width) || !Number.isFinite(box.height)
+          || box.width < pixels(100) - 1 || box.width > pixels(420) + 1
+          || box.height < pixels(100) - 1 || box.height > pixels(600) + 1
+          || Math.abs(box.width - expected.width) > 1 || Math.abs(box.height - expected.height) > 1)) {
+          throw new BadRequestException('页面尺寸无效或不一致，宽度须为 100–420mm，高度须为 100–600mm');
         }
-        const pdf = await page.pdf({ format: 'A4', preferCSSPageSize: true, printBackground: true, tagged: true });
+        const pdf = await page.pdf({ width: `${Math.ceil(expected.width)}px`, height: `${Math.ceil(expected.height)}px`, preferCSSPageSize: false, printBackground: true, tagged: true });
         if (pdf.length > 80 * 1024 * 1024) throw new BadRequestException('PDF 超过 80MB，请压缩图片后重试');
         return pdf;
       };

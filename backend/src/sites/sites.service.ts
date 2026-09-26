@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { DiscoverManagedSitesDto, SaveManagedSiteDto, SaveSharedSiteSettingsDto, UpdateManagedSiteDto } from './dto/site.dto';
 import { ManagedSite, ManagedSiteEnvironment } from './entities/managed-site.entity';
 import { SiteRequestContextService } from './site-request-context.service';
+import { siteRuntimeDefaults } from './site-runtime-defaults';
 
 @Injectable()
 export class SitesService implements OnModuleInit {
@@ -257,6 +258,10 @@ export class SitesService implements OnModuleInit {
     await this.sitesRepo.remove(site);
     await this.refreshCache();
     return { deleted: true, id };
+  }
+
+  getRuntimeDefaults() {
+    return siteRuntimeDefaults(process.platform, this.config.get<string>('PBOOT_SITE_ROOT'));
   }
 
   async discover(dto: DiscoverManagedSitesDto) {

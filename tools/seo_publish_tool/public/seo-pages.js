@@ -8,8 +8,8 @@
     },
     audit: {
       title: "页面体检与优化",
-      description: "检查页面技术 SEO、内容完整度，并按语言筛选和修复问题。",
-      badge: "检查与修复",
+      description: "仅检查 CN 中文资料：检查 → 修改 → 查看页面效果。其他语言在中文完善后再翻译、同步。",
+      badge: "仅 CN 中文版",
       documentTitle: "页面体检与优化 - PbootCMS",
     },
     engines: {
@@ -19,26 +19,26 @@
       documentTitle: "搜索引擎工作区 - PbootCMS",
     },
     google: {
-      title: "Google 收录与主动推进",
-      description: "管理 Search Console、Sitemap、URL Inspection 与 Indexing API 断点续传。",
+      title: "Google 收录",
+      description: "更新网站地图 → 提交给 Google → 等待并查看收录",
       badge: "Google",
       documentTitle: "Google 收录 - PbootCMS",
     },
     bing: {
       title: "Bing 收录与主动提交",
-      description: "管理 Bing Webmaster 验证、Sitemap、IndexNow 和 URL 查询。",
+      description: "提交网站地图 → 主动通知更新 → 等待并查看收录",
       badge: "Bing",
       documentTitle: "Bing 收录 - PbootCMS",
     },
     baidu: {
       title: "百度中文站收录",
-      description: "配置百度搜索资源平台 token，并主动推送中文站 URL。",
+      description: "配置中文站 → 主动提交页面 → 等待并查看收录",
       badge: "百度",
       documentTitle: "百度收录 - PbootCMS",
     },
     yandex: {
       title: "Yandex 收录与主动提交",
-      description: "管理站点验证、OAuth、Sitemap、IndexNow 与索引数据。",
+      description: "俄语站：提交网站地图 → 主动通知更新 → 等待并查看收录",
       badge: "Yandex",
       documentTitle: "Yandex 收录 - PbootCMS",
     },
@@ -66,4 +66,16 @@
     if (active) link.setAttribute("aria-current", "page");
   });
   window.NavigationIcons?.decorateWorkspace();
+  // Keep direct tutorial links usable when their containing panel is collapsed.
+  function revealGoogleAnchor() {
+    if (!["google", "bing", "baidu", "yandex"].includes(page) || !location.hash) return;
+    const target = document.getElementById(location.hash.slice(1));
+    if (!target) return;
+    for (let parent = target; parent; parent = parent.parentElement) {
+      if (parent.tagName === "DETAILS") parent.open = true;
+    }
+    target.scrollIntoView({ block: "start" });
+  }
+  window.addEventListener("hashchange", revealGoogleAnchor);
+  revealGoogleAnchor();
 })();

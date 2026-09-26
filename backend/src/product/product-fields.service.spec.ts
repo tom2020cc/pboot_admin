@@ -48,6 +48,7 @@ describe('site-scoped product field management', () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     const relative = path.relative(os.tmpdir(), root);
     if (!relative.startsWith('..') && relative.startsWith('pboot-fields-test-')) fs.rmSync(root, { recursive: true, force: true });
   });
@@ -156,6 +157,76 @@ describe('site-scoped product field management', () => {
     } finally { db.close(); }
   });
 
+  (process.platform === 'win32' ? it.skip : it)('retains POSIX ownership and non-default permissions when replacing the database', async () => {
+    await service.create({ name: 'ext_power', label: 'Power' });
+    // A root-run API must preserve ownership of a PHP-worker-owned database.
+    if (process.getuid?.() === 0) fs.chownSync(database(1), 65534, 65534);
+    fs.chmodSync(database(1), 0o660);
+    const before = fs.statSync(database(1));
+    await service.syncToPboot(['ext_power']);
+    const after = fs.statSync(database(1));
+    expect({ uid: after.uid, gid: after.gid, mode: after.mode & 0o7777 })
+      .toEqual({ uid: before.uid, gid: before.gid, mode: 0o660 });
+    const db = open();
+    try {
+      expect(db.exec('pragma table_info(ay_content_ext)')[0].values.some((row: any[]) => row[1] === 'ext_power')).toBe(true);
+    } finally { db.close(); }
+  });
+
+  it('leaves the original database intact and removes the staged file if permissions cannot be preserved', async () => {
+    await service.create({ name: 'ext_power', label: 'Power' });
+    const before = fs.readFileSync(database(1));
+    const chmod = jest.spyOn(fs, 'fchmodSync').mockImplementation(() => { throw new Error('EPERM'); });
+    await expect(service.syncToPboot(['ext_power'])).rejects.toThrow('未替换原文件');
+    chmod.mockRestore();
+    expect(fs.readFileSync(database(1))).toEqual(before);
+    expect(fs.readdirSync(path.dirname(database(1)))).toEqual(['site.db']);
+  });
+
+  (process.getuid?.() === 0 ? it : it.skip)('does not replace the original database if restoring its PHP owner fails', async () => {
+    await service.create({ name: 'ext_power', label: 'Power' });
+    fs.chownSync(database(1), 65534, 65534);
+    const before = fs.readFileSync(database(1));
+    jest.spyOn(fs, 'fchownSync').mockImplementation(() => { throw new Error('EPERM'); });
+    await expect(service.syncToPboot(['ext_power'])).rejects.toThrow('未替换原文件');
+    expect(fs.readFileSync(database(1))).toEqual(before);
+    expect(fs.statSync(database(1)).uid).toBe(65534);
+    expect(fs.readdirSync(path.dirname(database(1)))).toEqual(['site.db']);
+  });
+
+  it('does not overwrite a concurrent database update while preparing the replacement', async () => {
+    await service.create({ name: 'ext_power', label: 'Power' });
+    const write = fs.fsyncSync;
+    let concurrent: Buffer;
+    jest.spyOn(fs, 'fsyncSync').mockImplementation((fd) => {
+      write(fd);
+      const db = open();
+      try {
+        db.run("update ay_content_ext set ext_drill_depth='900' where contentid=10");
+        concurrent = Buffer.from(db.export());
+        fs.writeFileSync(database(1), concurrent);
+      } finally { db.close(); }
+    });
+    await expect(service.syncToPboot(['ext_power'])).rejects.toThrow('刚刚发生变化');
+    expect(fs.readFileSync(database(1))).toEqual(concurrent!);
+    expect(fs.readdirSync(path.dirname(database(1)))).toEqual(['site.db']);
+  });
+
+  (process.platform === 'win32' ? it.skip : it)('does not overwrite a concurrent database permission change', async () => {
+    await service.create({ name: 'ext_power', label: 'Power' });
+    const before = fs.readFileSync(database(1));
+    const changedMode = (fs.statSync(database(1)).mode & 0o7777) === 0o600 ? 0o640 : 0o600;
+    const sync = fs.fsyncSync;
+    jest.spyOn(fs, 'fsyncSync').mockImplementation((fd) => {
+      sync(fd);
+      fs.chmodSync(database(1), changedMode);
+    });
+    await expect(service.syncToPboot(['ext_power'])).rejects.toThrow('刚刚发生变化');
+    expect(fs.readFileSync(database(1))).toEqual(before);
+    expect(fs.statSync(database(1)).mode & 0o7777).toBe(changedMode);
+    expect(fs.readdirSync(path.dirname(database(1)))).toEqual(['site.db']);
+  });
+
   it('keeps legacy engine values and permits an explicit clear', async () => {
     const db = open();
     try {
@@ -215,5 +286,70 @@ describe('site-scoped product field management', () => {
     expect(fs.readFileSync(database(1))).toEqual(before);
     current = 2;
     expect((await service.list()).fields.some((field) => field.name === name)).toBe(false);
+  });
+
+  it('syncs only the three imported fields, idempotently, without changing existing PB values or other sites', async () => {
+    await service.create({name: 'ext_power', label: '额定功率', unit: 'kW'});
+    await service.create({name: 'ext_unused', label: '未使用字段', unit: 'm'});
+    const other = fs.readFileSync(database(2));
+    const parsed = parseFolderParameterTexts([{filename:'参数.txt',text:'产品参数：\n钻探深度（m）：600\n额定功率（kW）：85\n铲斗容量（m³）：0.4\n整机高度（mm）：3000'}], 'EX100');
+    const parameters = await service.prepareFolderParameters(parsed, true);
+    const definitions = (await service.list()).fields;
+    const bucket = definitions.find(field => field.label === '铲斗容量')!;
+    expect(bucket.pbootExists).toBe(true);
+    expect(definitions.find(field => field.name === 'ext_power')?.pbootExists).toBe(true);
+    expect(definitions.find(field => field.name === 'ext_unused')?.pbootExists).toBe(false);
+    expect(definitions.some(field => field.label === '整机高度')).toBe(false);
+    expect(service.parameterRows(parameters, 'zh-CN')).toHaveLength(3);
+    const synced = fs.readFileSync(database(1));
+    const backups = fs.readdirSync(sites.getCurrentSiteStorageDir('backups'));
+    expect(await service.prepareFolderParameters(parsed, true)).toEqual(parameters);
+    expect(fs.readFileSync(database(1))).toEqual(synced);
+    expect(fs.readdirSync(sites.getCurrentSiteStorageDir('backups'))).toEqual(backups);
+    expect(fs.readFileSync(database(2))).toEqual(other);
+    const db = open();
+    try {
+      expect(db.exec('select contentid,ext_drill_depth,ext_core_capacity from ay_content_ext')[0].values).toEqual([[10,'800','BQ 1000 / NQ 800 / HQ 500']]);
+      expect(db.exec("select description,sorting from ay_extfield where name='ext_drill_depth'")[0].values).toEqual([['钻孔深度',900]]);
+      expect(db.exec(`select type,mcode,description from ay_extfield where name='${bucket.name}'`)[0].values).toEqual([[1,'3','铲斗容量']]);
+      expect(service.writeProductValues(db, parameters)).toMatchObject({ext_drill_depth: '600', ext_power: '85', [bucket.name]: '0.4'});
+    } finally {db.close();}
+  });
+
+  it('does not write PB when a same-unit field is disabled', async () => {
+    await service.create({name:'ext_power',label:'额定功率',unit:'W'});
+    const parsed = parseFolderParameterTexts([{filename:'参数.txt',text:'额定功率（kW）：85'}], 'EX100');
+    const before = fs.readFileSync(database(1));
+    await service.update('ext_power', {label:'额定功率',unit:'kW',enabled:false});
+    await expect(service.prepareFolderParameters(parsed, true)).rejects.toThrow('未启用');
+    expect(fs.readFileSync(database(1))).toEqual(before);
+  });
+
+  it('creates a separate lifting-force unit field once and syncs it without changing existing products or units', async () => {
+    await service.create({name:'ext_force_kn',label:'回拉力',unit:'kN'});
+    await service.syncToPboot(['ext_force_kn']);
+    const db = open();
+    db.run("update ay_content_ext set ext_force_kn='185' where contentid=10");
+    fs.writeFileSync(database(1), Buffer.from(db.export())); db.close();
+    const other = fs.readFileSync(database(2));
+    const parsed = parseFolderParameterTexts([{filename:'WR400RC.txt',text:'钻孔深度（m）：400\n钻孔直径（mm）：105-305\n提升力（T）：40'}], 'WR400RC');
+    const parameters = await service.prepareFolderParameters(parsed, true);
+    const fields = (await service.list()).fields;
+    const tonnes = fields.find(field=>field.label === '提升力（T）')!;
+    expect(tonnes).toMatchObject({unit:'T',enabled:true,pbootExists:true});
+    expect(parameters.fieldValues[tonnes.name]).toBe('40');
+    expect(parameters.fieldValues.ext_force_kn).toBeUndefined();
+    expect(service.parameterRows(parameters, 'zh-CN')).toHaveLength(3);
+    const currentDb = open();
+    try {
+      expect(currentDb.exec(`select ext_force_kn,"${tonnes.name}" from ay_content_ext where contentid=10`)[0].values[0][0]).toBe('185');
+      expect(currentDb.exec(`select description from ay_extfield where name='${tonnes.name}'`)[0].values).toEqual([['提升力（T）']]);
+      expect(service.writeProductValues(currentDb, parameters)[tonnes.name]).toBe('40');
+    } finally {currentDb.close();}
+    const synced = fs.readFileSync(database(1));
+    expect(await service.prepareFolderParameters(parsed, true)).toEqual(parameters);
+    expect(fs.readFileSync(database(1))).toEqual(synced);
+    expect(fs.readFileSync(database(2))).toEqual(other);
+    expect((await service.list()).fields.filter(field=>field.name===tonnes.name)).toHaveLength(1);
   });
 });

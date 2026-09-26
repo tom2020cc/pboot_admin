@@ -1,33 +1,29 @@
-# vue3Admin
+# 管理后台前端（Vue 3）
 
-This template should help get you started developing with Vue 3 in Vite.
+PbootCMS 集中多站点管理系统的管理界面（SPA）。项目总览与启动脚本见[根目录 README](../README.md)。
 
-## Recommended IDE Setup
+## 技术栈
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+Vue 3 + Vite 5 + TypeScript + Element Plus + Pinia + vue-router；HTML 编辑使用 CodeMirror 6，报价单排版使用 paged.js。
 
-## Type Support for `.vue` Imports in TS
+## 快速开始
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vitejs.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
 pnpm install
+pnpm dev        # http://localhost:5278
 ```
 
-### Compile and Hot-Reload for Development
+按需复制 `.env.example`：`VITE_API_BASE_URL` 指向后端（默认 `http://localhost:5108`），其余端口变量见模板内注释。
 
-```sh
-pnpm dev
-```
+## 常用命令
 
-### Type-Check, Compile and Minify for Production
+| 命令 | 作用 |
+| --- | --- |
+| `pnpm dev` | Vite 开发服务器（默认 5278） |
+| `pnpm build` | 类型检查（vue-tsc）+ 构建到 `dist/` |
+| `pnpm preview` | 预览构建产物 |
 
-```sh
-pnpm build
-```
+## 说明
+
+- 日常启动建议直接用根目录 `start.cmd`，无需手动进入本目录。
+- `pnpm build` 产物 `dist/` 在生产环境由 Nginx 提供（模板见根目录 `deploy/nginx/`）。

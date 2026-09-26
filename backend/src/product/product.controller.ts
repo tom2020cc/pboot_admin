@@ -13,12 +13,20 @@ import { OptimizeSeoDto } from '../common/dto/optimize-seo.dto';
 import { TranslateMenuContentDto } from '../common/dto/translate-menu-content.dto';
 import { PbootScopeDto } from '../common/dto/pboot-scope.dto';
 import { ImportProductFolderDto } from './dto/import-product-folder.dto';
+import { BrowseProductDirectoryDto } from './dto/browse-product-directory.dto';
 import { SyncProductScopeDto } from './dto/sync-product-scope.dto';
+import { BatchProductDto } from './dto/batch-product.dto';
 
 @Controller('products')
 @ApiTags('产品管理')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
+
+  @Post('batch')
+  @ApiOperation({ summary: '批量管理当前网站的指定产品' })
+  batch(@Body() input: BatchProductDto) {
+    return this.productService.batchManage(input);
+  }
 
   @Post('thumbnail')
   @ApiOperation({ summary: '生成 500x400 产品缩略图，保存到当前型号目录' })
@@ -35,6 +43,12 @@ export class ProductController {
   @Post()
   create(@Body() postObj: CreateProductDto) {
     return this.productService.create(postObj);
+  }
+
+  @Get('folder-import/directories')
+  @ApiOperation({ summary: '只读浏览当前网站服务器根目录及子目录' })
+  browseProductDirectory(@Query() query: BrowseProductDirectoryDto) {
+    return this.productService.browseProductDirectory(query.siteId, query.directory);
   }
 
   @ApiOperation({ summary: '扫描产品资料文件夹', description: '按型号子文件夹识别主图、轮播图、详情 HTML 和详情图片' })

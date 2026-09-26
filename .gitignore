@@ -2,6 +2,11 @@
 node_modules/
 dist/
 *.tsbuildinfo
+.pnpm-store/
+__pycache__/
+*.pyc
+.cache-*/
+.vscode/
 
 # 日志
 *.log
@@ -16,6 +21,7 @@ logs/
 .env
 .env.local
 .env.*.local
+.env*.before-public-urls
 .home/
 .pm2/
 seo.config.json
@@ -33,11 +39,20 @@ search-index-coverage.json
 git.token
 *.token
 
+# 宝塔同步目标（含 FTP 密码）与同步清单/备份
+sync.config.json
+sync-state/
+
 # 本地上传与备份
 uploads/
 backups/
 tmp/
 artifacts/
+docs/tutorial-assets/**/*.png
+docs/tutorial-assets/**/*.jpg
+# 实机教程截图可能包含账号、连接信息；源码仓库保留文字与示意图
+frontend/public/tutorial/deployment/*.jpg
+tools/seo_publish_tool/public/tutorials/*.png
 coverage/
 
 # 每个受管网站的运行配置、凭据、状态与备份

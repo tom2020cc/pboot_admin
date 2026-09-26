@@ -2,7 +2,7 @@
 setlocal
 where pnpm >nul 2>nul
 if errorlevel 1 (
-  echo ERROR: pnpm was not found. Run the root 00-install.cmd first.
+  echo ERROR: pnpm was not found. Run the root install.cmd first.
   pause
   exit /b 1
 )

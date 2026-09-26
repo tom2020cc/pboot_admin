@@ -45,6 +45,8 @@ import { ProductFieldsService } from './product-fields.service';
 import { ensureFolderThumbnail, resolveProductThumbnailDirectory, saveUploadedProductThumbnail } from './product-thumbnail';
 import { UploadProductThumbnailDto } from './dto/upload-product-thumbnail.dto';
 import { ImportProductFolderDto } from './dto/import-product-folder.dto';
+import { browseProductDirectory } from './product-directory';
+import { thumbnailSize } from '../common/content-thumbnail';
 import { ensurePbootParameterFields, normalizeSharedParameters, publicParameterValues, readPbootParameters, sharedParameterRows } from './product-shared-parameters';
 import { mapFolderParameters } from './product-folder-parameters';
 import { ProductFieldDefinition } from './product-fields';
@@ -58,6 +60,9 @@ import {
 } from './product-folder-import';
 
 const initSqlJs = require('sql.js');
+import { randomUUID } from 'crypto';
+import { BatchProductDto, PRODUCT_BATCH_ACTIONS } from './dto/batch-product.dto';
+import { replaceBatchDatabase } from './product-batch-file';
 
 type ProductWithTranslations = Omit<Product, 'author' | 'source'> & {
   lang?: string;
@@ -756,6 +761,141 @@ export class ProductService {
     return await this.findOneById(saved.id);
   }
 
+  async batchManage(input: BatchProductDto) {
+    const { action, ids } = input;
+    if (!PRODUCT_BATCH_ACTIONS.includes(action) || !Array.isArray(ids) || !ids.length || ids.length > 100
+      || new Set(ids).size !== ids.length || ids.some(id => !Number.isSafeInteger(id) || id < 1)) {
+      throw new BadRequestException('请选择 1 至 100 个不同的产品');
+    }
+    if (['move', 'copy', 'delete'].includes(action) && input.confirmed !== true) throw new BadRequestException('请先确认批量操作及所有语言的影响范围');
+    if (['show', 'top', 'recommend'].includes(action) && typeof input.value !== 'boolean') throw new BadRequestException('请选择启用或关闭');
+    const siteId = await this.currentSiteId();
+    const products = await this.productRepo.find({ where: { siteId, id: In(ids) } });
+    if (products.length !== ids.length) throw new BadRequestException('部分产品已删除或不属于当前网站，未执行操作');
+    const target = ['move', 'copy'].includes(action) ? await this.requireChineseProductImportMenu(input.menuId) : null;
+    const orders = new Map((input.orders || []).map(item => [item.id, item.orderNum]));
+    if (action === 'sort' && (orders.size !== ids.length || input.orders?.length !== ids.length
+      || ids.some(id => !Number.isSafeInteger(orders.get(id)) || orders.get(id) < 0 || orders.get(id) > 999999))) {
+      throw new BadRequestException('排序必须与所选产品一一对应，范围为 0 至 999999');
+    }
+    if (action === 'sync' && !(await this.getConfiguredLanguageCodes()).includes(input.lang || DEFAULT_NEWS_LANG)) {
+      throw new BadRequestException('同步语言未在当前网站启用');
+    }
+    const results: Array<{ id: number; title: string; status: 'success' | 'partial' | 'failed'; message: string; newId?: number }> = [];
+    for (const id of ids) {
+      const product = products.find(item => item.id === id)!;
+      try {
+        let message = '已保存后台，尚未同步 PB';
+        let newId: number | undefined;
+        let status: 'success' | 'partial' = 'success';
+        if (action === 'sync') {
+          const result = await this.syncToPboot(id, { all: input.allLanguages === true, lang: input.lang || DEFAULT_NEWS_LANG });
+          status = result.skipped.length ? 'partial' : 'success';
+          message = `同步 ${result.synced.length} 个语言版本` + (result.skipped.length ? `；跳过：${result.skipped.map(item => `${item.lang} ${item.reason}`).join('；')}` : '');
+        } else if (action === 'delete') {
+          const deleted = await this.deleteBatchProduct(product, input.deletePboot === true);
+          message = input.deletePboot ? `已删除后台全部译文及 PB ${deleted} 条；图片文件保留` : '已删除后台产品及全部译文；PB 网站和图片文件保留';
+        } else if (action === 'copy') {
+          const translations = await this.translationRepo.find({ where: { productId: id } });
+          newId = await this.productRepo.manager.transaction(async manager => {
+            const { id: oldId, createTime, updateTime, ...base } = product;
+            const suffix = `copy-${randomUUID().replace(/-/g, '').slice(0, 20)}`;
+            const copy = await manager.getRepository(Product).save({ ...base, siteId, menuId: Number(target.id),
+              title: `${product.title.slice(0, 108)}（副本）`, urlName: `${this.normalizePbootFilename(product.urlName || `product-${id}`).slice(0, 60)}-${suffix}`, show: false });
+            for (const translation of translations) {
+              const { id: translationId, createTime: created, updateTime: updated, product: relation, ...content } = translation;
+              await manager.getRepository(ProductTranslation).save({ ...content, productId: copy.id,
+                title: translation.lang === DEFAULT_NEWS_LANG ? copy.title : translation.title ? `${translation.title.slice(0, 165)} (Copy)` : '',
+                urlName: translation.lang === DEFAULT_NEWS_LANG ? copy.urlName : `${this.normalizePbootFilename(translation.urlName || `${translation.lang}-product-${id}`).slice(0, 60)}-${suffix}` });
+            }
+            return copy.id;
+          });
+          message = `已创建隐藏副本 #${newId}，译文保留，URL 独立；尚未同步 PB`;
+        } else {
+          if (action === 'move') {
+            const versions = await this.translationRepo.find({ where: { productId: id } });
+            if (!product.urlName?.trim() || versions.some(item => item.title?.trim() && !item.urlName?.trim())) {
+              throw new BadRequestException('请先为产品及已有译文设置独立 URL，再移动，避免 PB 重复记录');
+            }
+          }
+          const patch = action === 'show' ? { show: input.value } : action === 'top' ? { isTop: input.value }
+            : action === 'recommend' ? { isRecommend: input.value } : action === 'sort' ? { orderNum: orders.get(id) } : { menuId: Number(target.id) };
+          const changed = await this.productRepo.update({ id, siteId }, patch);
+          if (!changed.affected) throw new BadRequestException('产品已变化，请刷新后重试');
+        }
+        results.push({ id, title: product.title, status, message, ...(newId ? { newId } : {}) });
+      } catch (error) {
+        results.push({ id, title: product.title, status: 'failed', message: error instanceof Error ? error.message : '操作失败' });
+      }
+    }
+    return { siteId, action, total: ids.length, succeeded: results.filter(item => item.status === 'success').length,
+      failed: results.filter(item => item.status === 'failed').length, results };
+  }
+
+  private async deleteBatchProduct(product: Product, deletePboot: boolean) {
+    let prepared: { file: string; original: Buffer; next: Buffer; count: number } | undefined;
+    if (deletePboot) {
+      await this.requireChineseProductImportMenu(product.menuId);
+      const file = this.getPbootDbPath();
+      const root = fs.realpathSync(this.getPbootSiteRoot());
+      const resolved = fs.realpathSync(file);
+      if (!resolved.startsWith(path.join(root, 'data') + path.sep) || fs.existsSync(`${file}-wal`)) throw new BadRequestException('PB 数据库路径或 WAL 状态不允许本次删除');
+      const translations = await this.translationRepo.find({ where: { productId: product.id } });
+      const otherProducts = (await this.productRepo.find({ where: { siteId: product.siteId } })).filter(item => item.id !== product.id);
+      const otherTranslations = otherProducts.length ? await this.translationRepo.find({ where: { productId: In(otherProducts.map(item => item.id)) } }) : [];
+      const original = fs.readFileSync(file);
+      const SQL = await initSqlJs();
+      const db = new SQL.Database(Uint8Array.from(original));
+      try {
+        const deleteIds = new Set<number>();
+        for (const [lang, config] of Object.entries(PBOOT_PRODUCT_SORTS)) {
+          const translation = translations.find(item => item.lang === lang);
+          if (lang !== DEFAULT_NEWS_LANG && !translation?.title?.trim()) continue;
+          const content = this.pickContentForPboot(product, translation, lang);
+          if (!content.title.trim()) continue;
+          const category = await this.resolvePbootConfigFromMenu(config, product.menuId);
+          const filename = this.normalizePbootFilename(content.urlName);
+          if (otherProducts.some(other => {
+            const translated = otherTranslations.find(item => item.productId === other.id && item.lang === lang);
+            if (lang !== DEFAULT_NEWS_LANG && !translated?.title?.trim()) return false;
+            const otherContent = this.pickContentForPboot(other, translated, lang);
+            return filename ? this.normalizePbootFilename(otherContent.urlName) === filename
+              : other.menuId === product.menuId && otherContent.title === content.title;
+          })) throw new BadRequestException(`${lang} 的 URL 或无 URL 标题被其他后台产品共用，未删除，请先核对绑定`);
+          const query = `select c.id from ay_content c join ay_content_sort s on s.acode=c.acode and s.scode=c.scode
+            where c.acode=? and c.scode=? and s.mcode='3' and ${filename ? 'c.filename=?' : 'c.title=?'}`;
+          const statement = db.prepare(query);
+          const matches: number[] = [];
+          try { statement.bind([category.acode, category.scode, filename || content.title]); while (statement.step()) matches.push(Number(statement.get()[0])); }
+          finally { statement.free(); }
+          if (matches.length > 1) throw new BadRequestException(`${lang} 匹配多个 PB 产品，未删除，请先核对重复记录`);
+          matches.forEach(id => deleteIds.add(id));
+        }
+        for (const id of deleteIds) {
+          db.run('delete from ay_content_ext where contentid=?', [id]);
+          db.run('delete from ay_content where id=?', [id]);
+        }
+        if (deleteIds.size) prepared = { file, original, next: Buffer.from(db.export()), count: deleteIds.size };
+      } finally { db.close(); }
+    }
+    let committed = false;
+    try {
+      await this.productRepo.manager.transaction(async manager => {
+        await manager.getRepository(ProductTranslation).delete({ productId: product.id });
+        const removed = await manager.getRepository(Product).delete({ id: product.id, siteId: product.siteId });
+        if (!removed.affected) throw new BadRequestException('产品已删除，请刷新');
+        if (prepared) { replaceBatchDatabase(prepared.file, prepared.original, prepared.next); committed = true; }
+      });
+    } catch (error) {
+      if (committed) {
+        try { replaceBatchDatabase(prepared.file, prepared.next, prepared.original); }
+        catch { throw new BadRequestException('后台删除失败且 PB 已有后续变化，结果需人工核对，请勿重复删除'); }
+      }
+      throw error;
+    }
+    return prepared?.count || 0;
+  }
+
   async uploadThumbnail(postObj: UploadProductThumbnailDto, file?: Express.Multer.File) {
     if (!file?.buffer?.length) throw new BadRequestException('请选择缩略图');
     if (file.buffer.length > 5 * 1024 * 1024) throw new BadRequestException('上传图片不能超过 5MB');
@@ -771,7 +911,13 @@ export class ProductService {
     return saveUploadedProductThumbnail(root, directory, file.buffer);
   }
 
+  async browseProductDirectory(siteId: number, directory?: string) {
+    const site = this.sitesService.getSiteById(siteId);
+    return { siteId: Number(site.id), siteName: site.name, ...await browseProductDirectory(site.rootPath, directory) };
+  }
+
   async scanProductFolderImport(postObj: ImportProductFolderDto) {
+    const size = thumbnailSize({ width: postObj.thumbnailWidth, height: postObj.thumbnailHeight });
     const menu = await this.requireChineseProductImportMenu(postObj.menuId);
     const candidates = scanProductFolders(postObj.sourceDirectory, postObj.parameterType);
     const duplicateNames = await this.findDuplicateProductNames(postObj.menuId, candidates);
@@ -782,6 +928,7 @@ export class ProductService {
       menuId: Number(menu.id),
       menuName: menu.name,
       total: items.length,
+      thumbnailSize: size,
       importable: items.filter((item) => !item.duplicate && !item.errors.length).length,
       blocked: items.filter((item) => !item.duplicate && item.errors.length).length,
       duplicates: items.filter((item) => item.duplicate).length,
@@ -790,6 +937,7 @@ export class ProductService {
   }
 
   async importProductFolders(postObj: ImportProductFolderDto) {
+    const size = thumbnailSize({ width: postObj.thumbnailWidth, height: postObj.thumbnailHeight });
     const menu = await this.requireChineseProductImportMenu(postObj.menuId);
     const candidates = scanProductFolders(postObj.sourceDirectory, postObj.parameterType);
     if (!candidates.length) throw new BadRequestException('没有找到符合命名规则的产品型号文件夹。');
@@ -814,9 +962,9 @@ export class ProductService {
       try {
         if (candidate.parameters.errors.length) throw new BadRequestException(candidate.parameters.errors.join('；'));
         if (!this.productFields) throw new BadRequestException('产品字段服务未初始化，请重启后端');
-        const sharedParameters = await this.productFields.prepareFolderParameters(candidate.parameters);
+        const sharedParameters = await this.productFields.prepareFolderParameters(candidate.parameters, true);
         const title = candidate.modelName.trim().slice(0, 120);
-        const generatedThumbnail = await ensureFolderThumbnail(candidate.directory, candidate.thumbnailSourceFile);
+        const generatedThumbnail = await ensureFolderThumbnail(candidate.directory, candidate.thumbnailSourceFile, size);
         const resolveAsset = createFolderAssetResolver(siteRoot, candidate.directory,
           path.join('static', 'codex', 'folder-import', String(menu.id), safeProductAssetSegment(candidate.modelName)));
         const largeImage = resolveAsset(candidate.largeImageFile);
@@ -1426,6 +1574,8 @@ export class ProductService {
       author: '',
       source: '',
       show: String(row.status) !== '0',
+      isTop: row.istop == null ? null : String(row.istop) === '1',
+      isRecommend: row.isrecommend == null ? null : String(row.isrecommend) === '1',
       orderNum: Number(row.sorting || 0),
       createTime: toPbootDate(row.date || row.create_time),
       updateTime: toPbootDate(row.update_time || row.date || row.create_time),
@@ -1512,6 +1662,8 @@ export class ProductService {
             author: '',
             source: '',
             show: String(base.status) !== '0',
+            isTop: base.istop == null ? null : String(base.istop) === '1',
+            isRecommend: base.isrecommend == null ? null : String(base.isrecommend) === '1',
             orderNum: Number(base.sorting || 0),
             createTime: created,
             updateTime: updated,
@@ -1752,8 +1904,8 @@ export class ProductService {
       description: (content.summary || this.stripHtml(content.content)).slice(0, 500),
       sorting: Number(product.orderNum || 0),
       status: product.show ? '1' : '0',
-      istop: '0',
-      isrecommend: '0',
+      istop: product.isTop ? '1' : '0',
+      isrecommend: product.isRecommend ? '1' : '0',
       isheadline: '0',
       visits: 0,
       likes: 0,
@@ -1770,6 +1922,8 @@ export class ProductService {
 
     if (row) {
       const fields = ['scode', 'title', 'subtitle', 'filename', 'date', 'ico', 'pics', 'content', 'keywords', 'description', 'sorting', 'status', 'update_user', 'update_time', 'picstitle'];
+      if (typeof product.isTop === 'boolean') fields.push('istop');
+      if (typeof product.isRecommend === 'boolean') fields.push('isrecommend');
       this.runSql(db, `update ay_content set ${fields.map((field) => `${field}=?`).join(',')} where id=?`, [...fields.map((field) => values[field]), row.id]);
       this.upsertPbootProductExt(db, row.id, product, siteRoot, now, lang);
       return this.createPbootSyncItem(lang, config, row.id, values.title, filename, 'updated');

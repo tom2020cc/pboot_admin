@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" role="img" aria-labelledby="title desc">
+  <title id="title">产品与新闻的 Google 收录流程</title>
+  <desc id="desc">启用 Search Console API，授权网站属性，检查并提交 Sitemap，再用网址检查查询索引。普通产品不使用 Indexing API。</desc>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#1976d2"/></marker></defs>
+  <rect width="900" height="420" fill="#fff"/>
+  <g font-family="Arial, Microsoft YaHei, sans-serif" fill="#25323a">
+    <text x="30" y="45" font-size="23" font-weight="700">普通产品 / 新闻：Search Console + Sitemap</text>
+    <text x="30" y="76" font-size="15" fill="#58656f">操作示意 · 授权由网站所有者完成 · 各网站分别检查属性范围</text>
+    <g font-size="17" font-weight="700">
+      <rect x="30" y="110" width="390" height="88" rx="6" fill="#edf5ff" stroke="#bbd7f5"/>
+      <text x="50" y="145">1. Cloud 项目</text><text x="50" y="177" font-size="15" font-weight="400">启用 Search Console API，创建服务账号 JSON</text>
+      <rect x="480" y="110" width="390" height="88" rx="6" fill="#f1f9f3" stroke="#b8d9c0"/>
+      <text x="500" y="145">2. Search Console 网站属性</text><text x="500" y="177" font-size="15" font-weight="400">验证域名，给 client_email 网站完整权限</text>
+      <rect x="480" y="245" width="390" height="88" rx="6" fill="#edf5ff" stroke="#bbd7f5"/>
+      <text x="500" y="280">3. 本工具配置与提交</text><text x="500" y="312" font-size="15" font-weight="400">测试权限 → 检查线上文件 → 提交 Sitemap</text>
+      <rect x="30" y="245" width="390" height="88" rx="6" fill="#fff9e9" stroke="#e6d39a"/>
+      <text x="50" y="280">4. 跟踪与优化</text><text x="50" y="312" font-size="15" font-weight="400">URL Inspection 查询状态，修复页面质量问题</text>
+    </g>
+    <path d="M427 154H470 M675 204V234 M473 289H432" fill="none" stroke="#1976d2" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="30" y="377" font-size="16" fill="#9c471e">Sitemap 已接收 ≠ 网页已收录；URL Inspection 查询不等于请求收录。</text>
+    <text x="30" y="404" font-size="14" fill="#58656f">Indexing API 仅适用 JobPosting，或 VideoObject 内包含 BroadcastEvent 的招聘 / 直播页面。</text>
+  </g>
+</svg>

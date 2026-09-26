@@ -228,8 +228,8 @@ function collectDiagnostics(config = loadConfig(false)) {
   );
   add("backend-package", "后端程序", fs.existsSync(path.join(PACKAGE_ROOT, "backend", "package.json")), "backend/package.json");
   add("frontend-package", "前端程序", fs.existsSync(path.join(PACKAGE_ROOT, "frontend", "package.json")), "frontend/package.json");
-  add("backend-deps", "后端依赖", fs.existsSync(path.join(PACKAGE_ROOT, "backend", "node_modules")), "未安装时运行 00-install.cmd");
-  add("frontend-deps", "前端依赖", fs.existsSync(path.join(PACKAGE_ROOT, "frontend", "node_modules")), "未安装时运行 00-install.cmd");
+  add("backend-deps", "后端依赖", fs.existsSync(path.join(PACKAGE_ROOT, "backend", "node_modules")), "未安装时运行 install.cmd");
+  add("frontend-deps", "前端依赖", fs.existsSync(path.join(PACKAGE_ROOT, "frontend", "node_modules")), "未安装时运行 install.cmd");
   const portValues = ports.map((item) => item[1]);
   add(
     "ports",

@@ -6,14 +6,14 @@ import { SitesController } from './sites.controller';
 import { SitesService } from './sites.service';
 import { SiteResourcesController } from './site-resources.controller';
 import { SiteResourcesService } from './site-resources.service';
-import { TemplateBindingsController } from './template-bindings.controller';
-import { TemplateBindingsService } from './template-bindings.service';
+import { SiteLicenseController } from './site-license.controller';
+import { SiteLicenseService } from './site-license.service';
 
 @Global()
 @Module({
   imports: [TypeOrmModule.forFeature([ManagedSite])],
-  controllers: [SitesController, SiteResourcesController, TemplateBindingsController],
-  providers: [SitesService, SiteResourcesService, TemplateBindingsService, SiteRequestContextService, SiteRequestContextMiddleware],
+  controllers: [SitesController, SiteResourcesController, SiteLicenseController],
+  providers: [SitesService, SiteResourcesService, SiteLicenseService, SiteRequestContextService, SiteRequestContextMiddleware],
   exports: [SitesService, SiteRequestContextService, SiteRequestContextMiddleware],
 })
 export class SitesModule {}

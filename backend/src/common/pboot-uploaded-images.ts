@@ -30,7 +30,7 @@ export function parseUploadedImage(value: string): { filename: string; siteId?: 
   return { filename, siteId };
 }
 
-export function copyUploadedImageToPboot(value: string, sites: UploadSite, siteRoot: string, now: string, kind: 'news' | 'products' | 'pages' | 'menus') {
+export function copyUploadedImageToPboot(value: string, sites: UploadSite, siteRoot: string, now: string, kind: 'news' | 'products' | 'pages' | 'menus' | 'site-information') {
   const upload = parseUploadedImage(value);
   if (!upload) return value || '';
   const siteId = sites.getCurrentSiteId();

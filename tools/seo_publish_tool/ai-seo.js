@@ -977,7 +977,10 @@ async function fetchWithTimeout(url, options, timeoutMs = AI_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    // Generation can continue after headers arrive; keep the body within the deadline.
+    const responseText = await response.text();
+    return { ok: response.ok, status: response.status, responseText };
   } finally {
     clearTimeout(timer);
   }
@@ -1025,6 +1028,10 @@ async function callAiOnce(toolRoot, modelName, systemPrompt, userPrompt, options
         ],
         temperature: 0.2,
         max_tokens: maxTokens,
+        ...(options.jsonObject ? {
+          response_format: { type: "json_object" },
+          thinking: { type: "disabled" },
+        } : {}),
       }),
     }, timeoutMs);
   } else if (model.provider === "qwen") {
@@ -1060,16 +1067,34 @@ async function callAiOnce(toolRoot, modelName, systemPrompt, userPrompt, options
     }, timeoutMs);
   }
 
-  const responseText = await response.text();
+  const responseText = response.responseText;
   if (!response.ok) {
     throw new Error(`${model.label} 请求失败 (${response.status})：${responseText.slice(0, 500)}`);
   }
-  const data = JSON.parse(responseText);
+  let data;
+  try {
+    data = JSON.parse(responseText);
+  } catch (_error) {
+    throw aiFormatError(`${model.label} 接口返回的响应不是有效 JSON，请稍后重试。`, "AI_RESPONSE_JSON");
+  }
   const rawText =
     model.provider === "zhipu" || model.provider === "deepseek" || model.provider === "qwen"
       ? data?.choices?.[0]?.message?.content || ""
       : pickOpenAiText(data);
-  return parseJsonText(rawText);
+  if (data?.choices?.[0]?.finish_reason === "length" || data?.status === "incomplete") {
+    throw aiFormatError(`${model.label} 输出被截断，请缩小单次内容量或增加输出额度。`);
+  }
+  try {
+    return parseJsonText(rawText);
+  } catch (_error) {
+    throw aiFormatError(`${model.label} 已响应，但生成内容不是有效 JSON（可能为空或含异常标记）。这不等同于 API Key 失效，请重试。`);
+  }
+}
+
+function aiFormatError(message, code = "AI_MODEL_JSON") {
+  const error = new SyntaxError(message);
+  error.code = code;
+  return error;
 }
 
 function sleep(ms) {
@@ -1139,19 +1164,31 @@ async function callAi(toolRoot, modelName, systemPrompt, userPrompt) {
 async function testAiConnection(toolRoot, modelName) {
   const startedAt = Date.now();
   try {
-    const result = await callAiOnce(
-      toolRoot,
-      modelName,
-      "Return strict JSON only.",
-      'Return exactly this JSON object: {"ok":true,"message":"connection-ready"}',
-      { timeoutMs: 30000, maxTokens: 64, allowFailed: true },
-    );
-    if (!result || result.ok !== true) {
-      throw new Error("模型已经响应，但返回格式不符合要求，请切换模型后重试。");
+    let attempts = 0;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      attempts = attempt;
+      try {
+        const result = await callAiOnce(
+          toolRoot,
+          modelName,
+          "Return strict JSON only. Do not include reasoning, markdown, or special tokens.",
+          'Return exactly this JSON object: {"ok":true,"message":"connection-ready"}',
+          { timeoutMs: Math.max(1, Math.min(30000, 45000 - (Date.now() - startedAt))),
+            maxTokens: attempt === 1 ? 256 : 512, allowFailed: true, jsonObject: true },
+        );
+        if (!result || Array.isArray(result) || result.ok !== true || result.message !== "connection-ready") {
+          throw aiFormatError("模型已响应，但连接测试内容不符合要求。请重试，不必因此重新填写 API Key。");
+        }
+        break;
+      } catch (error) {
+        // Retry malformed output only, not invalid keys, exhausted balance or rate limits.
+        if (!["AI_MODEL_JSON", "AI_RESPONSE_JSON"].includes(error?.code) || attempt === 2 || Date.now() - startedAt >= 44000) throw error;
+      }
     }
     const response = {
       ok: true,
       model: modelName,
+      attempts,
       elapsedMs: Date.now() - startedAt,
       message: "模型连接和 JSON 返回格式正常。",
     };
@@ -2235,6 +2272,7 @@ module.exports = {
   startJob,
   testAiConnection,
   _test: {
+    callAiOnce,
     prepareUpdates,
     prepareTranslationUpdates,
     applyUpdates,

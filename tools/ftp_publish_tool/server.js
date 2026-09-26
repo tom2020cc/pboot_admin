@@ -2,8 +2,14 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const ftp = require("basic-ftp");
+const { createFtpClient, networkInterfaces } = require('./ftp-client');
 const siteRuntime = require("../site-runtime");
+const { buildPublicNavigation } = require("../public-navigation");
+const { deploymentEnvironment } = require('../deployment-environment');
 const { readConfig, writeConfig, collectFiles, formatBytes, uploadFiles } = require("./upload-to-ftp");
+const { createSyncEngine, assertSyncNotBusy } = require("./sync-engine");
+const { createFileBrowser, listLocal, listRemote } = require('./file-browser');
+const fileBrowser = createFileBrowser();
 const {
   appendHistory,
   baselineInfo,
@@ -79,6 +85,41 @@ const securityState = {
 };
 
 const monitorTimers = new Map();
+const serverSecurity = require('./server-security').createServerSecurity({ busy: () => uploadState.running || securityState.running || syncState.running || databaseActions.isRunning() || domainCheck.isRunning() });
+
+// 本地 → 宝塔同步（仅本地环境；路由层有 APP_ENVIRONMENT=local 守卫）
+const syncEngine = createSyncEngine({ readBaseFtpConfig: () => readConfig() });
+const syncState = {
+  running: false,
+  preset: "",
+  targetKey: "",
+  phase: "idle",
+  total: 0,
+  uploaded: 0,
+  skipped: 0,
+  backedUp: 0,
+  backupRoot: "",
+  current: "",
+  startedAt: "",
+  finishedAt: "",
+  error: "",
+  checklist: null,
+  logs: [],
+};
+const databaseActions = require('./database-actions').createDatabaseActions({
+  engine: syncEngine,
+  busy: () => syncState.running || uploadState.running || securityState.running || serverSecurity.isRunning() || domainCheck.isRunning(),
+});
+const domainCheck = require('./domain-check').createDomainCheck({
+  engine: syncEngine,
+  busy: () => syncState.running || uploadState.running || securityState.running || serverSecurity.isRunning() || databaseActions.isRunning(),
+});
+
+function pushSyncLog(message) {
+  const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+  syncState.logs.push(line);
+  if (syncState.logs.length > 300) syncState.logs.shift();
+}
 
 function readSecurityCheckpoint() {
   try {
@@ -219,18 +260,9 @@ function buildNavigation() {
   }
   const backendPort = Number(env.BACKEND_PORT || 5000);
   const frontendPort = Number(env.FRONTEND_PORT || 5178);
-  const seoPort = Number(seo.localPort || 5188);
-  return [
-    { id: "admin", label: "管理后台", url: `http://localhost:${frontendPort}/#/` },
-    { id: "backend", label: "后端接口", url: `http://localhost:${backendPort}/api-docs` },
-    { id: "sites", label: "站点管理", url: `http://localhost:${frontendPort}/#/sites` },
-    { id: "quotation", label: "报价单生成", url: `http://localhost:${frontendPort}/#/quotations` },
-    { id: "seo", label: "SEO 检查", url: `http://localhost:${seoPort}` },
-    { id: "models", label: "模型总览", url: `http://localhost:${seoPort}/models.html` },
-    { id: "models-config", label: "模型配置", url: `http://localhost:${seoPort}/models-config.html` },
-    { id: "ftp", label: "FTP 发布", url: `http://localhost:${PORT}/` },
-    { id: "ftp-security", label: "FTP 安全巡检", url: `http://localhost:${PORT}/security.html` },
-  ].map((item) => ({ ...item, url: siteRuntime.withSiteQuery(item.url) }));
+  const seoPort = Number(process.env.SEO_TOOL_PORT || env.SEO_TOOL_PORT || seo.localPort || 5188);
+  return buildPublicNavigation({ ...env, ...process.env },
+    { backendPort, frontendPort, seoPort, ftpPort: PORT }, "ftp", siteRuntime.withSiteQuery);
 }
 
 function normalizeConfigInput(body, current) {
@@ -238,6 +270,7 @@ function normalizeConfigInput(body, current) {
   const next = {
     ...current,
     host: typeof body.host === "string" ? body.host.trim() : current.host,
+    networkInterface: typeof body.networkInterface === 'string' ? body.networkInterface.trim() : current.networkInterface || '',
     port: Number(body.port || current.port || 21),
     user: typeof body.user === "string" ? body.user.trim() : current.user,
     secure: has("secure") ? Boolean(body.secure) : Boolean(current.secure),
@@ -295,7 +328,7 @@ function buildPlan() {
 }
 
 async function testFtpConnection(config) {
-  const client = new ftp.Client(15000);
+  const client = createFtpClient(config, 15000);
   try {
     await client.access({
       host: config.host,
@@ -303,6 +336,8 @@ async function testFtpConnection(config) {
       user: config.user,
       password: config.password,
       secure: Boolean(config.secure),
+      // 宝塔 pure-ftpd 自签证书：保留加密，不校验证书链
+      ...(config.secure ? { secureOptions: { rejectUnauthorized: false } } : {}),
     });
     const loginDir = await client.pwd().catch(() => "");
     const remoteRoot = normalizeRemoteRootForCd(config.remoteRoot);
@@ -323,18 +358,23 @@ async function testFtpConnection(config) {
   }
 }
 
-function startUpload(scopeOverride = "") {
+function startUpload(scopeOverride = "", selected = null) {
+  if (domainCheck.isRunning()) throw new Error('域名上线检测正在运行');
+  if (databaseActions.isRunning()) throw new Error("数据库维护正在执行");
+  if (databaseActions.isRunning()) throw new Error("数据库维护正在执行");
+  if (serverSecurity.isRunning()) throw new Error('宝塔服务器巡检正在运行，请先停止巡检。');
   if (uploadState.running) throw new Error("Upload is already running.");
   if (securityState.running) throw new Error("安全巡检正在运行，请等待扫描完成后再发布。");
+  if (syncState.running) throw new Error("宝塔同步正在运行，请等待同步完成。");
   const savedConfig = readConfig();
-  const config = {
+  const config = selected?.config || {
     ...savedConfig,
     uploadScope: scopeOverride === "seo" ? "seo" : savedConfig.uploadScope || "site",
   };
   if (!config.host || !config.user || !config.password) {
     throw new Error("Please fill FTP host, user and password first.");
   }
-  const files = collectFiles(config);
+  const files = selected?.files || collectFiles(config);
   if (!files.length) throw new Error("No files to upload.");
 
   uploadState.running = true;
@@ -349,6 +389,7 @@ function startUpload(scopeOverride = "") {
   uploadState.finishedAt = "";
   uploadState.error = "";
   uploadState.scope = config.uploadScope;
+  uploadState.siteId = Number(siteRuntime.currentSite()?.id || 0);
   uploadState.logs = [];
   pushLog(`Upload started. ${files.length} files, ${formatBytes(files.reduce((sum, file) => sum + file.size, 0))}.`);
   pushLog(`Remote root: ${config.remoteRoot || "/"}; relative upload mode enabled.`);
@@ -361,6 +402,7 @@ function startUpload(scopeOverride = "") {
   );
 
   uploadFiles(config, files, {
+    beforeFile: selected?.beforeFile,
     onConnect: (event) => {
       if (event?.reason === "retry") pushLog("FTP reconnected after server closed the connection.");
       else if (event?.reason === "scheduled") pushLog("FTP reconnected automatically to keep the session fresh.");
@@ -406,6 +448,123 @@ function startUpload(scopeOverride = "") {
     });
 }
 
+function publicSyncPlan(plan) {
+  const toUpload = (plan.toUpload || []).slice(0, 300).map((file) => ({
+    relativePath: file.relativePath,
+    action: file.action,
+    size: file.size,
+    sizeText: formatBytes(file.size),
+  }));
+  return {
+    preset: plan.preset,
+    targetKey: plan.targetKey,
+    target: plan.target,
+    ready: plan.ready,
+    site: plan.site || null,
+    localPath: plan.localPath || "",
+    remoteName: plan.remoteName || "",
+    counts: plan.counts,
+    toUploadCount: (plan.toUpload || []).length,
+    toUploadSize: plan.toUploadSize,
+    toUploadSizeText: plan.toUploadSizeText,
+    files: toUpload,
+    truncated: (plan.toUpload || []).length > 300,
+    removedSinceLastSync: (plan.removedSinceLastSync || []).slice(0, 100),
+    pathMappings: plan.pathMappings || [],
+    lastSyncAt: plan.lastSyncAt || "",
+    warnings: plan.warnings || [],
+    notes: plan.notes || [],
+  };
+}
+
+function startSync({ preset, siteCode, options = {} }) {
+  if (syncState.running) {
+    throw Object.assign(new Error("同步任务正在运行，请等待完成。"), { statusCode: 409 });
+  }
+  assertSyncNotBusy({
+    uploadRunning: uploadState.running,
+    securityRunning: securityState.running,
+    serverSecurityRunning: serverSecurity.isRunning(),
+  });
+  const plan = syncEngine.buildSyncPlan({ preset, siteCode, options });
+
+  const totalEstimate = plan.preset === "database" ? 2 : (plan.toUpload || []).length;
+  Object.assign(syncState, {
+    running: true,
+    preset,
+    targetKey: plan.targetKey,
+    phase: "uploading",
+    total: totalEstimate,
+    uploaded: 0,
+    skipped: 0,
+    backedUp: 0,
+    backupRoot: "",
+    current: "",
+    startedAt: new Date().toISOString(),
+    finishedAt: "",
+    error: "",
+    checklist: null,
+    logs: [],
+  });
+  pushSyncLog(`同步开始：${preset}（${plan.targetKey}），待上传 ${totalEstimate} 项，${plan.toUploadSizeText || ""}。`);
+  for (const warning of plan.warnings || []) pushSyncLog(`注意：${warning}`);
+
+  syncEngine.runSyncPlan(plan, options, {
+    onLog: (message) => pushSyncLog(message),
+    onPhase: (phase) => { syncState.phase = phase; syncState.current = ""; },
+    onBackup: (event) => {
+      syncState.backedUp = event.backedUp;
+      syncState.backupRoot = event.backupRoot;
+    },
+    onProgress: (event) => {
+      syncState.uploaded = event.uploaded;
+      syncState.skipped = event.skipped;
+      syncState.backedUp = event.backedUp;
+      syncState.total = Number(event.total || syncState.total || 0);
+      syncState.current = event.file?.relativePath || "";
+      pushSyncLog(`${event.action === "skipped" ? "跳过" : "上传"} ${syncState.current}`);
+    },
+  })
+    .then(({ result, checklist, phase }) => {
+      syncState.running = false;
+      syncState.phase = phase || "complete";
+      syncState.uploaded = result.uploaded;
+      syncState.skipped = result.skipped;
+      syncState.backedUp = result.backedUp;
+      syncState.backupRoot = result.backupRoot;
+      syncState.finishedAt = new Date().toISOString();
+      syncState.checklist = checklist;
+      pushSyncLog(`同步完成：上传 ${result.uploaded}，跳过 ${result.skipped}，覆盖前备份 ${result.backedUp}。`);
+      syncEngine.appendHistory({
+        preset,
+        targetKey: plan.targetKey,
+        startedAt: syncState.startedAt,
+        finishedAt: syncState.finishedAt,
+        uploaded: result.uploaded,
+        skipped: result.skipped,
+        backedUp: result.backedUp,
+        error: "",
+      });
+    })
+    .catch((error) => {
+      syncState.running = false;
+      syncState.phase = "error";
+      syncState.error = error.message || String(error);
+      syncState.finishedAt = new Date().toISOString();
+      pushSyncLog(`同步失败：${syncState.error}`);
+      syncEngine.appendHistory({
+        preset,
+        targetKey: plan.targetKey,
+        startedAt: syncState.startedAt,
+        finishedAt: syncState.finishedAt,
+        uploaded: syncState.uploaded,
+        skipped: syncState.skipped,
+        backedUp: syncState.backedUp,
+        error: syncState.error,
+      });
+    });
+}
+
 function securityStatus() {
   const config = readConfig();
   const baseline = readBaseline();
@@ -432,8 +591,12 @@ function securityStatus() {
 }
 
 function startSecurityScan({ mode = "scan", scanType = "incremental", allowFindings = false, reason = "manual", resume = false } = {}) {
+  if (domainCheck.isRunning()) throw new Error('域名上线检测正在运行');
+  if (databaseActions.isRunning()) throw new Error("数据库维护正在执行");
+  if (serverSecurity.isRunning()) throw new Error('宝塔服务器巡检正在运行，请先停止巡检。');
   if (securityState.running) throw new Error("安全巡检已经在运行。");
   if (uploadState.running) throw new Error("FTP 发布正在运行，请等待发布完成后再扫描。");
+  if (syncState.running) throw new Error("宝塔同步正在运行，请等待同步完成。");
   const config = readConfig();
   const baseline = readBaseline();
   const savedCheckpoint = resume ? readSecurityCheckpoint() : null;
@@ -610,7 +773,69 @@ function sendFile(res, filePath) {
 
 async function handleApi(req, res, pathname) {
   try {
+    if (req.method === 'POST' && domainCheck.isRunning()) throw new Error('域名上线检测正在运行，请等待完成');
+    if (req.method === 'POST' && databaseActions.isRunning()) throw new Error('数据库维护正在执行，请等待完成');
+    if (!siteRuntime.currentSite() && !(req.method === 'GET' && pathname === '/api/config')) {
+      sendJson(res, { message: "请先在管理后台添加网站。", setupRequired: true }, 400);
+      return;
+    }
+    if (pathname.startsWith('/api/files/')) {
+      const site = siteRuntime.currentSite();
+      const config = readConfig();
+      const url = new URL(req.url, 'http://localhost');
+      if (req.method === 'GET' && pathname === '/api/files/local') {
+        sendJson(res, listLocal(site, url.searchParams.get('path') || '', url.searchParams.get('includeEnvironment') === 'true')); return;
+      }
+      if (req.method === 'GET' && pathname === '/api/files/remote') {
+        sendJson(res, await listRemote(config, url.searchParams.get('path') || '')); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/files/plan') {
+        sendJson(res, fileBrowser.prepare(site, config, await readBody(req))); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/files/upload') {
+        if (uploadState.running || securityState.running || syncState.running || serverSecurity.isRunning()) throw new Error('其他发布或巡检任务正在运行，请稍后重试');
+        const selected = fileBrowser.consume(site, config, await readBody(req));
+        startUpload('', selected);
+        sendJson(res, { started: true, state: uploadState }); return;
+      }
+    }
+    if (req.method === 'GET' && pathname === '/api/ftp/network') {
+      sendJson(res, { interfaces: networkInterfaces() }); return;
+    }
+    if (pathname.startsWith('/api/server-security/')) {
+      const site = siteRuntime.currentSite();
+      if (req.method === 'POST' && ['/api/server-security/read', '/api/server-security/trust', '/api/server-security/untrust',
+        '/api/server-security/quarantine', '/api/server-security/restore'].includes(pathname)) {
+        const body = await readBody(req);
+        const actor = require('node:crypto').createHash('sha256').update(req.headers.cookie || req.headers.authorization || '').digest('hex');
+        res.setHeader('Cache-Control', 'no-store');
+        const kind = pathname.split('/').pop();
+        sendJson(res, kind === 'read' ? serverSecurity.inspect(site, body, actor) : serverSecurity.fileAction(site, kind, body, actor)); return;
+      }
+      if (req.method === 'GET' && pathname === '/api/server-security/status') {
+        sendJson(res, { ...serverSecurity.status(site), navigation: buildNavigation() }); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/server-security/scan') {
+        serverSecurity.start(site); sendJson(res, { ok: true }, 202); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/server-security/stop') {
+        serverSecurity.stop(site); sendJson(res, { ok: true }); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/server-security/settings') {
+        const settings = serverSecurity.configure(site, await readBody(req)); sendJson(res, { ok: true, settings }); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/server-security/baseline') {
+        const body = await readBody(req);
+        if (body.confirm !== true) throw new Error('请确认当前扫描结果可信后再采用基线。');
+        serverSecurity.adopt(site, body.reportId); sendJson(res, { ok: true }); return;
+      }
+    }
     if (req.method === "GET" && pathname === "/api/config") {
+      if (!siteRuntime.currentSite()) {
+        sendJson(res, { config: {}, navigation: buildNavigation(), site: null, setupRequired: true,
+          message: "请先在管理后台添加网站。" });
+        return;
+      }
       sendJson(res, {
         config: publicConfig(readConfig()),
         navigation: buildNavigation(),
@@ -625,6 +850,34 @@ async function handleApi(req, res, pathname) {
       writeConfig(next);
       scheduleSecurityMonitor();
       sendJson(res, { config: publicConfig(next) });
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/publish/use-sync-target") {
+      // 本地网站同步：把宝塔同步配置里当前站点的 FTP 目标一键写入本页配置
+      if (deploymentEnvironment({ ...parseEnvFile(BACKEND_ENV_PATH), ...process.env }).environment !== "local") {
+        sendJson(res, { message: "仅本地环境可用。" }, 403);
+        return;
+      }
+      const site = siteRuntime.currentSite();
+      if (!site) throw new Error("请先在管理后台添加网站。");
+      const syncConfig = syncEngine.readSyncConfig();
+      const target = syncConfig.sites[site.code];
+      if (!target || !target.host) {
+        throw new Error(`站点 ${site.code} 还没有宝塔同步目标，请先在「宝塔同步」页填写并保存。`);
+      }
+      const next = {
+        ...readConfig(),
+        host: target.host,
+        port: Number(target.port || 21),
+        user: target.user,
+        password: target.password,
+        secure: target.secure !== false,
+        remoteRoot: target.remoteRoot || "/",
+        networkInterface: target.networkInterface || '',
+      };
+      writeConfig(next);
+      scheduleSecurityMonitor();
+      sendJson(res, { ok: true, config: publicConfig(next), site: { code: site.code, name: site.name } });
       return;
     }
     if (req.method === "GET" && pathname === "/api/plan") {
@@ -736,13 +989,117 @@ async function handleApi(req, res, pathname) {
       sendJson(res, { ok: true, ...result });
       return;
     }
+    if (pathname.startsWith('/api/domain-check/')) {
+      if (deploymentEnvironment({ ...parseEnvFile(BACKEND_ENV_PATH), ...process.env }).environment !== 'local') {
+        sendJson(res, { message: '请从本地项目发起域名上线检测' }, 403); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/domain-check/start') {
+        sendJson(res, domainCheck.start(await readBody(req)), 202); return;
+      }
+      if (req.method === 'GET' && pathname === '/api/domain-check/status') {
+        sendJson(res, domainCheck.status()); return;
+      }
+    }
+    if (pathname.startsWith('/api/databases/')) {
+      if (deploymentEnvironment({ ...parseEnvFile(BACKEND_ENV_PATH), ...process.env }).environment !== 'local') {
+        sendJson(res, { message: '数据库同步仅在本地项目开放' }, 403); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/databases/inspect') {
+        sendJson(res, await databaseActions.inspect(await readBody(req))); return;
+      }
+      if (req.method === 'POST' && pathname === '/api/databases/run') {
+        sendJson(res, databaseActions.start(await readBody(req)), 202); return;
+      }
+      if (req.method === 'GET' && pathname === '/api/databases/status') {
+        sendJson(res, databaseActions.status()); return;
+      }
+    }
+    if (pathname.startsWith("/api/sync/")) {
+      if (deploymentEnvironment({ ...parseEnvFile(BACKEND_ENV_PATH), ...process.env }).environment !== "local") {
+        sendJson(res, { message: "同步功能仅在本地环境可用（backend/.env 需要 APP_ENVIRONMENT=local）。" }, 403);
+        return;
+      }
+      if (req.method === "GET" && pathname === "/api/sync/config") {
+        sendJson(res, {
+          config: syncEngine.publicSyncConfig(syncEngine.readSyncConfig()),
+          sections: syncEngine.MANAGED_SITE_SECTIONS,
+          sites: siteRuntime.readManagedSites().map((site) => ({
+            code: site.code,
+            name: site.name,
+            rootPath: site.rootPath,
+            isDefault: Boolean(site.isDefault),
+          })),
+          currentSite: siteRuntime.publicSiteContext(),
+          navigation: buildNavigation(),
+        });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/sync/config") {
+        const body = await readBody(req);
+        const current = syncEngine.readSyncConfig();
+        const next = { project: current.project, sites: { ...current.sites } };
+        if (body.project) next.project = syncEngine.normalizeTargetInput(body.project, current.project);
+        for (const [code, targetInput] of Object.entries(body.sites || {})) {
+          if (!next.sites[code]) continue;
+          next.sites[code] = syncEngine.normalizeTargetInput(targetInput, next.sites[code]);
+        }
+        syncEngine.writeSyncConfig(next);
+        sendJson(res, { ok: true, config: syncEngine.publicSyncConfig(next) });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/sync/test") {
+        const body = await readBody(req);
+        const config = syncEngine.readSyncConfig();
+        const target = body.targetType === "site" ? config.sites[body.siteCode] : config.project;
+        if (!target) throw new Error("同步目标不存在，请先保存目标配置。");
+        const result = await testFtpConnection(target);
+        const names = (result.items || []).map((item) => String(item.name || "").toLowerCase());
+        if (body.targetType === "site") {
+          result.looksLikePbootRoot = names.includes("data") && (names.includes("static") || names.includes("template") || names.includes("apps"));
+        } else {
+          result.looksLikeProjectRoot = names.includes("package.json") || (names.includes("backend") && names.includes("frontend"));
+        }
+        sendJson(res, result);
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/sync/plan") {
+        const body = await readBody(req);
+        const plan = syncEngine.buildSyncPlan({ preset: body.preset, siteCode: body.siteCode, options: body.options || {} });
+        sendJson(res, { plan: publicSyncPlan(plan) });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/sync/run") {
+        const body = await readBody(req);
+        if (body.confirm !== true) {
+          sendJson(res, { message: "需要确认后才能开始同步。" }, 400);
+          return;
+        }
+        startSync({ preset: body.preset, siteCode: body.siteCode, options: body.options || {} });
+        sendJson(res, { started: true, state: syncState }, 202);
+        return;
+      }
+      if (req.method === "GET" && pathname === "/api/sync/status") {
+        sendJson(res, syncState);
+        return;
+      }
+      if (req.method === "GET" && pathname === "/api/sync/history") {
+        sendJson(res, { history: syncEngine.readHistory() });
+        return;
+      }
+    }
     sendJson(res, { message: "API not found" }, 404);
   } catch (error) {
-    sendJson(res, { message: error.message || String(error) }, 500);
+    sendJson(res, { message: error.message || String(error) }, error.statusCode || 500);
   }
 }
 
-const server = http.createServer((req, res) => {
+const authenticateTool = require('../tool-auth').createToolAuth({ tool: 'ftp', env: { ...parseEnvFile(BACKEND_ENV_PATH), ...process.env } });
+const server = http.createServer(async (req, res) => {
+  if (req.method === 'GET' && new URL(req.url, 'http://localhost').pathname === '/deployment-environment') {
+    sendJson(res, deploymentEnvironment({ ...parseEnvFile(BACKEND_ENV_PATH), ...process.env }));
+    return;
+  }
+  if (await authenticateTool(req, res)) return;
   siteRuntime.runForRequest(req, res, () => {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     if (url.pathname.startsWith("/api/")) {
@@ -751,6 +1108,12 @@ const server = http.createServer((req, res) => {
     }
     if (url.pathname === "/site-context.js") {
       sendFile(res, path.join(PACKAGE_ROOT, "tools", "site-context-client.js"));
+      return;
+    }
+    // 宝塔线上环境：本地网站同步页不可用，默认跳到安全巡检
+    if (url.pathname === "/" && deploymentEnvironment({ ...parseEnvFile(BACKEND_ENV_PATH), ...process.env }).environment === "baota") {
+      res.writeHead(302, { Location: "/security.html" });
+      res.end();
       return;
     }
     const filePath = url.pathname === "/" ? path.join(PUBLIC_ROOT, "index.html") : path.join(PUBLIC_ROOT, url.pathname.replace(/^\/+/, ""));
@@ -765,6 +1128,10 @@ const server = http.createServer((req, res) => {
 });
 
 function startServer() {
+  const serverMonitorTimer = setInterval(() => serverSecurity.tick(), 60000);
+  serverMonitorTimer.unref();
+  server.once('close', () => clearInterval(serverMonitorTimer));
+  serverSecurity.tick();
   return server.listen(PORT, "127.0.0.1", () => {
   const sites = siteRuntime.readManagedSites();
   if (sites.length) {

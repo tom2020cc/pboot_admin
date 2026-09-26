@@ -2,6 +2,11 @@ import request from "@/utils/request";
 
 export type SiteEnvironment = "phpstudy" | "baota" | "remote";
 
+export interface SiteRuntimeDefaults {
+  environment: SiteEnvironment;
+  parentPath: string;
+}
+
 export interface ManagedSite {
   id: number;
   name: string;
@@ -84,6 +89,7 @@ export interface SiteBusinessProfile {
 }
 
 export const getSites = () => request.get<ManagedSite[]>("/sites");
+export const getSiteRuntimeDefaults = () => request.get<SiteRuntimeDefaults>("/sites/runtime-defaults");
 export const getCurrentSite = () => request.get<ManagedSite>("/sites/current");
 export const getCurrentSiteLanguages = () => request.get<SiteLanguage[]>("/sites/current/languages");
 export const getCurrentSiteProfile = () => request.get<SiteBusinessProfile>("/sites/current/profile");

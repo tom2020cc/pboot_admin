@@ -117,7 +117,7 @@ node tools/seo-content-worker/index.cjs
 node tools/seo-content-worker/index.cjs --check
 ```
 
-Windows 可运行 `08-start-seo-content.cmd`：检查主后端认证后后台启动 worker，日志位于 `logs/seo-content-worker.out.log` 和 `logs/seo-content-worker.err.log`；检测到通过该入口运行的进程则不重复启动。不要同时用不同入口手工启动多个 worker。只检查、不启动可执行 `powershell -NoProfile -File tools/start-seo-content.ps1 -CheckOnly`。启动进程不等于启用任务，网站总开关与全局开关仍需单独开启。
+Windows 可运行 `seo-content.cmd`：检查主后端认证后后台启动 worker，日志位于 `logs/seo-content-worker.out.log` 和 `logs/seo-content-worker.err.log`；检测到通过该入口运行的进程则不重复启动。不要同时用不同入口手工启动多个 worker。只检查、不启动可执行 `powershell -NoProfile -File tools/start-seo-content.ps1 -CheckOnly`。启动进程不等于启用任务，网站总开关与全局开关仍需单独开启。
 
 默认连接 `http://127.0.0.1:5108`，随 `BACKEND_PORT` 调整。不同机器部署时显式设置 `SEO_WORKER_API_URL`，必须 HTTPS。主服务与 worker 使用相同的 `SEO_WORKER_TOKEN`，至少 32 字符。写作模型密钥复用后端环境变量或 `tools/seo_publish_tool/ai.config.json`，不通过任务接口传递。
 

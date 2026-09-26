@@ -44,6 +44,8 @@ export class ProductTranslationDto {
 }
 
 export class CreateProductDto {
+  @IsBoolean() @IsOptional() isTop?: boolean;
+  @IsBoolean() @IsOptional() isRecommend?: boolean;
   @ApiProperty({ description: 'Shared technical parameters and internal reference price', required: false, nullable: true })
   @IsObject()
   @IsOptional()

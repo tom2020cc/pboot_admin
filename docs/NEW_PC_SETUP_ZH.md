@@ -18,11 +18,11 @@ E:\phpstudy_pro\WWW\
 
 1. 安装 Node.js LTS。
 2. 把项目放到 `E:\phpstudy_pro\WWW\pboot_admin_center`。
-3. 双击 `00-install.cmd`。
-4. 双击 `07-start-all.cmd`。
+3. 双击 `install.cmd`。
+4. 双击 `start.cmd`。
 5. 保持可见的 `Pboot Admin Backend API` 终端打开。
 6. 打开 `http://localhost:5278`。
-7. 没有管理员账号时使用登录页注册，或运行 `03-create-admin.cmd`。
+7. 没有管理员账号时使用登录页注册，或运行 `create-admin.cmd`。
 
 首次启动会自动从 `backend/.env.example` 创建 `backend/.env`，不再运行独立配置向导。
 
@@ -60,7 +60,7 @@ E:\phpstudy_pro\WWW\
 
 ## 五、日常使用
 
-以后只需双击 `07-start-all.cmd`。需要直接管理网站时也可运行 `01-sites.cmd`。
+以后只需双击 `start.cmd` 启动全部服务；停止用 `stop.cmd`。
 
 切换站点前先看页面顶部的当前站点名称。菜单、新闻、产品、单页、视频、图片和报价单操作都应跟随当前站点。
 

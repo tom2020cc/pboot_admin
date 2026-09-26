@@ -1,7 +1,7 @@
 <template>
   <div class="login-page">
     <el-form ref="formRef" :model="form" :rules="rules" label-position="top" size="large" class="login-form">
-      <h2>{{ isRegister ? "注册账号" : "后台登录" }}</h2>
+      <h2>{{ isRegister ? "注册账号" : environment === 'local' ? '本地后台登录' : environment === 'baota' ? '宝塔后台登录' : '后台登录' }}</h2>
       <p class="login-sub">PbootCMS 内部管理后台</p>
       <el-form-item label="邮箱" prop="email">
         <el-input v-model="form.email" autocomplete="username" />
@@ -29,6 +29,7 @@ import { login, signup, type LoginInfo } from "@/api/users";
 import { useMyTokenStore } from "@/stores/myToken";
 import { useRoute, useRouter } from "vue-router";
 import { getErrorMessage } from "@/utils/request";
+import { useDeploymentEnvironment } from '@/composables/useDeploymentEnvironment';
 
 const router = useRouter();
 const route = useRoute();
@@ -38,6 +39,7 @@ const formRef = ref<FormInstance>();
 const isLoading = ref(false);
 const isRegister = ref(false);
 const myTokenStore = useMyTokenStore();
+const { environment } = useDeploymentEnvironment();
 
 const rules: FormRules<LoginInfo> = {
   email: [

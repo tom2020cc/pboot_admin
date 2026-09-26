@@ -5,8 +5,8 @@
 ## 第一次启动
 
 1. 安装 Node.js LTS。
-2. 双击 `00-install.cmd` 安装依赖。
-3. 双击 `07-start-all.cmd`。
+2. 双击 `install.cmd` 安装依赖。
+3. 双击 `start.cmd`。
 4. 保持 `Pboot Admin Backend API` 后端终端打开。
 5. 浏览器进入管理后台，打开“系统管理 → 站点管理”。
 6. 使用“扫描网站”批量识别 `E:\phpstudy_pro\WWW` 下的 PbootCMS 网站，或手工新增站点。
@@ -38,18 +38,14 @@ managed-sites/
 
 ## 日常入口
 
-- `01-sites.cmd`：启动管理服务并直接打开站点管理。
-- `02-start.cmd`：只启动管理后台和后端。
-- `04-stop-ports.cmd`：停止本项目管理服务。
-- `05-start-seo-tool.cmd`：启动 SEO 工具。
-- `06-start-ftp-tool.cmd`：启动 FTP 工具。
-- `07-start-all.cmd`：日常启动后端、前端、SEO 和 FTP。
+- `stop.cmd`：停止本项目管理服务。
+- `start.cmd`：日常启动后端、前端、SEO 和 FTP。
 
 ## 文档
 
 - [2026-09-09 开发基线与备份说明](docs/PROJECT_BASELINE_20260909_ZH.md)
 - [SEO 内容计划与实施范围](docs/SEO_CONTENT_PLAN_ZH.md)
-- SEO 内容任务进程：主后端启动后运行 `08-start-seo-content.cmd`，不会自动开启网站计划。支持 DeepSeek 联网文字研究、独立写作模型、版本化 SEO Skill、本站资料及产品选择、旧文审核更新与历史对照。DeepSeek 使用服务端 `DEEPSEEK_API_KEY` 或已有模型配置；Brave 为可选项，RSS 无需搜索密钥。不采集图片、不生成图片或 ALT。
+- SEO 内容任务进程：主后端启动后运行 `seo-content.cmd`，不会自动开启网站计划。支持 DeepSeek 联网文字研究、独立写作模型、版本化 SEO Skill、本站资料及产品选择、旧文审核更新与历史对照。DeepSeek 使用服务端 `DEEPSEEK_API_KEY` 或已有模型配置；Brave 为可选项，RSS 无需搜索密钥。不采集图片、不生成图片或 ALT。
 - [新电脑集中版安装教程](docs/NEW_PC_SETUP_ZH.md)
 - [宝塔集中部署图文教程](docs/BAOTA_MULTI_SITE_DEPLOY_ZH.md)
 - [多站点配置目录说明](managed-sites/README.md)

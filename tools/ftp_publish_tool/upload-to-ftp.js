@@ -1,4 +1,6 @@
 const ftp = require("basic-ftp");
+const { completeTemplateBundle, verifyTemplateDependency } = require("./template-dependencies");
+const { createFtpClient } = require('./ftp-client');
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
@@ -242,13 +244,14 @@ function collectFiles(config) {
   }
 
   const seen = new Set();
-  const deduped = files.filter((file) => {
+  const selected = files.filter((file) => {
     const key = file.relativePath.toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 
+  const deduped = completeTemplateBundle(localRoot, selected, relative => isExcluded(relative, config.exclude || [])).files;
   if (config.uploadScope === "seo" || config.uploadScope === "full" || config.uploadMode !== "quick") return deduped;
 
   const days = Math.max(1, Number(config.recentImageDays || 14));
@@ -330,7 +333,7 @@ async function uploadFiles(config, files, hooks = {}) {
 
   async function connect(reason) {
     await closeClient();
-    client = hooks.clientFactory ? hooks.clientFactory() : new ftp.Client(Number(config.timeoutMs || 45000));
+    client = hooks.clientFactory ? hooks.clientFactory() : createFtpClient(config, Number(config.timeoutMs || 45000));
     if (client.ftp) client.ftp.verbose = Boolean(config.verbose);
     await client.access({
       host: config.host,
@@ -338,6 +341,8 @@ async function uploadFiles(config, files, hooks = {}) {
       user: config.user,
       password: config.password,
       secure: Boolean(config.secure),
+      // 宝塔 pure-ftpd 使用自签证书：保留加密通道，不校验证书链（FTP 密码本身是认证边界）
+      ...(config.secure ? { secureOptions: { rejectUnauthorized: false } } : {}),
     });
     baseDir = await client.pwd().catch(() => "");
     hooks.onConnect?.({ reason, baseDir });
@@ -384,6 +389,7 @@ async function uploadFiles(config, files, hooks = {}) {
             hooks.onReconnect?.({ index: index + 1, total: files.length, file, operations });
             await connectWithRetry("scheduled", { index: index + 1, total: files.length, file });
           }
+          await hooks.beforeFile?.(file, client, baseDir);
           const remotePath = joinRemote(config.remoteRoot, file.relativePath);
           let remoteSize = null;
           if (config.skipSameSizeAssets && isBinaryAssetFile(file.relativePath)) {
@@ -428,6 +434,7 @@ async function uploadFiles(config, files, hooks = {}) {
           const remoteName = slashIndex >= 0 ? remotePath.slice(slashIndex + 1) : remotePath;
           await ensureRelativeDir(client, remoteDir, baseDir);
           await client.uploadFrom(file.localPath, remoteName);
+          await verifyTemplateDependency(client, file, remoteName);
           uploaded += 1;
           operations += 1;
           hooks.onProgress?.({ index: index + 1, total: files.length, action: "uploaded", file, uploaded, skipped, backedUp });
@@ -513,5 +520,12 @@ if (require.main === module) {
     formatBytes,
     joinRemote,
     uploadFiles,
+    // 以下内部工具同步给 sync-engine 复用（宝塔同步功能），行为不变
+    toPosix,
+    ensureRelativeDir,
+    isRetryableFtpError,
+    isBinaryAssetFile,
+    safeBackupPath,
+    sleep,
   };
 }

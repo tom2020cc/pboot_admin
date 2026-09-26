@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="/site-context.js"></script>
+    <title>管理项目代码与配置 · 网站发布</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand"><div class="mark">SYNC</div><span>管理项目发布</span></div>
+      <div class="header-status" id="status">正在读取配置</div>
+    </header>
+    <nav class="tool-nav" id="toolNav" aria-label="项目工具导航"></nav>
+
+    <main>
+      <nav class="page-switch" aria-label="FTP 功能">
+        <a class="active" href="/sync.html">① 管理项目代码与配置</a>
+        <a href="/">② 当前网站文件同步</a>
+        <a href="/databases.html">数据库改名与同步</a>
+        <a href="/domain-check.html">域名上线检测</a>
+        <a href="/security.html">安全巡检</a>
+        <a href="/server-security.html">宝塔服务器巡检</a>
+      </nav>
+
+      <section class="card" id="envGuard" style="display:none">
+        <div class="section-heading"><div><h1>仅本地环境可用</h1></div></div>
+        <p class="subtitle" id="envGuardText">同步功能只在本地环境（backend/.env 设置 APP_ENVIRONMENT=local）开放；宝塔线上环境不提供此功能。</p>
+      </section>
+
+      <details class="card"><summary>连接设置（配置一次，后续直接同步）</summary>
+        <div class="section-heading">
+          <div><h1>管理项目发布到宝塔</h1><p class="subtitle">源码和配置分别预览、分别发布。FTP 账号根目录必须对应管理项目；当前网站文件使用另一个入口。宝塔面板账号与 FTP 账号是两套不同账号。</p></div>
+        </div>
+        <div class="form-grid">
+          <label class="field">目标<select id="targetSelect"></select></label>
+          <label class="field">FTP 地址<input id="host" placeholder="服务器 IP 或域名" autocomplete="off" /></label>
+          <label class="field">端口<input id="port" type="number" min="1" max="65535" value="21" /></label>
+          <label class="field">用户名<input id="user" autocomplete="off" /></label>
+          <label class="field">密码<input id="password" type="password" placeholder="留空则保留原密码" autocomplete="new-password" /></label>
+          <label class="field">远程根目录<input id="remoteRoot" placeholder="/ （FTP 登录目录即站点根时填 /）" /></label>
+          <label class="field">连接方式<select id="secure"><option value="true">FTPS 加密（推荐）</option><option value="false">普通 FTP</option></select></label>
+          <label class="field">连接网卡<select id="networkInterface"><option value="">系统默认</option></select></label>
+          <label class="field">服务器绝对路径<input id="serverRoot" placeholder="/www/wwwroot/…（用于配置路径改写，非 FTP 路径）" /></label>
+        </div>
+        <div class="checks">
+          <label class="check"><input id="targetEnabled" type="checkbox" checked />启用该目标</label>
+        </div>
+        <div id="btPanelSection" style="display:none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+          <h3 style="margin-bottom: 0.5rem; font-size: 0.95rem; font-weight: 600;">自动上线（代码上传后构建、重启）</h3>
+          <p class="subtitle" style="margin-bottom: 1rem;">配置宝塔面板登录信息后，代码同步完成时将自动执行 pnpm install、build 和 pm2 restart，无需手动 SSH 操作。</p>
+          <div class="form-grid">
+            <label class="field">宝塔面板地址<input id="btPanelUrl" placeholder="https://43.160.236.132:8888/abcd1234" autocomplete="off" /></label>
+            <label class="field">宝塔用户名<input id="btPanelUser" placeholder="通常是 username 或邮箱" autocomplete="off" /></label>
+            <label class="field">宝塔密码<input id="btPanelPassword" type="password" placeholder="留空则保留原密码" autocomplete="new-password" /></label>
+          </div>
+          <div class="checks">
+            <label class="check"><input id="btPanelAutoBuild" type="checkbox" />启用自动构建（代码同步后自动 install + build + restart）</label>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button class="primary" id="targetSaveBtn">保存目标</button>
+          <button id="targetTestBtn">测试连接</button>
+          <span class="status-badge" id="targetBadge">尚未测试</span>
+          <span class="hint" id="targetHint"></span>
+        </div>
+      </details>
+
+      <section class="card" id="cardProject">
+        <div class="section-heading">
+          <div><h2>① 代码同步</h2><p class="subtitle">更新管理后台功能。上传 → 构建 → 重启 → 检查，通过后才显示“已上线”。保留线上数据库和运行配置。</p></div>
+          <span class="status-badge" id="projectLastSync">未同步</span>
+        </div>
+        <details><summary>高级选项</summary><div class="checks">
+          <label class="check"><input id="projectForceFull" type="checkbox" />全量重传（忽略清单）</label>
+          <label class="check"><input id="projectBackup" type="checkbox" />覆盖前备份远端文件</label>
+        </div></details>
+        <div class="toolbar">
+          <button id="projectPlanBtn">刷新计划</button>
+          <button class="primary" id="projectRunBtn">同步代码并上线</button>
+        </div>
+        <section class="metrics sync-metrics" aria-label="代码同步统计">
+          <div class="metric"><span>新增</span><strong id="projectFresh">-</strong></div>
+          <div class="metric medium"><span>修改</span><strong id="projectChanged">-</strong></div>
+          <div class="metric"><span>未变化</span><strong id="projectUnchanged">-</strong></div>
+          <div class="metric medium"><span>本地已删</span><strong id="projectRemoved">-</strong></div>
+          <div class="metric safe"><span>待上传</span><strong id="projectSize">-</strong></div>
+        </section>
+        <div class="table-wrap"><table><thead><tr><th>路径</th><th>动作</th><th>大小</th></tr></thead><tbody id="projectFiles"></tbody></table></div>
+        <p class="subtitle" id="projectNote"></p>
+        <div class="checklist" id="projectChecklist" style="display:none"></div>
+      </section>
+
+      <section class="card" id="cardProjectConfig">
+        <div class="section-heading"><div><h2>② 项目配置同步</h2><p class="subtitle">按需勾选管理后台的公共配置。不会上传 .env、数据库、站点域名或系统授权码。</p></div><span id="projectConfigLastSync" class="status-badge">未同步</span></div>
+        <div class="checks">
+          <label class="check"><input id="backendUploads" type="checkbox" />管理后台上传图片</label>
+          <label class="check"><input id="aiKeys" type="checkbox" />公共模型密钥（覆盖线上同名配置）</label>
+          <label class="check"><input id="searchAccounts" type="checkbox" />Google / Bing / Yandex 共享账号（含密钥，覆盖线上同名配置）</label>
+        </div>
+        <p class="subtitle">Google / Bing / Yandex 提示“未配置账号”时，勾选共享账号并同步即可；站点自己的域名、验证配置仍通过下方“站点配置同步”处理。</p>
+        <div class="toolbar"><button id="projectConfigPlanBtn">查看待上传</button><button class="primary" id="projectConfigRunBtn">同步项目配置</button></div>
+        <div id="projectConfigWarnings"></div>
+        <p id="projectConfigNote" class="subtitle"></p>
+        <div class="table-wrap"><table><thead><tr><th>文件</th><th>操作</th><th>大小</th></tr></thead><tbody id="projectConfigFiles"></tbody></table></div>
+        <div id="projectConfigChecklist" class="checklist" style="display:none"></div>
+      </section>
+
+      <section class="card" id="cardManaged">
+        <div class="section-heading">
+          <div><h2>③ 站点配置同步</h2><p class="subtitle">选择站点和需要更新的配置，只同步所选内容。站点路径自动转换为线上路径；授权码使用专门的同步入口。</p></div>
+          <span class="status-badge" id="managedLastSync">未同步</span>
+        </div>
+        <div class="checks" id="siteChecks"></div>
+        <div class="checks" id="sectionChecks"></div>
+        <div class="checks">
+          <label class="check"><input id="managedBackup" type="checkbox" />覆盖前备份远端文件</label>
+        </div>
+        <div id="managedWarnings"></div>
+        <div class="toolbar">
+          <button id="managedPlanBtn">刷新计划</button>
+          <button class="primary" id="managedRunBtn">同步站点配置</button>
+        </div>
+        <section class="metrics sync-metrics" aria-label="配置同步统计">
+          <div class="metric"><span>新增</span><strong id="managedFresh">-</strong></div>
+          <div class="metric medium"><span>修改</span><strong id="managedChanged">-</strong></div>
+          <div class="metric"><span>未变化</span><strong id="managedUnchanged">-</strong></div>
+          <div class="metric medium"><span>本地已删</span><strong id="managedRemoved">-</strong></div>
+          <div class="metric safe"><span>待上传</span><strong id="managedSize">-</strong></div>
+        </section>
+        <div class="table-wrap"><table><thead><tr><th>路径</th><th>动作</th><th>大小</th></tr></thead><tbody id="managedFiles"></tbody></table></div>
+        <div class="table-wrap" id="mappingWrap" style="display:none"><table><thead><tr><th>本地路径</th><th>改写为服务器路径</th></tr></thead><tbody id="mappingRows"></tbody></table></div>
+        <p class="subtitle" id="managedNote"></p>
+        <div class="checklist" id="managedChecklist" style="display:none"></div>
+      </section>
+
+      <section class="card" id="cardSiteData" style="display:none">
+        <!-- PB 网站数据同步已迁至「本地网站同步」页（互不干扰：此页仅项目级同步） -->
+      </section>
+
+      <section class="result-banner" id="resultBanner"><h2 id="resultTitle">同步状态</h2><p id="resultMessage">等待操作。</p></section>
+
+      <section class="card">
+        <div class="section-heading"><div><h2>同步日志</h2><p class="subtitle" id="backupPath">尚无覆盖备份。</p></div></div>
+        <div class="log" id="logs">等待操作。</div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading"><div><h2>同步历史</h2><p class="subtitle">最近 30 次同步记录。</p></div></div>
+        <div class="history-list" id="historyList"><div class="empty">暂无记录</div></div>
+      </section>
+    </main>
+
+    <script src="/common.js"></script>
+    <script src="/sync.js"></script>
+  </body>
+</html>

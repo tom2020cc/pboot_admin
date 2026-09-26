@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/site-context.js"></script><title>同步区域配置 · 网站发布</title><link rel="stylesheet" href="/styles.css">
+<style>
+  .area-sync-main { max-width:1100px; margin:auto; }
+  .area-sync-main h1 { font-size:24px; margin:0 0 12px; }
+  .area-sync-main .card { margin-bottom:18px; }
+  .area-table-wrap { overflow-x:auto; margin:18px 0; }
+  .area-table { width:100%; border-collapse:collapse; text-align:left; }
+  .area-table th,.area-table td { padding:12px; border-bottom:1px solid #e5eaf2; vertical-align:top; }
+  .area-table th { background:#f5f7fb; }
+  .area-table td { overflow-wrap:anywhere; }
+  .area-table small { display:block; color:#748198; margin-top:4px; }
+  .area-target { overflow-wrap:anywhere; }
+  .area-default { color:#1677ff; font-weight:600; }
+  .area-sync-main .result-banner.info { display:block; border-color:#acd0ff; background:#eef5ff; }
+</style></head>
+<body>
+  <header class="app-header"><div class="brand">区域配置同步</div><div id="status" class="header-status">正在读取</div></header>
+  <nav id="toolNav" class="tool-nav"></nav>
+  <main class="area-sync-main">
+    <section class="card">
+      <h1>同步区域配置到线上</h1>
+      <p class="subtitle">把当前网站的语言名称、绑定域名和默认语言同步到线上，并联动更新站点信息的主域名。产品、文章、账号、授权和模板保持原样。</p>
+      <p id="areaSite" class="area-default"></p>
+      <div class="toolbar"><button id="areaPreview" disabled>读取并预览</button><button id="areaRun" class="primary" disabled>确认同步到线上</button></div>
+      <p class="subtitle">确认同步后会按预览更新线上配置，管理后台短暂重启，完成后自动恢复。</p>
+      <div id="areaPlan" hidden>
+        <p id="areaTarget" class="area-target subtitle"></p>
+        <div class="area-table-wrap"><table class="area-table"><thead><tr><th>语言</th><th>线上当前配置</th><th>同步后配置</th></tr></thead><tbody id="areaRows"></tbody></table></div>
+        <p id="areaExtra" class="subtitle"></p>
+      </div>
+      <p class="subtitle">空域名也会覆盖。新增区域只建立语言配置，内容仍需单独发布。DNS 解析、宝塔域名绑定和证书请在“域名上线检测”中检查。</p>
+    </section>
+    <section id="areaResult" class="result-banner info"><h2 id="areaResultTitle">先读取配置，再确认同步</h2><p id="areaResultMessage">请核对目标网站，避免同步到其他项目。</p></section>
+    <details class="card"><summary>操作日志</summary><pre id="areaLogs" class="log">等待操作。</pre></details>
+  </main>
+  <script src="/common.js"></script><script src="/area-sync.js"></script>
+</body></html>

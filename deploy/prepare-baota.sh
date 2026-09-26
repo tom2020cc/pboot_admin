@@ -17,7 +17,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const root = process.env.PBOOT_INSTALL_ROOT;
 const env = [
-  'NODE_ENV=production', 'DB_TYPE=sqljs', `DB_SQLJS_LOCATION=${root}/data/pboot-admin.sqlite`,
+  'NODE_ENV=production', 'APP_ENVIRONMENT=baota', 'DB_TYPE=sqljs', `DB_SQLJS_LOCATION=${root}/data/pboot-admin.sqlite`,
   'BACKEND_PORT=5108', 'BACKEND_HOST=127.0.0.1', 'REQUEST_BODY_LIMIT=20mb',
   `JWT_SECRET=${crypto.randomBytes(48).toString('hex')}`, 'CORS_ORIGINS=', 'ENABLE_SWAGGER=false',
   `MANAGED_SITES_DIR=${root}/managed-sites`, `BACKEND_DB_BACKUP_DIR=${root}/backups/backend_database`,

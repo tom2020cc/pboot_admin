@@ -1,85 +1,51 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 管理后台后端（NestJS）
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+PbootCMS 集中多站点管理系统的 API 服务。项目总览与启动脚本见[根目录 README](../README.md)。
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 技术栈
 
-## Description
+- NestJS 10 + TypeORM 0.3
+- 默认 SQL.js 本地 SQLite（`DB_TYPE=sqljs`，无需外部数据库），可选 PostgreSQL（`DB_TYPE=postgres`）
+- JWT 登录态（全局守卫，`@Public()` 放行公开接口）+ bcryptjs
+- sharp 生成缩略图；Playwright Chromium 生成报价单 / 产品手册 PDF
+- Swagger 接口文档：`/api-docs`（需 `ENABLE_SWAGGER=true`）
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 环境要求
 
-## Project setup
+- Node.js ≥ 22.12，pnpm 9
+
+## 快速开始
 
 ```bash
-$ pnpm install
+pnpm install
+pnpm start:dev     # 默认端口 5108（.env 的 BACKEND_PORT）
 ```
 
-## Compile and run the project
+首次启动会自动从 `.env.example` 生成 `.env`；各环境变量含义见模板内注释。
 
-```bash
-# development
-$ pnpm run start
+## 常用命令
 
-# watch mode
-$ pnpm run start:dev
+| 命令 | 作用 |
+| --- | --- |
+| `pnpm start:dev` | 开发模式（watch） |
+| `pnpm build` | 构建到 `dist/` |
+| `pnpm start:prod` | 运行构建产物 |
+| `pnpm test` / `pnpm test:cov` | Jest 单元测试 / 覆盖率 |
+| `pnpm lint` | ESLint 检查并修复 |
 
-# production mode
-$ pnpm run start:prod
-```
+## 结构速览
 
-## Run tests
+| 目录 | 说明 |
+| --- | --- |
+| `src/sites/` | 站点注册、目录扫描发现、运行环境默认值 |
+| `src/auth/`、`src/user/` | JWT 认证与管理员账号 |
+| `src/menu/`、`src/news/`、`src/product/`、`src/page/`、`src/video/` | 内容与多语言翻译、同步到 PbootCMS |
+| `src/quotation/`、`src/brochure/` | 报价单与产品手册 PDF 生成 |
+| `src/img-upload/`、`src/site-information/`、`src/seo-content/`、`src/database-backup/` | 图片上传、站点资料、SEO 内容、数据库备份 |
+| `src/common/` | PbootCMS 内容导入、翻译与缩略图等共享工具 |
 
-```bash
-# unit tests
-$ pnpm run test
+单元测试（`*.spec.ts`）与源码同目录。受管站点通过请求头 `X-Pboot-Site-Id` 区分，每站配置保存在根目录 `managed-sites/`。
 
-# e2e tests
-$ pnpm run test:e2e
+## 生产注意
 
-# test coverage
-$ pnpm run test:cov
-```
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+`NODE_ENV=production` 时 `/auth/signup` 被拒绝（不开放公开注册）。生产环境首管理员由根目录 `deploy/bootstrap-admin.cjs` 创建，详见[宝塔集中部署图文教程](../docs/BAOTA_MULTI_SITE_DEPLOY_ZH.md)。

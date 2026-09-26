@@ -527,6 +527,53 @@ html[data-seo-page="audit"] .content-grid[data-seo-pages~="audit"] {
   border-top: 1px solid var(--el-border-color);
 }
 
+/* Google daily workflow: three actions, with setup kept in compact disclosures. */
+html[data-seo-page="google"] #google-search-console {
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 5px 24px rgba(30, 64, 110, .04);
+}
+html[data-seo-page="google"] #google-search-console > .band-title { align-items: flex-start; }
+html[data-seo-page="google"] #searchConsoleMeta { max-width: 45%; overflow-wrap: anywhere; text-align: right; }
+.google-task-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.google-task-card { display: flex; flex-direction: column; align-items: flex-start; padding: 22px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fbfcfe; }
+.google-task-card-primary { background: #f2f7ff; border-color: #bcd5ff; }
+.google-task-number { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: #eaf1fa; color: #527096; font-size: 13px; font-weight: 700; }
+.google-task-card-primary .google-task-number { color: #fff; background: #1677ff; }
+.google-task-card h3 { margin: 14px 0 8px; font-size: 18px; color: #1e293b; }
+.google-task-card p { margin: 0 0 20px; color: #64748b; font-size: 13px; line-height: 1.7; }
+.google-task-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; }
+.google-task-actions button { min-height: 38px; border-radius: 8px; }
+.google-batch-choice { display: flex; align-items: center; gap: 6px; color: #52647c; font-size: 13px; }
+.google-batch-choice select { width: 90px; min-height: 38px; border-radius: 8px; }
+.google-task-card small { margin-top: 14px; color: #73839a; font-size: 12px; line-height: 1.6; }
+.google-task-card h3 .google-optional-badge { margin: 0 0 0 7px; padding: 3px 7px; border-radius: 5px; background: #edf1f6; color: #64748b; font-weight: 400; vertical-align: middle; }
+.google-next-step { margin: 0 0 16px; padding: 13px 16px; border-radius: 9px; background: #f0f6ff; color: #365d8d; font-size: 13px; line-height: 1.7; }
+.google-optional-request { display: flex; align-items: center; gap: 20px; padding: 16px; margin: 10px 0; border-radius: 9px; background: #f7f9fc; }
+.google-optional-request strong { color: #475569; font-size: 14px; }
+.google-optional-request p { margin: 6px 0 0; color: #64748b; font-size: 13px; line-height: 1.7; }
+.google-optional-request button { flex-shrink: 0; }
+@media (max-width: 760px) { .google-optional-request { flex-direction: column; align-items: flex-start; } }
+html[data-seo-page="google"] .gsc-summary { gap: 12px; }
+html[data-seo-page="google"] .gsc-summary .gi-stat { border-radius: 10px; box-shadow: none; }
+.google-fold > summary { display: flex; align-items: center; gap: 16px; list-style: none; cursor: pointer; padding: 3px 0; }
+.google-fold > summary::-webkit-details-marker { display: none; }
+.google-fold > summary::after { content: "+"; margin-left: auto; color: #64748b; font-size: 22px; }
+.google-fold[open] > summary::after { content: "−"; }
+.google-fold > summary strong { font-size: 15px; color: #334155; }
+.google-fold > summary span { font-size: 12px; color: #8190a5; }
+.google-fold-body { padding-top: 22px; }
+#google-permission-tutorial { scroll-margin-top: 180px; }
+@media (max-width: 1100px) { .google-task-grid { gap: 10px; } .google-task-card { padding: 16px; } }
+@media (max-width: 760px) {
+  .google-task-grid { grid-template-columns: 1fr; }
+  html[data-seo-page="google"] #google-search-console { padding: 16px; }
+  html[data-seo-page="google"] #google-search-console > .band-title { display: block; }
+  html[data-seo-page="google"] #searchConsoleMeta { display: block; max-width: 100%; text-align: left; margin-top: 10px; }
+  .google-fold > summary { flex-wrap: wrap; gap: 6px; }
+  .google-fold > summary span { max-width: 70%; }
+}
+
 .gsc-push-panel {
   display: flex;
   align-items: center;
@@ -1780,3 +1827,111 @@ body > .tool-nav {
     min-width: 0;
   }
 }
+
+/* Bing uses the same three-step layout as Google. */
+html[data-seo-page="bing"] #bing-workspace { border-radius:16px; padding:24px; }
+#bingMeta { overflow-wrap:anywhere; text-align:right; }
+#bingInspectPanel { margin-top:18px; }
+.bing-advanced { margin-top:18px; padding-top:16px; border-top:1px solid #e2e8f0; }
+.bing-advanced summary { cursor:pointer; color:#64748b; }
+.bing-guide { color:#52647c; padding-left:24px; line-height:1.9; }
+.bing-guide li { margin-bottom:10px; }
+#bing-account-settings input[type="checkbox"] { width:auto; }
+@media (max-width:760px) {
+  html[data-seo-page="bing"] #bing-workspace { padding:16px; }
+  #bing-workspace > .band-title { display:block; }
+  #bingMeta { display:block; text-align:left; margin-top:8px; }
+}
+
+#bing-permission-tutorial { scroll-margin-top: 180px; }
+#bing-permission-tutorial .tutorial-shot img { aspect-ratio:auto; height:auto; object-fit:contain; }
+
+#bingConfirmDialog { width:min(460px, calc(100vw - 48px)); padding:24px; border:1px solid #dce5f0; border-radius:14px; box-shadow:0 18px 70px #142c4b33; color:#334155; }
+#bingConfirmDialog::backdrop { background:#15263b66; }
+#bingConfirmDialog h3 { margin:0 0 12px; }
+#bingConfirmMessage { line-height:1.8; white-space:pre-wrap; }
+#bingConfirmDialog .google-actions { justify-content:flex-end; margin-top:20px; }
+
+/* Baidu: keep actions aligned and configuration compact without changing other engines. */
+#baidu-workspace .google-task-actions { min-height: 38px; }
+#baidu-workspace .google-batch-choice { margin: 0; white-space: nowrap; }
+#baidu-workspace .google-batch-choice select { margin: 0; }
+#baidu-workspace .google-task-card > small { min-height: 38px; }
+#baidu-workspace .band-title { gap: 16px; flex-wrap: wrap; }
+#baiduResult { border: 1px solid #dce7f5; border-left: 4px solid #1677ff; border-radius: 10px; padding: 18px 20px; margin: 0 0 18px; }
+#baiduResult[data-tone="warning"] { border-color: #f5dfb8; border-left-color: #e6a23c; background: #fffbf3; }
+#baiduResult[data-tone="success"] { border-color: #c4e7d2; border-left-color: #2ca363; }
+#baiduResult .google-result-title { font-size: 15px; }
+.baidu-result-copy { margin: 8px 0 0; line-height: 1.8; color: #53647a; overflow-wrap: anywhere; }
+.baidu-result-copy p { margin: 4px 0; }
+.baidu-result-actions, .baidu-config-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+#baiduResult .baidu-result-actions a { margin: 0; font-weight: 400; }
+.baidu-error-detail { margin-top: 14px; color: #7b8797; font-size: 12px; }
+.baidu-error-detail summary { cursor: pointer; }
+.baidu-error-detail pre { padding-top: 10px; line-height: 1.8; }
+#baidu-account-settings { scroll-margin-top: 180px; }
+.baidu-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; max-width: 1200px; }
+.baidu-config-field { min-width: 0; }
+.baidu-config-field > label { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; font-size: 13px; color: #334155; }
+.baidu-config-field > label span { font-size: 12px; color: #8794a7; font-weight: normal; }
+.baidu-config-field > input { width: 100%; min-width: 0; height: 38px; }
+.baidu-config-field > input[readonly] { background: #f7f9fc; }
+.baidu-config-field > .action-link { margin-top: 14px; }
+.baidu-config-actions .baidu-disable { color: #8491a4; }
+.baidu-config-note { margin: 20px 0 0; padding-top: 14px; border-top: 1px solid #edf1f6; color: #8491a4; font-size: 12px; line-height: 1.7; }
+@media(max-width: 760px) {
+  .baidu-config-grid { grid-template-columns: 1fr; gap: 22px; }
+  #baidu-workspace .google-task-card > small { min-height: 0; }
+  #baiduResult { padding: 14px; }
+}
+
+/* Yandex keeps the same three-step layout as Google and Bing. */
+.yandex-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.yandex-config-grid h3 { margin: 0 0 12px; font-size: 16px; }
+.yandex-config-grid label { display: grid; gap: 8px; margin-top: 14px; }
+.yandex-config-grid input, .yandex-config-grid textarea { width: 100%; box-sizing: border-box; }
+.yandex-config-grid label:has(input[type="checkbox"]) { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.yandex-config-grid input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; flex: 0 0 18px; }
+
+/* Chinese source-data audit: one readable flow, optional tools stay folded. */
+html[data-seo-page="audit"] .cn-audit-intro[data-seo-pages] { display: grid !important; grid-template-columns: 1fr auto; align-items: center; gap: 16px; background: linear-gradient(120deg, #f1f6ff, #fff); border-color: #dbe7ff; }
+.cn-audit-intro h2 { margin: 12px 0 8px; }
+.cn-audit-intro p { margin: 6px 0; }
+.cn-audit-badge { display: inline-block; color: #1765cb; background: #e5efff; padding: 5px 10px; border-radius: 7px; font-weight: 600; font-size: 12px; }
+.cn-audit-feedback { grid-column: 1 / -1; padding: 10px 14px; background: #eaf2ff; border-radius: 8px; color: #24568f; }
+.cn-audit-feedback:empty { display: none; }
+.cn-audit-feedback.error { background: #fff1f0; color: #b42318; }
+html[data-seo-page="audit"] #content-audit { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+html[data-seo-page="audit"] .cn-audit-content[data-seo-pages] { display: flex !important; flex-direction: column; align-items: stretch; gap: 16px; }
+.cn-site-details { order: 2; }
+.cn-site-details summary, .cn-page-audit > summary, .cn-ai-panel > summary { cursor: pointer; padding: 4px 0; }
+.cn-site-details .site-meta { margin-top: 16px; }
+.cn-page-audit > summary, .cn-ai-panel > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; list-style: none; }
+.cn-page-audit > summary::after, .cn-ai-panel > summary::after { content: '+'; color: #6481a4; font-size: 20px; }
+.cn-page-audit[open] > summary::after, .cn-ai-panel[open] > summary::after { content: '−'; }
+.cn-page-audit > summary span, .cn-ai-panel > summary span { margin-right: auto; color: #8190a5; font-size: 12px; }
+.cn-page-body { padding-top: 22px; }
+.cn-ai-panel { border: 1px solid #dfe8f4; border-radius: 10px; background: #f8faff; padding: 14px 16px; margin: 18px 0; }
+html[data-seo-page="audit"] .ai-fix-bar { grid-template-columns: minmax(220px, 1fr) auto auto auto; align-items: end; margin-top: 18px; }
+html[data-seo-page="audit"] .ai-fix-bar [hidden], html[data-seo-page="audit"] .issue-tools [hidden] { display: none !important; }
+html[data-seo-page="audit"] .issue-tools { grid-template-columns: 140px 140px minmax(180px, 1fr); margin-top: 20px; }
+html[data-seo-page="audit"] .issue { border-radius: 10px; padding: 16px; margin-top: 10px; }
+html[data-seo-page="audit"] .issue-title { font-size: 14px; }
+html[data-seo-page="audit"] .issue-detail { margin-top: 6px; line-height: 1.7; }
+html[data-seo-page="audit"] .issue-edit { white-space: nowrap; }
+@media(max-width: 760px) {
+  html[data-seo-page="audit"] .cn-audit-intro[data-seo-pages] { grid-template-columns: 1fr; }
+  html[data-seo-page="audit"] #content-audit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-seo-page="audit"] .ai-fix-bar, html[data-seo-page="audit"] .issue-tools { grid-template-columns: 1fr; }
+  .cn-page-audit > summary, .cn-ai-panel > summary { flex-wrap: wrap; }
+}
+.yandex-verification { margin-top: 18px; }
+.yandex-verification summary { cursor: pointer; color: #64748b; }
+#yandexTutorial li { margin-bottom: 14px; line-height: 1.8; }
+#yandexNextStep { margin-top: 20px; }
+@media(max-width: 900px) { .yandex-config-grid { grid-template-columns: 1fr; } }
+
+/* Keep optional detail out of the main CN maintenance flow. */
+.cn-ai-links { display: flex; gap: 18px; margin-top: 14px; font-size: 12px; }
+.cn-passed-checks { grid-column: 1 / -1; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+.cn-passed-checks > summary { cursor: pointer; color: #64748b; font-size: 13px; }

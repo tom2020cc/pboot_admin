@@ -6,7 +6,6 @@
         <p>一套管理中心维护多个 PbootCMS 网站，内容操作始终跟随顶部选中的当前站点。</p>
       </div>
       <div class="page-actions">
-        <el-button @click="$router.push('/template-bindings')">模板栏目绑定</el-button>
         <el-button :icon="Search" @click="$router.push('/site-resources')">资源检测</el-button>
         <el-button :icon="FolderOpened" @click="openScanner">扫描网站</el-button>
         <el-button :icon="CircleCheck" :loading="checkingAll" @click="checkAllSites">批量检查</el-button>
@@ -37,6 +36,8 @@
       />
       <el-button type="primary" :loading="savingSharedSettings" @click="saveYoutubeApiKey">保存 Key</el-button>
     </div>
+
+    <SiteLicenseSettings :site-id="activeSiteId || 0" />
 
     <div class="site-summary" aria-label="站点统计">
       <div><span>站点总数</span><strong>{{ sites.length }}</strong></div>
@@ -160,10 +161,10 @@
           </el-form-item>
         </div>
         <el-form-item label="PbootCMS 网站根目录" prop="rootPath">
-          <el-input v-model="form.rootPath" placeholder="E:/phpstudy_pro/WWW/example.com" />
+          <el-input v-model="form.rootPath" :placeholder="form.environment === 'phpstudy' ? 'E:/phpstudy_pro/WWW/example.com' : '/www/wwwroot/example.com'" />
         </el-form-item>
         <el-form-item label="PbootCMS 数据库文件" prop="dbPath">
-          <el-input v-model="form.dbPath" placeholder="E:/phpstudy_pro/WWW/example.com/data/xxx.db" />
+          <el-input v-model="form.dbPath" :placeholder="form.environment === 'phpstudy' ? 'E:/phpstudy_pro/WWW/example.com/data/xxx.db' : '/www/wwwroot/example.com/data/xxx.db'" />
         </el-form-item>
         <el-form-item label="本站 YouTube 频道 ID">
           <el-input v-model="form.youtubeChannelId" placeholder="UC 开头的频道 ID；没有可留空" />
@@ -237,6 +238,7 @@ import {
   createSite,
   discoverSites,
   getSharedSiteSettings,
+  getSiteRuntimeDefaults,
   removeSite,
   setDefaultSite,
   saveSharedSiteSettings,
@@ -251,6 +253,7 @@ import {
 } from "@/api/sites";
 import { getErrorMessage } from "@/utils/request";
 import { useSitesStore } from "@/stores/sites";
+import SiteLicenseSettings from '@/components/SiteLicenseSettings.vue';
 
 const store = useSitesStore();
 const { sites, loading, activeSiteId } = storeToRefs(store);
@@ -347,10 +350,15 @@ const toSaveSite = (site: ManagedSite): SaveManagedSite => ({
 
 const resetForm = (values: SaveManagedSite = emptyForm()) => Object.assign(form, values);
 
-const openCreate = () => {
-  editingId.value = 0;
-  resetForm({ ...emptyForm(), environment: sites.value[0]?.environment || "phpstudy" });
-  dialogVisible.value = true;
+const openCreate = async () => {
+  try {
+    const defaults = (await getSiteRuntimeDefaults()).data;
+    editingId.value = 0;
+    resetForm({ ...emptyForm(), environment: store.activeSite?.environment || defaults.environment });
+    dialogVisible.value = true;
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, "读取服务器运行环境失败"));
+  }
 };
 
 const openEdit = (site: ManagedSite) => {
@@ -489,12 +497,17 @@ const parentPathOf = (value: string) => {
   return index > 0 ? normalized.slice(0, index) : "";
 };
 
-const openScanner = () => {
-  scanner.parentPath = parentPathOf(sites.value[0]?.rootPath || "") || "E:/phpstudy_pro/WWW";
-  scanner.environment = sites.value[0]?.environment || "phpstudy";
-  scanCandidates.value = [];
-  scanSelection.value = [];
-  scannerVisible.value = true;
+const openScanner = async () => {
+  try {
+    const defaults = (await getSiteRuntimeDefaults()).data;
+    scanner.parentPath = parentPathOf(store.activeSite?.rootPath || "") || defaults.parentPath;
+    scanner.environment = store.activeSite?.environment || defaults.environment;
+    scanCandidates.value = [];
+    scanSelection.value = [];
+    scannerVisible.value = true;
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, "读取服务器运行环境失败"));
+  }
 };
 
 const runScanner = async () => {

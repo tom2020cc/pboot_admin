@@ -4,26 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script src="/site-context.js"></script>
-    <title>PbootCMS FTP 发布</title>
+    <title>当前网站同步 · 网站发布</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="app-header">
-      <div class="brand"><div class="mark">FTP</div><span>PbootCMS FTP 发布</span></div>
+      <div class="brand"><div class="mark">SYNC</div><span>当前网站同步</span></div>
       <div class="header-status" id="status">正在读取配置</div>
     </header>
     <nav class="tool-nav" id="toolNav" aria-label="项目工具导航"></nav>
 
     <main>
       <nav class="page-switch" aria-label="FTP 功能">
-        <a class="active" href="/">发布管理</a>
+        <a href="/sync.html">① 管理项目代码与配置</a>
+        <a class="active" href="/">② 当前网站文件同步</a>
+        <a href="/databases.html">数据库改名与同步</a>
+        <a href="/domain-check.html">域名上线检测</a>
         <a href="/security.html">安全巡检</a>
+        <a href="/server-security.html">宝塔服务器巡检</a>
       </nav>
 
       <section class="card">
         <div class="section-heading">
-          <div><h1>FTP 发布配置</h1><p class="subtitle">管理连接、上传范围和覆盖前备份。</p></div>
+          <div><h1>当前网站的线上连接</h1><p class="subtitle">此连接只用于顶部选中的网站。管理项目代码和配置请使用「① 管理项目代码与配置」。保存连接后，在下方左右文件栏选择同步。</p></div>
           <span class="status-badge" id="connectionBadge">尚未测试</span>
+        </div>
+        <div class="site-strip" id="siteStrip">
+          <span class="site-strip-label">当前同步的网站</span>
+          <strong id="siteStripName">-</strong>
+          <span class="site-strip-url" id="siteStripUrl"></span>
+          <span class="site-strip-hint">顶栏站点选择器可切换</span>
         </div>
         <div class="form-grid">
           <label class="field">FTP 地址<input id="host" placeholder="ftp.example.com" autocomplete="off" /></label>
@@ -32,6 +42,48 @@
           <label class="field">密码<input id="password" type="password" placeholder="留空则保留原密码" autocomplete="new-password" /></label>
           <label class="field">远程网站根目录<input id="remoteRoot" placeholder="/ 或 /wwwroot" /></label>
           <label class="field">连接方式<select id="secure"><option value="false">普通 FTP</option><option value="true">FTPS 加密</option></select></label>
+          <label class="field">连接网卡<select id="networkInterface"><option value="">系统默认</option></select></label>
+        </div>
+        <div class="toolbar">
+          <button class="primary" id="saveBtn">保存配置</button>
+          <button id="testBtn">测试连接</button>
+          <button id="useSyncTargetBtn" title="把宝塔同步配置里当前站点的 FTP 目标一键填入（含密码），无需重复输入">一键填入宝塔目标</button>
+          <a class="hint" href="/security.html" style="margin-left:auto">前往安全巡检</a>
+        </div>
+      </section>
+
+      <section class="card" id="fileManager">
+        <div class="section-heading"><div><h2>文件管理 · 选择覆盖上传</h2><p class="subtitle">读取当前站点根目录，勾选文件或目录后，按站点内的相对路径上传到已保存的 FTP 根目录。已有同名文件直接覆盖，远程其他文件保留。</p></div></div>
+        <div class="toolbar">
+          <button id="fmRefresh">读取本地目录</button><button id="fmRemoteRefresh">读取远程目录</button>
+          <button id="fmTemplatePlan">预览模板同步（含功能代码）</button>
+          <button id="fmClear">清空选择</button><button class="primary" id="fmPlan">预览所选上传</button>
+          <span id="fmSelected">已选 0 项</span>
+        </div>
+        <p class="subtitle">同步产品属性模板时，自动带上对应解析代码，并在上传后回读校验；完整清单会在下方预览。模板文件不包含产品数据，数据更新请使用数据库同步。</p>
+        <label class="check"><input type="checkbox" id="fmEnvironment" />包含数据库与环境配置（可能覆盖线上数据、域名及授权码）</label>
+        <div class="file-manager-columns">
+          <div><h3>本地站点</h3><div class="file-manager-path" id="fmLocalRoot"></div><div class="toolbar"><button id="fmLocalUp">上层目录</button><strong id="fmLocalPath">/</strong></div>
+            <div class="table-wrap file-manager-list"><table><thead><tr><th><input type="checkbox" id="fmSelectAll" aria-label="选择当前目录可上传项目" /></th><th>名称</th><th>大小</th><th>修改时间</th></tr></thead><tbody id="fmLocalItems"></tbody></table></div>
+          </div>
+          <div><h3>远程站点</h3><div class="file-manager-path" id="fmRemoteRoot">读取远程目录后显示</div><div class="toolbar"><button id="fmRemoteUp" disabled>上层目录</button><strong id="fmRemotePath">/</strong></div>
+            <div class="table-wrap file-manager-list"><table><thead><tr><th>名称</th><th>大小</th><th>修改时间</th></tr></thead><tbody id="fmRemoteItems"><tr><td colspan="3">点击“读取远程目录”连接当前站点的 FTP。</td></tr></tbody></table></div>
+          </div>
+        </div>
+        <p id="fmMessage" role="status"></p>
+        <div id="fmPreview" hidden>
+          <h3>本次覆盖上传清单</h3><p id="fmPlanSummary"></p>
+          <p class="warn-text">以下文件将直接覆盖同路径的远程文件，不按大小跳过，也不生成备份。空目录不会单独上传。</p>
+          <div class="table-wrap file-manager-list"><table><thead><tr><th>相对路径</th><th>大小</th></tr></thead><tbody id="fmPlanItems"></tbody></table></div>
+          <details id="fmExcluded" hidden><summary>已排除的项目</summary><pre id="fmExcludedItems"></pre></details>
+          <div class="toolbar"><button class="warning" id="fmUpload">确认覆盖上传上述文件</button><button id="fmDismiss">收起清单</button></div>
+        </div>
+      </section>
+
+      <details class="card" id="bulkPublish">
+        <summary>高级批量发布：数据库、图片、SEO 或整站</summary>
+        <p class="subtitle">日常同步请使用上方左右文件栏。需要按预设范围发布时再展开此处。</p>
+        <div class="form-grid">
           <label class="field">上传范围<select id="uploadScope"><option value="site">网站数据与图片</option><option value="seo">仅 SEO 收录文件</option><option value="full">整站上传</option></select></label>
           <label class="field">上传模式<select id="uploadMode"><option value="quick">快速上传（日常）</option><option value="full">完整校验（首次/大改）</option></select></label>
           <label class="field">最近图片天数<input id="recentImageDays" type="number" min="1" value="14" /></label>
@@ -45,13 +97,10 @@
         </div>
         <div class="mode-note" id="modeNote"></div>
         <div class="toolbar">
-          <button class="primary" id="saveBtn">保存配置</button>
           <button id="planBtn">刷新上传计划</button>
-          <button id="testBtn">测试连接</button>
-          <button class="warning" id="uploadBtn">开始发布</button>
-          <a class="hint" href="/security.html" style="margin-left:auto">前往安全巡检</a>
+          <button class="warning" id="uploadBtn">开始同步</button>
         </div>
-      </section>
+      </details>
 
       <section class="card remote-preview" id="remotePreview">
         <div class="section-heading"><div><h2>远程目录预览</h2><p class="subtitle" id="remoteHint"></p></div></div>
@@ -93,5 +142,6 @@
 
     <script src="/common.js"></script>
     <script src="/publish.js"></script>
+    <script src="/file-browser.js"></script>
   </body>
 </html>

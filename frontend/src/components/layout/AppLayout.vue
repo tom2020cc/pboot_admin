@@ -4,7 +4,7 @@
       <AppAside />
       <el-container class="content-shell">
         <AppHeader />
-        <ToolNav />
+        <ToolNav :active-id="route.name === 'deploymentTutorial' ? 'tutorial' : 'admin'" />
         <el-main>
           <RouterView />
         </el-main>
@@ -15,10 +15,12 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from "vue";
+import { useRoute } from "vue-router";
 import AppAside from "./AppAside.vue";
 import AppHeader from "./AppHeader.vue";
 import ToolNav from "./ToolNav.vue";
 import { isCollapse } from "./isCollapse";
+const route = useRoute();
 
 let narrowScreen: MediaQueryList | undefined;
 

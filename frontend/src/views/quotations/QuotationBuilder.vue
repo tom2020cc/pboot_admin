@@ -1,21 +1,22 @@
 <template>
-  <section class="page quotation-page">
+  <section class="page quotation-page" :aria-busy="busy">
     <div class="page-bar">
       <div>
         <h2>{{ workspaceView === "editor" ? "报价单生成" : "报价单列表" }}</h2>
         <p v-if="workspaceView === 'editor'">
-          中文产品报价 · {{ quote.quotationNo }} · {{ currentQuotationId ? `已保存 #${currentQuotationId}` : "尚未保存" }}
+          {{ quotationLanguageName(quote.language) }} · {{ quote.quotationNo }} · {{ !currentQuotationId ? '未保存' : dirty ? '未保存修改' : '已保存' }}
         </p>
         <p v-else>管理已经保存的报价单，可继续编辑、预览、下载或删除。</p>
       </div>
       <div v-if="workspaceView === 'editor'" class="page-actions">
-        <el-button :icon="RefreshLeft" @click="resetDraft">新建报价</el-button>
+        <el-button :icon="RefreshLeft" :disabled="busy" @click="resetDraft">新建报价</el-button>
         <el-button @click="showQuotationList">报价单列表</el-button>
-        <el-button type="success" :icon="Check" :loading="savingQuotation" @click="saveQuotation">
+        <el-button type="primary" :icon="Check" :loading="savingQuotation" :disabled="busy" @click="saveQuotation">
           {{ currentQuotationId ? "保存修改" : "保存报价单" }}
         </el-button>
-        <el-button :icon="View" @click="openWebDialog">打开网页</el-button>
-        <el-button type="primary" :icon="Download" :disabled="!quote.items.length" @click="downloadHtml">生成 HTML</el-button>
+        <el-button :icon="View" :disabled="busy || !quote.items.length" @click="exportDocument('web')">打开网页</el-button>
+        <el-button :icon="Download" :disabled="busy || !quote.items.length" @click="exportDocument('html')">下载 HTML</el-button>
+        <el-button type="success" :icon="Download" :loading="exporting" :disabled="busy || !quote.items.length" @click="exportDocument('pdf')">导出 PDF</el-button>
       </div>
       <div v-else class="page-actions">
         <el-button :icon="RefreshLeft" :loading="loadingQuotations" @click="loadQuotationList">刷新列表</el-button>
@@ -24,7 +25,9 @@
       </div>
     </div>
 
-    <div class="quotation-view-tabs">
+    <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon @close="errorMessage = ''" />
+    <el-alert v-if="exportProgress" :title="exportProgress" type="info" :closable="false" />
+    <div class="quotation-view-tabs" :inert="busy">
       <button type="button" :class="{ active: workspaceView === 'editor' }" @click="workspaceView = 'editor'">编辑报价</button>
       <button type="button" :class="{ active: workspaceView === 'list' }" @click="showQuotationList">报价单列表</button>
     </div>
@@ -37,10 +40,12 @@
       </div>
       <div class="list-filter">
         <el-input v-model="quotationSearch" clearable placeholder="搜索报价单编号、客户公司或联系人" @keyup.enter="loadQuotationList" />
+        <el-select v-model="listLanguage" clearable placeholder="全部语言" aria-label="筛选报价语言"><el-option v-for="language in availableLanguages" :key="language.code" :label="language.name" :value="language.code" /></el-select>
         <el-button type="primary" @click="loadQuotationList">查询</el-button>
       </div>
-      <el-table v-loading="loadingQuotations" :data="quotationRecords" border stripe class="quotation-table" empty-text="暂无已保存报价单">
+      <el-table v-loading="loadingQuotations" :data="filteredRecords" border stripe class="quotation-table" empty-text="暂无已保存报价单">
         <el-table-column prop="quotationNo" label="报价单编号" min-width="170" />
+        <el-table-column label="语言" min-width="110"><template #default="{ row }">{{ quotationLanguageName(row.data?.language) }}</template></el-table-column>
         <el-table-column prop="customerCompany" label="客户公司" min-width="190">
           <template #default="{ row }">{{ row.customerCompany || "-" }}</template>
         </el-table-column>
@@ -62,14 +67,23 @@
             <el-button type="info" link @click="previewSavedQuotation(row)">预览</el-button>
             <el-button type="primary" link @click="editSavedQuotation(row)">编辑</el-button>
             <el-button type="success" link @click="downloadSavedQuotation(row)">下载 HTML</el-button>
+            <el-button type="success" link :disabled="busy" @click="exportDocument('pdf', normalizeQuotation(row.data))">PDF</el-button>
             <el-button type="danger" link @click="deleteSavedQuotation(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
     </section>
 
-    <div v-else class="quotation-workbench">
-      <div class="quotation-editor">
+    <div v-else>
+      <div class="workspace-controls">
+        <el-select :model-value="quote.language" :disabled="busy" aria-label="报价语言" @change="changeLanguage"><el-option v-for="language in availableLanguages" :key="language.code" :label="language.name" :value="language.code" /></el-select>
+        <el-radio-group v-model="viewMode" size="small"><el-radio-button value="split">编辑与预览</el-radio-button><el-radio-button value="edit">编辑</el-radio-button><el-radio-button value="preview">预览</el-radio-button></el-radio-group>
+        <el-tag v-if="switchingLanguage">读取语言版本</el-tag>
+      </div>
+      <el-alert v-for="warning in warnings" :key="warning" :title="warning" type="warning" :closable="false" show-icon class="quotation-warning" />
+      <div class="quotation-workbench" :class="{ 'single-pane': viewMode !== 'split' }">
+      <fieldset v-show="viewMode !== 'preview'" class="quotation-editor" :disabled="busy" :inert="busy">
+        <QuotationLayoutSettings v-model="quote.layout" />
         <section class="editor-section">
           <div class="section-heading">
             <div><span>01</span><h3>报价信息</h3></div>
@@ -77,6 +91,7 @@
           </div>
           <el-form label-position="top" class="compact-form">
             <div class="form-grid two">
+              <el-form-item label="报价标题"><el-input v-model="quote.title" /></el-form-item>
               <el-form-item label="报价单编号"><el-input v-model="quote.quotationNo" /></el-form-item>
               <el-form-item label="报价日期"><el-date-picker v-model="quote.quotationDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
               <el-form-item label="客户公司"><el-input v-model="quote.customerCompany" placeholder="填写客户公司" /></el-form-item>
@@ -90,7 +105,7 @@
               <el-form-item label="联系邮箱"><el-input v-model="quote.email" placeholder="业务邮箱" /></el-form-item>
               <el-form-item label="产品类型"><el-input v-model="quote.productCategory" placeholder="例如：车载式水井钻机" /></el-form-item>
               <el-form-item label="是否特殊定制">
-                <el-select v-model="quote.customized"><el-option label="否" value="否" /><el-option label="是" value="是" /></el-select>
+                <el-input v-model="quote.customized" />
               </el-form-item>
               <el-form-item label="原产国"><el-input v-model="quote.originCountry" /></el-form-item>
               <el-form-item label="报价有效期">
@@ -147,6 +162,7 @@
               </div>
               <div class="line-pricing">
                 <label><span>数量</span><el-input-number v-model="item.quantity" :min="0" :precision="0" controls-position="right" /></label>
+                <label><span>单位</span><el-input v-model="item.unit" /></label>
                 <label><span>单价（{{ quote.currency }}）</span><el-input-number v-model="item.unitPrice" :min="0" :precision="2" :step="100" controls-position="right" /></label>
                 <div class="line-image-field">
                   <div class="image-picker-heading">
@@ -227,114 +243,55 @@
             </div>
           </el-form>
         </details>
-      </div>
+      </fieldset>
 
-      <aside class="quote-preview-pane">
-        <div class="preview-toolbar">
-          <div><strong>网页预览</strong><span>中文保存稿</span></div>
-          <div><span>产品小计 {{ formatMoney(subtotal, quote.currency) }}</span><strong>总额 {{ formatMoney(grandTotal, quote.currency) }}</strong></div>
-        </div>
-        <div class="quote-preview-frame" v-html="previewHtml" />
+      <aside v-if="viewMode !== 'edit'" class="quote-preview-pane">
+        <QuotationDocumentPreview title="报价单 PDF 预览" :paper-label="quotationPaperLabel(quote.layout)" :render="previewRenderer" />
       </aside>
+      </div>
     </div>
 
     <el-dialog v-model="savedPreviewVisible" :title="savedPreviewRecord?.quotationNo || '报价单预览'" width="96vw" top="2vh" destroy-on-close class="saved-preview-dialog">
-      <div class="saved-preview-frame" v-html="savedPreviewHtml" />
+      <QuotationDocumentPreview v-if="savedPreviewVisible" title="已保存报价预览" :paper-label="quotationPaperLabel(savedPreviewRecord?.data.layout)" :render="savedPreviewRenderer" />
       <template #footer>
         <el-button @click="savedPreviewVisible = false">关闭</el-button>
         <el-button v-if="savedPreviewRecord" type="primary" @click="downloadSavedQuotation(savedPreviewRecord)">下载 HTML</el-button>
+        <el-button v-if="savedPreviewRecord" type="success" :disabled="busy" @click="exportDocument('pdf', savedPreviewRecord.data)">导出 PDF</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="webDialogVisible" title="网页、HTML 与 PDF" width="min(680px, 94vw)" class="web-output-dialog">
-      <el-form label-position="top">
-        <el-form-item label="网页语言">
-          <el-select v-model="targetLanguage" :disabled="translating">
-            <el-option v-for="language in availableLanguages" :key="language.code" :label="language.name" :value="language.code" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="targetLanguage !== 'zh-CN'" label="翻译模型">
-          <el-select v-model="selectedTranslationModel" filterable :loading="loadingTranslationModels" :disabled="translating">
-            <el-option
-              v-for="model in selectableTranslationModels"
-              :key="model.value"
-              :label="model.displayLabel || model.label"
-              :value="model.value"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button :disabled="translating" @click="webDialogVisible = false">取消</el-button>
-        <el-button :icon="Download" :loading="translating && webOutputAction === 'download'" :disabled="translating" @click="downloadWebQuotation">
-          {{ targetLanguage === "zh-CN" ? "下载中文 HTML" : "翻译并下载 HTML" }}
-        </el-button>
-        <el-button :icon="Printer" :loading="translating && webOutputAction === 'pdf'" :disabled="translating" @click="exportPdfQuotation">
-          {{ targetLanguage === "zh-CN" ? "导出中文 PDF" : "翻译并导出 PDF" }}
-        </el-button>
-        <el-button type="primary" :icon="targetLanguage === 'zh-CN' ? View : MagicStick" :loading="translating && webOutputAction === 'open'" :disabled="translating" @click="generateWebQuotation">
-          {{ targetLanguage === "zh-CN" ? "打开中文网页" : "翻译并打开网页" }}
-        </el-button>
-      </template>
-    </el-dialog>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { onBeforeRouteLeave } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { ArrowDown, ArrowUp, Check, Delete, Download, MagicStick, Printer, RefreshLeft, View } from "@element-plus/icons-vue";
-import {
-  getProductList,
-  getProductTranslationModels,
-  PRODUCT_LANGUAGES,
-  translateProductDraft,
-  type ProductItem,
-} from "@/api/products";
-import type { TranslationModel } from "@/api/news";
+import { ArrowDown, ArrowUp, Check, Delete, Download, RefreshLeft, View } from "@element-plus/icons-vue";
+import { getProductList, getProductById, type ProductItem } from "@/api/products";
 import { getAll as getAllMenus, type MenuItem } from "@/api/menus";
 import { getCurrentSiteProfile, type SiteBusinessProfile } from "@/api/sites";
-import {
-  createQuotation,
-  getNextQuotationNumber,
-  getQuotationById,
-  getQuotationList,
-  removeQuotation,
-  updateQuotation,
-  type QuotationPayload,
-  type QuotationRecord,
-} from "@/api/quotations";
+import { createQuotation, getNextQuotationNumber, getQuotationById, getQuotationList, removeQuotation, updateQuotation, exportQuotationPdf, type QuotationPayload, type QuotationRecord } from "@/api/quotations";
 import { getUploadUrl } from "@/api/uploads";
 import { getErrorMessage } from "@/utils/request";
-import {
-  buildQuotationHtml,
-  buildQuotationPreviewHtml,
-  createDefaultQuotation,
-  createQuotationLine,
-  formatMoney,
-  formatSpecificationText,
-  parseSpecificationText,
-  quotationHtmlFileName,
-  quotationSubtotal,
-  quotationTotal,
-  type QuotationDraft,
-  type QuotationLanguageCode,
-  type QuotationLine,
-} from "@/utils/quotation";
+import { buildQuotationHtml, buildQuotationWebHtml, createDefaultQuotation, createQuotationLine, formatMoney, parseSpecificationText, quotationHtmlFileName, quotationSubtotal, quotationTotal, normalizeQuotation, validateQuotation, portableQuotation, type QuotationDraft, type QuotationLanguageCode, type QuotationLine } from "@/utils/quotation";
+import { quotationLanguage, quotationLanguageName, quotationLanguageDraft, quotationWarnings } from "@/utils/quotation-language";
+import { exactQuotationProduct } from "@/utils/quotation-language";
+import { findEquivalentMenuForLang } from "@/utils/menuLanguage";
+import { paginateQuotationForExport } from "@/utils/quotation-pagination";
+import QuotationDocumentPreview from "@/components/QuotationDocumentPreview.vue";
+import QuotationLayoutSettings from "@/components/QuotationLayoutSettings.vue";
+import { quotationPaperLabel } from "@/utils/quotation-layout";
 import { useAvailableLanguages } from "@/composables/useAvailableLanguages";
 import { getActiveSiteId } from "@/utils/siteSelection";
-import { resolvePreferredTranslationModel, savePreferredTranslationModel } from "@/utils/translationModelPreference";
 
-const LEGACY_DRAFT_KEY = "pboot-quotation-draft-v1";
 const availableLanguages = useAvailableLanguages();
-const LEGACY_CURRENT_ID_KEY = "pboot-quotation-current-id-v1";
-const siteStorageKey = (key: string) => `${key}:site:${getActiveSiteId() || 0}`;
-const draftStorageKey = () => siteStorageKey(LEGACY_DRAFT_KEY);
-const currentIdStorageKey = () => siteStorageKey(LEGACY_CURRENT_ID_KEY);
+const siteId = getActiveSiteId();
+const draftKey = `pboot-quotation-draft-v1:site:${siteId}`;
+const idKey = `pboot-quotation-current-id-v1:site:${siteId}`;
 const quote = reactive<QuotationDraft>(createDefaultQuotation());
 const currentSiteProfile = ref<SiteBusinessProfile | null>(null);
 const loadingSiteProfile = ref(false);
-const restoredFromLegacyDraft = ref(false);
 const defaultLogoUrl = computed(() => currentSiteProfile.value?.logoUrl || "");
 const products = ref<ProductItem[]>([]);
 const menus = ref<MenuItem[]>([]);
@@ -346,617 +303,281 @@ const savingQuotation = ref(false);
 const loadingQuotations = ref(false);
 const quotationRecords = ref<QuotationRecord[]>([]);
 const quotationSearch = ref("");
+const listLanguage = ref("");
 const savedPreviewVisible = ref(false);
 const savedPreviewRecord = ref<QuotationRecord | null>(null);
-const webDialogVisible = ref(false);
-const translationModels = ref<TranslationModel[]>([]);
-const selectableTranslationModels = computed(() =>
-  translationModels.value.filter((model) => model.available && model.operational !== false),
-);
-const loadingTranslationModels = ref(false);
-const translating = ref(false);
-const webOutputAction = ref<"" | "open" | "download" | "pdf">("");
-const targetLanguage = ref<QuotationLanguageCode>("zh-CN");
-const selectedTranslationModel = ref("");
+const switchingLanguage = ref(false);
+const importing = ref(false);
+const exporting = ref(false);
+const readingRecord = ref(false);
+const initializing = ref(true);
+const cacheBlocked = ref(false);
+const errorMessage = ref("");
+const exportProgress = ref("");
+const baseline = ref("");
+const viewMode = ref("split");
+const busy = computed(() => initializing.value || savingQuotation.value || switchingLanguage.value || importing.value || exporting.value || readingRecord.value);
+const dirty = computed(() => baseline.value !== JSON.stringify(quote));
+const warnings = computed(() => quotationWarnings(quote));
+const filteredRecords = computed(() => quotationRecords.value.filter(row => !listLanguage.value || quotationLanguage(row.data?.language) === listLanguage.value));
 const currencies = ["USD", "CNY", "EUR"];
 const incoterms = ["EXW", "FOB", "CIF", "CFR"];
 const transportModes = ["海运", "陆运", "空运", "客户自提"];
-
-const currentSiteAssetReference = (value: string) => {
-  const source = String(value || "").trim();
-  if (!/^https?:\/\//i.test(source)) return source;
-  try {
-    const path = decodeURIComponent(new URL(source).pathname);
-    return /^\/(?:static|uploads?)\//i.test(path) ? path : source;
-  } catch {
-    return source;
-  }
-};
-
-const localPreviewAssetUrl = (value: string) => {
-  const source = String(value || "").trim();
-  if (!source || /^data:|^blob:/i.test(source)) return source;
-  const siteReference = currentSiteAssetReference(source);
-  return siteReference === source && /^https?:\/\//i.test(source) ? source : getUploadUrl(siteReference);
-};
-
-const createLocalPreviewDraft = (source: QuotationDraft) => {
-  const draft = JSON.parse(JSON.stringify(source)) as QuotationDraft;
-  draft.logoUrl = localPreviewAssetUrl(draft.logoUrl);
-  draft.assetBaseUrl = "";
-  draft.items.forEach((item) => {
-    item.image = localPreviewAssetUrl(item.image);
-    item.images = (item.images || []).map(localPreviewAssetUrl);
-  });
-  return draft;
-};
-
+let active = true;
+const assertScope = () => { if (!active || getActiveSiteId() !== siteId) throw new Error("网站已切换，请在当前网站重新操作"); };
+const cloneDraft = (draft: QuotationDraft): QuotationDraft => JSON.parse(JSON.stringify(draft));
+const reportError = (error: unknown, fallback: string) => { if (active) errorMessage.value = getErrorMessage(error, fallback); };
 const subtotal = computed(() => quotationSubtotal(quote));
 const grandTotal = computed(() => quotationTotal(quote));
-const previewHtml = computed(() => buildQuotationPreviewHtml(createLocalPreviewDraft(quote)));
-const savedPreviewHtml = computed(() => savedPreviewRecord.value
-  ? buildQuotationPreviewHtml(createLocalPreviewDraft(savedPreviewRecord.value.data))
-  : "");
-const latestQuotationTime = computed(() => quotationRecords.value[0]?.updateTime
-  ? formatDateTime(quotationRecords.value[0].updateTime)
-  : "-");
-
-const productMap = computed(() => new Map(products.value.map((product) => [product.id, product])));
-const menuMap = computed(() => new Map(menus.value.map((menu) => [Number(menu.id), menu])));
-
-const productCategoryName = (product: ProductItem) => String(menuMap.value.get(Number(product.menuId))?.name || "").trim();
-
-const productOptionLabel = (product: ProductItem) => {
-  const categoryName = productCategoryName(product);
-  return categoryName ? `${product.title} ${categoryName}` : product.title;
-};
-
-const normalizeQuotationCategories = (draft: QuotationDraft) => {
-  draft.items.forEach((item) => {
-    if (String(item.categoryName || "").trim()) return;
-    const product = productMap.value.get(item.productId);
-    item.categoryName = product ? productCategoryName(product) : "";
-  });
-};
-
-const normalizeQuotationImages = (draft: QuotationDraft) => {
-  draft.items.forEach((item) => {
-    const values = (Array.isArray(item.images) && item.images.length ? item.images : [item.image])
-      .map((value) => String(value || "").trim())
-      .filter((value, index, images) => value && images.indexOf(value) === index)
-      .slice(0, 3);
-    item.images = values;
-    item.image = values[0] || "";
-  });
-};
-
-const primaryLineImage = (item: QuotationLine) => item.images?.[0] || item.image || "";
-
-const syncLegacyImage = (item: QuotationLine) => {
-  item.images = (item.images || []).slice(0, 3);
-  item.image = item.images[0] || "";
-};
-
+const previewRenderer = computed(() => { const snapshot = cloneDraft(quote); return (token: string) => buildQuotationHtml(snapshot, token); });
+const savedPreviewRenderer = computed(() => { const snapshot = savedPreviewRecord.value ? cloneDraft(savedPreviewRecord.value.data) : createDefaultQuotation(); return (token: string) => buildQuotationHtml(snapshot, token); });
+const latestQuotationTime = computed(() => quotationRecords.value[0]?.updateTime ? formatDateTime(quotationRecords.value[0].updateTime) : "-");
+const productMap = computed(() => new Map(products.value.map(product => [product.id, product])));
+const productCategoryName = (product: ProductItem, language = quote.language) => findEquivalentMenuForLang(menus.value, product.menuId, language, "3")?.name || "";
+const productOptionLabel = (product: ProductItem) => `${product.title || '#' + product.id} ${productCategoryName(product)}`.trim();
+const primaryLineImage = (item: QuotationLine) => item.images?.[0] || "";
 const selectedLineImageIndex = (item: QuotationLine, image: string) => (item.images || []).indexOf(image);
-
 const isLineImageSelected = (item: QuotationLine, image: string) => selectedLineImageIndex(item, image) >= 0;
-
-const toggleLineImage = (item: QuotationLine, image: string) => {
-  const images = [...(item.images || [])];
-  const selectedIndex = images.indexOf(image);
-  if (selectedIndex >= 0) {
-    images.splice(selectedIndex, 1);
-  } else if (images.length >= 3) {
-    ElMessage.warning("最多展示 3 张图片，请先取消一张已选图片");
-    return;
-  } else {
-    images.push(image);
-  }
-  item.images = images;
-  syncLegacyImage(item);
-};
-
-const applyProductSelection = (ids: number[]) => {
-  const existing = new Map(quote.items.map((item) => [item.productId, item]));
-  quote.items = ids.flatMap((id) => {
-    const savedLine = existing.get(id);
-    if (savedLine) return [savedLine];
-    const product = productMap.value.get(id);
-    return product ? [createQuotationLine(product, productCategoryName(product), quote.currency)] : [];
-  });
-  normalizeQuotationImages(quote);
-  normalizeQuotationCategories(quote);
-};
-
+const lineTotal = (item: QuotationLine) => Number(item.quantity || 0) * Number(item.unitPrice || 0);
 const imageOptions = (productId: number) => {
   const product = productMap.value.get(productId);
   if (!product) return [];
-  const values = [
-    { label: "产品大图", value: product.largeImage },
-    { label: "缩略图", value: product.thumbnail },
-    ...(product.carouselImages || []).map((value, index) => ({ label: `轮播图 ${index + 1}`, value })),
-  ].filter((item) => item.value);
-  return values.filter((item, index) => values.findIndex((candidate) => candidate.value === item.value) === index);
+  const values = [{label:"产品大图",value:product.largeImage}, {label:"缩略图",value:product.thumbnail}, ...(product.carouselImages || []).map((value,index) => ({label:`产品图 ${index+1}`,value}))].filter(item => item.value);
+  return values.filter((item,index) => values.findIndex(candidate => candidate.value === item.value) === index);
 };
-
-const lineTotal = (item: QuotationLine) => Number(item.quantity || 0) * Number(item.unitPrice || 0);
-
-const moveLine = (index: number, offset: number) => {
-  const next = index + offset;
-  if (next < 0 || next >= quote.items.length) return;
-  const [item] = quote.items.splice(index, 1);
-  quote.items.splice(next, 0, item);
-  selectedProductIds.value = quote.items.map((line) => line.productId);
-};
-
-const removeLine = (index: number) => {
-  quote.items.splice(index, 1);
-  selectedProductIds.value = quote.items.map((line) => line.productId);
-};
-
-const cloneDraft = (value: QuotationDraft): QuotationDraft => JSON.parse(JSON.stringify(value));
-
-const applyCurrentSiteProfile = (draft: QuotationDraft, overwrite = false) => {
-  const profile = currentSiteProfile.value;
-  if (!profile) return;
-  const use = (current: string, next: string) => overwrite ? next : current || next;
-  draft.companyName = use(draft.companyName, profile.companyName);
-  draft.companySubtitle = use(draft.companySubtitle, profile.companySubtitle);
-  draft.logoUrl = use(draft.logoUrl, profile.logoUrl);
-  draft.website = use(draft.website, profile.website);
-  draft.assetBaseUrl = use(draft.assetBaseUrl, profile.assetBaseUrl);
-  draft.salesName = use(draft.salesName, profile.contactName);
-  draft.phone = use(draft.phone, profile.phone);
-  draft.whatsapp = use(draft.whatsapp, profile.whatsapp);
-  draft.wechat = use(draft.wechat, profile.wechat);
-  draft.email = use(draft.email, profile.email);
-  if (overwrite) {
-    draft.items.forEach((item) => {
-      item.image = currentSiteAssetReference(item.image);
-      item.images = (item.images || []).map(currentSiteAssetReference);
-    });
-  }
-};
-
-const loadCurrentSiteProfile = async () => {
-  loadingSiteProfile.value = true;
-  try {
-    currentSiteProfile.value = (await getCurrentSiteProfile()).data;
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, "当前网站资料读取失败"));
-  } finally {
-    loadingSiteProfile.value = false;
-  }
-};
-
-const reloadCurrentSiteProfile = async () => {
-  await loadCurrentSiteProfile();
-  if (!currentSiteProfile.value) return;
-  applyCurrentSiteProfile(quote, true);
-  ElMessage.success(`已读取当前网站：${currentSiteProfile.value.siteName}`);
-};
-
-const loadTranslationModels = async () => {
-  loadingTranslationModels.value = true;
-  try {
-    const result = await getProductTranslationModels();
-    translationModels.value = result.data;
-    selectedTranslationModel.value = resolvePreferredTranslationModel(translationModels.value, selectedTranslationModel.value);
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, "翻译模型加载失败"));
-  } finally {
-    loadingTranslationModels.value = false;
-  }
-};
-
-watch(selectedTranslationModel, (value) => savePreferredTranslationModel(value));
-
-const buildTranslatedQuotation = async () => {
-  const translated = cloneDraft(quote);
-  translated.language = targetLanguage.value;
-  const slots: Array<{ source: string; apply: (value: string) => void }> = [];
-  const translatedSpecGroups: Array<{ line: QuotationLine; specs: ReturnType<typeof parseSpecificationText> }> = [];
-  const addSlot = (source: string, apply: (value: string) => void) => {
-    const text = String(source || "").trim();
-    if (text) slots.push({ source: text, apply });
-  };
-
-  addSlot(quote.salesDepartment, (value) => { translated.salesDepartment = value; });
-  addSlot(quote.salesPosition, (value) => { translated.salesPosition = value; });
-  addSlot(quote.productCategory, (value) => { translated.productCategory = value; });
-  addSlot(quote.customized, (value) => { translated.customized = value; });
-  addSlot(quote.originCountry, (value) => { translated.originCountry = value; });
-  addSlot(quote.warranty, (value) => { translated.warranty = value; });
-  addSlot(quote.paymentTerms, (value) => { translated.paymentTerms = value; });
-  addSlot(quote.loadingPort, (value) => { translated.loadingPort = value; });
-  addSlot(quote.destinationPort, (value) => { translated.destinationPort = value; });
-  addSlot(quote.transportMode, (value) => { translated.transportMode = value; });
-
-  quote.items.forEach((sourceLine, index) => {
-    const targetLine = translated.items[index];
-    addSlot(sourceLine.title, (value) => { targetLine.title = value; });
-    addSlot(sourceLine.categoryName || "", (value) => { targetLine.categoryName = value; });
-    addSlot(sourceLine.remark, (value) => { targetLine.remark = value; });
-    const specs = parseSpecificationText(sourceLine.specText).map((item) => ({ ...item }));
-    translatedSpecGroups.push({ line: targetLine, specs });
-    specs.forEach((spec) => {
-      addSlot(spec.group, (value) => { spec.group = value; });
-      addSlot(spec.name, (value) => { spec.name = value; });
-      addSlot(spec.value, (value) => { spec.value = value; });
-    });
-  });
-
-  const result = await translateProductDraft({
-    sourceLang: "zh-CN",
-    targetLang: targetLanguage.value,
-    model: selectedTranslationModel.value,
-    title: quote.title,
-    subtitle: quote.companyName,
-    keywords: "",
-    summary: quote.companySubtitle,
-    content: quote.notes,
-    carouselTitles: slots.map((slot) => slot.source),
-  });
-  const output = result.data;
-  if ((output.carouselTitles || []).length !== slots.length) {
-    throw new Error(`译文校验失败：应返回 ${slots.length} 项，实际返回 ${output.carouselTitles?.length || 0} 项`);
-  }
-  translated.title = output.title || quote.title;
-  translated.companyName = output.subtitle || quote.companyName;
-  translated.companySubtitle = output.summary || quote.companySubtitle;
-  translated.notes = output.content || quote.notes;
-  output.carouselTitles.forEach((value, index) => slots[index].apply(value || slots[index].source));
-  translatedSpecGroups.forEach(({ line, specs }) => { line.specText = formatSpecificationText(specs); });
-  return translated;
-};
-
-const persistDraft = () => {
-  localStorage.setItem(draftStorageKey(), JSON.stringify(quote));
-  if (currentQuotationId.value) localStorage.setItem(currentIdStorageKey(), String(currentQuotationId.value));
-  else localStorage.removeItem(currentIdStorageKey());
-};
-
-const restoreDraft = () => {
-  try {
-    const scopedValue = localStorage.getItem(draftStorageKey());
-    const legacyValue = scopedValue ? null : localStorage.getItem(LEGACY_DRAFT_KEY);
-    const saved = JSON.parse(scopedValue || legacyValue || "null") as QuotationDraft | null;
-    if (saved?.version !== 1) return false;
-    restoredFromLegacyDraft.value = Boolean(legacyValue);
-    Object.assign(quote, createDefaultQuotation(), saved);
-    quote.language = "zh-CN";
-    normalizeQuotationImages(quote);
-    const savedId = Number(scopedValue ? localStorage.getItem(currentIdStorageKey()) || 0 : 0);
-    currentQuotationId.value = Number.isInteger(savedId) && savedId > 0 ? savedId : null;
-    if (legacyValue) {
-      localStorage.removeItem(LEGACY_DRAFT_KEY);
-      localStorage.removeItem(LEGACY_CURRENT_ID_KEY);
-    }
-    return true;
-  } catch (_error) {
-    localStorage.removeItem(draftStorageKey());
-    localStorage.removeItem(currentIdStorageKey());
-    return false;
-  }
-};
-
-const resetDraft = async () => {
-  try {
-    await ElMessageBox.confirm("新建报价会清空当前未导出的内容，继续吗？", "新建报价", { type: "warning" });
-  } catch (_error) {
-    return false;
-  }
-  Object.assign(quote, createDefaultQuotation());
-  applyCurrentSiteProfile(quote, true);
-  currentQuotationId.value = null;
-  selectedProductIds.value = [];
-  localStorage.removeItem(draftStorageKey());
-  localStorage.removeItem(currentIdStorageKey());
-  await applyNextQuotationNumber();
-  workspaceView.value = "editor";
-  return true;
-};
-
-const createNewQuotation = async () => {
-  await resetDraft();
-};
-
-const applyNextQuotationNumber = async () => {
-  try {
-    const result = await getNextQuotationNumber(quote.quotationDate);
-    quote.quotationNo = result.data.quotationNo;
-  } catch (_error) {
-    // Keep the local fallback number when the backend is temporarily unavailable.
-  }
-};
-
-const quotationPayload = (): QuotationPayload => {
-  const chineseDraft = cloneDraft(quote);
-  chineseDraft.language = "zh-CN";
-  return {
-    quotationNo: quote.quotationNo.trim(),
-    customerCompany: quote.customerCompany.trim(),
-    customerContact: quote.customerContact.trim(),
-    currency: quote.currency,
-    total: grandTotal.value,
-    itemCount: quote.items.length,
-    quotationDate: quote.quotationDate,
-    data: chineseDraft,
-  };
-};
-
-const loadQuotationList = async () => {
-  loadingQuotations.value = true;
-  try {
-    const result = await getQuotationList(quotationSearch.value);
-    quotationRecords.value = result.data;
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, "报价单列表加载失败"));
-  } finally {
-    loadingQuotations.value = false;
-  }
-};
-
-const showQuotationList = () => {
-  workspaceView.value = "list";
-  loadQuotationList();
-};
-
-const saveQuotation = async () => {
-  if (!quote.quotationNo.trim()) {
-    ElMessage.warning("请填写报价单编号");
-    return;
-  }
-  if (!quote.items.length) {
-    ElMessage.warning("请至少选择一个产品");
-    return;
-  }
-  savingQuotation.value = true;
-  try {
-    const wasUpdate = Boolean(currentQuotationId.value);
-    const payload = quotationPayload();
-    const result = currentQuotationId.value
-      ? await updateQuotation(currentQuotationId.value, payload)
-      : await createQuotation(payload);
-    currentQuotationId.value = result.data.id;
-    Object.assign(quote, createDefaultQuotation(), result.data.data);
-    quote.language = "zh-CN";
-    normalizeQuotationImages(quote);
-    persistDraft();
-    await loadQuotationList();
-    ElMessage.success(wasUpdate ? "报价单修改已保存" : "报价单已创建");
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, "报价单保存失败"));
-  } finally {
-    savingQuotation.value = false;
-  }
-};
-
-const readSavedQuotation = async (id: number) => {
-  const result = await getQuotationById(id);
-  return result.data;
-};
-
-const previewSavedQuotation = async (record: QuotationRecord) => {
-  try {
-    savedPreviewRecord.value = await readSavedQuotation(record.id);
-    normalizeQuotationCategories(savedPreviewRecord.value.data);
-    savedPreviewVisible.value = true;
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, "报价单读取失败"));
-  }
-};
-
-const editSavedQuotation = async (record: QuotationRecord) => {
-  try {
-    const saved = await readSavedQuotation(record.id);
-    Object.assign(quote, createDefaultQuotation(), cloneDraft(saved.data));
-    quote.language = "zh-CN";
-    normalizeQuotationImages(quote);
-    normalizeQuotationCategories(quote);
-    currentQuotationId.value = saved.id;
-    selectedProductIds.value = quote.items.map((item) => item.productId).filter((id) => productMap.value.has(id));
-    workspaceView.value = "editor";
-    persistDraft();
-    ElMessage.success(`已打开 ${saved.quotationNo}`);
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, "报价单读取失败"));
-  }
-};
-
-const downloadDraftHtml = (draft: QuotationDraft) => {
-  const blob = new Blob([buildQuotationHtml(draft)], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = quotationHtmlFileName(draft);
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
-
-const downloadSavedQuotation = (record: QuotationRecord) => {
-  const draft = cloneDraft(record.data);
-  normalizeQuotationCategories(draft);
-  downloadDraftHtml(draft);
-  ElMessage.success(`${record.quotationNo} HTML 已生成`);
-};
-
-const deleteSavedQuotation = async (record: QuotationRecord) => {
-  try {
-    await ElMessageBox.confirm(`确定删除报价单 ${record.quotationNo} 吗？`, "删除报价单", { type: "warning" });
-  } catch (_error) {
-    return;
-  }
-  try {
-    await removeQuotation(record.id);
-    if (currentQuotationId.value === record.id) {
-      currentQuotationId.value = null;
-      persistDraft();
-    }
-    if (savedPreviewRecord.value?.id === record.id) savedPreviewVisible.value = false;
-    await loadQuotationList();
-    ElMessage.success("报价单已删除");
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, "报价单删除失败"));
-  }
-};
-
-function formatDateTime(value: string) {
-  if (!value) return "-";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN", { hour12: false });
+function toggleLineImage(item: QuotationLine, image: string) {
+  if (busy.value) return;
+  const images = [...(item.images || [])], index = images.indexOf(image);
+  if (index >= 0) images.splice(index,1);
+  else if (images.length >= 3) { ElMessage.warning("最多展示 3 张图片，请先取消一张"); return; }
+  else images.push(image);
+  item.images = images; item.image = images[0] || "";
 }
-
-const loadProducts = async () => {
+async function translatedLine(id: number, language: QuotationLanguageCode) {
+  assertScope();
+  const product = exactQuotationProduct((await getProductById(id, language)).data, language);
+  assertScope();
+  if (!product.title.trim()) throw new Error(`产品 #${id} 缺少${quotationLanguageName(language)}译文，请先在产品管理完成翻译`);
+  return createQuotationLine(product, productCategoryName(product, language), quote.currency, language);
+}
+async function applyProductSelection(ids: number[]) {
+  if (busy.value) { selectedProductIds.value = quote.items.map(item => item.productId); return; }
+  importing.value = true; errorMessage.value = "";
+  try {
+    if (ids.length > 20) throw new Error("每份报价最多 20 个产品");
+    const next: QuotationLine[] = [], existing = new Map(quote.items.map(item => [item.productId,item]));
+    for (const id of ids) next.push(existing.get(id) || await translatedLine(id, quote.language));
+    assertScope(); quote.items = next;
+  } catch (error) { reportError(error,"产品导入失败"); }
+  finally { selectedProductIds.value = quote.items.map(item => item.productId); importing.value = false; }
+}
+function moveLine(index: number, offset: number) {
+  if (busy.value || index + offset < 0 || index + offset >= quote.items.length) return;
+  const [item] = quote.items.splice(index,1); quote.items.splice(index+offset,0,item);
+  selectedProductIds.value = quote.items.map(line => line.productId);
+}
+function removeLine(index: number) {
+  if (busy.value) return;
+  quote.items.splice(index,1); selectedProductIds.value = quote.items.map(line => line.productId);
+}
+function applyCurrentSiteProfile(overwrite = false) {
+  const profile = currentSiteProfile.value; if (!profile) return;
+  const fields = { companyName:profile.companyName, companySubtitle:profile.companySubtitle, logoUrl:profile.logoUrl, website:profile.website, assetBaseUrl:profile.assetBaseUrl, salesName:profile.contactName, phone:profile.phone, whatsapp:profile.whatsapp, wechat:profile.wechat, email:profile.email };
+  for (const [key,value] of Object.entries(fields)) { const field = key as keyof typeof fields; if (overwrite || !quote[field]) quote[field] = value || ""; }
+}
+async function loadCurrentSiteProfile() {
+  loadingSiteProfile.value = true; currentSiteProfile.value = null;
+  try { const result = await getCurrentSiteProfile(); assertScope(); currentSiteProfile.value = result.data; }
+  catch (error) { reportError(error,"当前网站资料读取失败"); }
+  finally { loadingSiteProfile.value = false; }
+}
+async function reloadCurrentSiteProfile() {
+  if (busy.value) return;
+  try { await ElMessageBox.confirm("替换当前报价的公司抬头和联系方式？", "读取网站资料"); }
+  catch { return; }
+  await loadCurrentSiteProfile(); assertScope(); applyCurrentSiteProfile(true);
+}
+function persistDraft() {
+  if (initializing.value || cacheBlocked.value || !active) return;
+  try {
+    // The captured site ID prevents a pending task from moving a draft into another website.
+    localStorage.setItem(draftKey, JSON.stringify(quote));
+    if (currentQuotationId.value) localStorage.setItem(idKey, String(currentQuotationId.value));
+    else localStorage.removeItem(idKey);
+  } catch { errorMessage.value = "浏览器草稿缓存写入失败，请点击保存报价单。"; }
+}
+function restoreDraft() {
+  try {
+    const raw = localStorage.getItem(draftKey); if (!raw) return false;
+    const saved = JSON.parse(raw);
+    if (saved?.version !== 1 || !Array.isArray(saved.items)) throw new Error("invalid");
+    Object.assign(quote, normalizeQuotation(saved));
+    const id = Number(localStorage.getItem(idKey));
+    currentQuotationId.value = Number.isSafeInteger(id) && id > 0 ? id : null;
+    return true;
+  } catch { cacheBlocked.value = true; errorMessage.value = "本地草稿格式异常，已保留原缓存。请从报价单列表打开已保存资料，或明确新建报价。"; return true; }
+}
+async function loadProducts() {
   loadingProducts.value = true;
   try {
-    const [result, menuResult] = await Promise.all([getProductList(undefined, "zh-CN"), getAllMenus()]);
+    const result = await getProductList(undefined, quote.language); assertScope();
     products.value = result.data;
-    menus.value = menuResult.data;
-    normalizeQuotationCategories(quote);
-    selectedProductIds.value = quote.items.map((item) => item.productId).filter((id) => productMap.value.has(id));
-    if (!quote.items.length && products.value.length) {
-      const firstProduct = products.value[0];
-      quote.items = [createQuotationLine(firstProduct, productCategoryName(firstProduct), quote.currency)];
-      selectedProductIds.value = [firstProduct.id];
-    }
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, "产品列表加载失败"));
-  } finally {
-    loadingProducts.value = false;
-  }
-};
-
-const downloadHtml = () => {
-  persistDraft();
-  const chineseDraft = cloneDraft(quote);
-  chineseDraft.language = "zh-CN";
-  downloadDraftHtml(chineseDraft);
-  ElMessage.success("中文 HTML 报价单已生成");
-};
-
-const openWebDialog = () => {
-  persistDraft();
-  webDialogVisible.value = true;
-};
-
-const validateWebQuotation = () => {
+    selectedProductIds.value = quote.items.map(item => item.productId);
+  } catch (error) { reportError(error,"产品列表加载失败"); }
+  finally { loadingProducts.value = false; }
+}
+async function loadQuotationList() {
+  loadingQuotations.value = true;
+  try { const result = await getQuotationList(quotationSearch.value); assertScope(); quotationRecords.value = result.data; }
+  catch (error) { reportError(error,"报价列表读取失败"); }
+  finally { loadingQuotations.value = false; }
+}
+function showQuotationList() { if (busy.value) return; workspaceView.value = "list"; void loadQuotationList(); }
+function quotationPayload(): QuotationPayload {
+  const data = cloneDraft(quote);
+  return { quotationNo:data.quotationNo.trim(), customerCompany:data.customerCompany.trim(), customerContact:data.customerContact.trim(), currency:data.currency, total:quotationTotal(data), itemCount:data.items.length, quotationDate:data.quotationDate, data };
+}
+async function saveQuotation() {
+  if (savingQuotation.value || exporting.value || importing.value || initializing.value) return false;
+  savingQuotation.value = true; errorMessage.value = "";
+  try {
+    assertScope(); validateQuotation(quote);
+    const payload = quotationPayload();
+    const result = currentQuotationId.value ? await updateQuotation(currentQuotationId.value, payload) : await createQuotation(payload);
+    assertScope(); currentQuotationId.value = result.data.id; baseline.value = JSON.stringify(quote);
+    persistDraft(); await loadQuotationList(); ElMessage.success("报价单已保存"); return true;
+  } catch (error) { reportError(error,"报价单保存失败"); return false; }
+  finally { savingQuotation.value = false; }
+}
+async function changeLanguage(value: string) {
+  if (busy.value || value === quote.language || !availableLanguages.value.some(lang => lang.code === value)) return;
+  const language = quotationLanguage(value);
   if (!quote.items.length) {
-    ElMessage.warning("请至少选择一个产品");
-    return false;
+    Object.assign(quote, quotationLanguageDraft(quote,language,[])); currentQuotationId.value = null; await loadProducts(); return;
   }
-  if (targetLanguage.value !== "zh-CN" && !selectedTranslationModel.value) {
-    ElMessage.warning("请选择已配置的翻译模型");
-    return false;
-  }
-  return true;
-};
-
-const buildSelectedLanguageQuotation = async () => targetLanguage.value === "zh-CN"
-  ? { ...cloneDraft(quote), language: "zh-CN" as const }
-  : await buildTranslatedQuotation();
-
-const selectedLanguageName = () => PRODUCT_LANGUAGES.find((item) => item.code === targetLanguage.value)?.name || targetLanguage.value;
-
-const downloadWebQuotation = async () => {
-  if (!validateWebQuotation()) return;
-  webOutputAction.value = "download";
-  translating.value = true;
+  try { await ElMessageBox.confirm(`先保存当前报价，再另建${quotationLanguageName(language)}版本。产品名称和参数读取产品库译文；自定义参数不自动翻译。金额、客户资料、已选图片和自定义商务条款保留，需核对新版本。原报价不覆盖。`, "切换报价语言", {type:"warning",confirmButtonText:"保存并新建语言版本"}); }
+  catch { return; }
+  switchingLanguage.value = true; errorMessage.value = "";
   try {
-    const outputDraft = await buildSelectedLanguageQuotation();
-    downloadDraftHtml(outputDraft);
-    webDialogVisible.value = false;
-    ElMessage.success(`${selectedLanguageName()} HTML 报价单已下载`);
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, "HTML 报价单生成失败"));
-  } finally {
-    translating.value = false;
-    webOutputAction.value = "";
-  }
-};
-
-const openGeneratingWindow = () => {
-  const preview = window.open("", "_blank");
-  if (!preview) {
-    ElMessage.warning("浏览器阻止了新窗口，请允许弹出窗口后重试");
-    return null;
-  }
-  preview.opener = null;
-  preview.document.write('<!doctype html><meta charset="UTF-8"><title>正在生成报价单</title><style>body{display:grid;place-items:center;min-height:100vh;margin:0;font:16px "Microsoft YaHei",sans-serif;color:#344054;background:#f4f6f8}</style><p>正在生成报价单...</p>');
-  return preview;
-};
-
-const waitForPreviewAssets = async (preview: Window) => {
-  const images = Array.from(preview.document.images);
-  await Promise.all(images.map((image) => image.complete
-    ? Promise.resolve()
-    : new Promise<void>((resolve) => {
-        image.addEventListener("load", () => resolve(), { once: true });
-        image.addEventListener("error", () => resolve(), { once: true });
-      })));
-  await preview.document.fonts?.ready;
-};
-
-const exportPdfQuotation = async () => {
-  if (!validateWebQuotation()) return;
-  const preview = openGeneratingWindow();
-  if (!preview) return;
-
-  webOutputAction.value = "pdf";
-  translating.value = true;
+    if (!await saveQuotation()) return;
+    const original = cloneDraft(quote), lines: QuotationLine[] = [];
+    for (const item of original.items) lines.push(await translatedLine(item.productId,language));
+    const next = quotationLanguageDraft(original,language,lines);
+    const number = await getNextQuotationNumber(next.quotationDate); assertScope();
+    next.quotationNo = number.data.quotationNo;
+    Object.assign(quote,next); currentQuotationId.value = null; baseline.value = "";
+    persistDraft(); await loadProducts();
+    ElMessage.success("已新建独立语言版本，请核对条款后保存");
+  } catch (error) { reportError(error,"语言切换失败，原报价已保留"); }
+  finally { switchingLanguage.value = false; }
+}
+async function confirmReplace() {
+  if (!dirty.value) return true;
+  try { await ElMessageBox.confirm("当前报价有未保存内容，是否放弃当前编辑？", "切换报价", {type:"warning"}); return true; }
+  catch { return false; }
+}
+async function resetDraft() {
+  if (busy.value || !await confirmReplace()) return false;
+  readingRecord.value = true;
   try {
-    const outputDraft = await buildSelectedLanguageQuotation();
-    preview.document.open();
-    preview.document.write(buildQuotationHtml(outputDraft));
-    preview.document.close();
-    await waitForPreviewAssets(preview);
-    webDialogVisible.value = false;
-    preview.focus();
-    preview.print();
-    ElMessage.success(`${selectedLanguageName()} PDF 已就绪，请在打印窗口选择“另存为 PDF”`);
-  } catch (error) {
-    preview.close();
-    ElMessage.error(getErrorMessage(error, "PDF 报价单生成失败"));
-  } finally {
-    translating.value = false;
-    webOutputAction.value = "";
-  }
-};
-
-const generateWebQuotation = async () => {
-  if (!validateWebQuotation()) return;
-
-  const preview = openGeneratingWindow();
-  if (!preview) return;
-
-  webOutputAction.value = "open";
-  translating.value = true;
+    const next = createDefaultQuotation(), result = await getNextQuotationNumber(next.quotationDate); assertScope();
+    next.quotationNo = result.data.quotationNo; Object.assign(quote,next);
+    currentQuotationId.value = null; selectedProductIds.value = []; cacheBlocked.value = false; baseline.value = "";
+    applyCurrentSiteProfile(true); workspaceView.value = "editor"; errorMessage.value = ""; persistDraft(); await loadProducts(); return true;
+  } catch (error) { reportError(error,"新建失败，原稿已保留"); return false; }
+  finally { readingRecord.value = false; }
+}
+const createNewQuotation = resetDraft;
+async function previewSavedQuotation(record: QuotationRecord) {
+  if (busy.value) return;
+  readingRecord.value = true;
+  try { const result = await getQuotationById(record.id); assertScope(); savedPreviewRecord.value = {...result.data,data:normalizeQuotation(result.data.data)}; savedPreviewVisible.value = true; }
+  catch (error) { reportError(error,"报价单读取失败"); }
+  finally { readingRecord.value = false; }
+}
+async function editSavedQuotation(record: QuotationRecord) {
+  if (busy.value || !await confirmReplace()) return;
+  readingRecord.value = true;
   try {
-    const outputDraft = await buildSelectedLanguageQuotation();
-    preview.document.open();
-    preview.document.write(buildQuotationHtml(outputDraft));
-    preview.document.close();
-    webDialogVisible.value = false;
-    ElMessage.success(`${selectedLanguageName()} 网页报价单已生成`);
-  } catch (error) {
-    preview.close();
-    ElMessage.error(getErrorMessage(error, "网页报价单生成失败"));
-  } finally {
-    translating.value = false;
-    webOutputAction.value = "";
-  }
-};
-
-watch(quote, persistDraft, { deep: true });
-
+    const result = await getQuotationById(record.id); assertScope();
+    Object.assign(quote, normalizeQuotation(result.data.data)); currentQuotationId.value = result.data.id;
+    baseline.value = JSON.stringify(quote); cacheBlocked.value = false;
+    workspaceView.value = "editor"; persistDraft(); await loadProducts();
+  } catch (error) { reportError(error,"报价单读取失败"); }
+  finally { readingRecord.value = false; }
+}
+async function deleteSavedQuotation(record: QuotationRecord) {
+  if (busy.value) return;
+  try { await ElMessageBox.confirm(`删除报价单 ${record.quotationNo}？`,"删除报价单",{type:"warning"}); }
+  catch { return; }
+  readingRecord.value = true;
+  try {
+    assertScope(); await removeQuotation(record.id); assertScope();
+    if (currentQuotationId.value === record.id) { currentQuotationId.value = null; baseline.value = ""; persistDraft(); }
+    if (savedPreviewRecord.value?.id === record.id) savedPreviewVisible.value = false;
+    await loadQuotationList();
+  } catch (error) { reportError(error,"删除失败"); }
+  finally { readingRecord.value = false; }
+}
+function downloadBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob), link = document.createElement("a");
+  link.href = url; link.download = name; document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+async function exportDocument(action: "web" | "html" | "pdf", source: QuotationDraft = quote) {
+  if (busy.value) return;
+  try { validateQuotation(source); assertScope(); } catch(error) { reportError(error,"请检查报价"); return; }
+  const draft = cloneDraft(source);
+  const popup = action === "web" ? window.open("about:blank","_blank") : null;
+  if (action === "web" && !popup) { ElMessage.warning("请允许打开新窗口"); return; }
+  if (popup) { popup.opener = null; popup.document.title = "正在生成报价单"; popup.document.body.textContent = "正在生成报价单..."; }
+  exporting.value = true; errorMessage.value = ""; exportProgress.value = "准备图片";
+  try {
+    const portable = await portableQuotation(draft,(done,total) => { exportProgress.value = `处理图片 ${done}/${total}`; });
+    if (action !== 'pdf') {
+      assertScope();
+      const blob = new Blob([buildQuotationWebHtml(portable)], { type: 'text/html;charset=utf-8' });
+      if (action === 'html') downloadBlob(blob, quotationHtmlFileName(draft));
+      else if (popup && !popup.closed) {
+        const url = URL.createObjectURL(blob); popup.location.replace(url);
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+      ElMessage.success(`${quotationLanguageName(draft.language)}网页版报价已生成`);
+      return;
+    }
+    assertScope(); exportProgress.value = `${quotationPaperLabel(draft.layout)} 排版中`;
+    const token = crypto.randomUUID(), result = await paginateQuotationForExport(buildQuotationHtml(portable,token),token);
+    assertScope();
+    if (action === "pdf") {
+      exportProgress.value = "服务器生成 PDF";
+      const blob = await exportQuotationPdf(result.html, draft.layout); assertScope();
+      downloadBlob(blob,quotationHtmlFileName(draft).replace(/\.html$/i,".pdf"));
+    }
+    ElMessage.success(`${quotationLanguageName(draft.language)}报价已生成，共 ${result.pages} 页`);
+  } catch(error) { popup?.close(); reportError(error,"报价导出失败，请重试"); }
+  finally { exporting.value = false; exportProgress.value = ""; }
+}
+const downloadSavedQuotation = (record: QuotationRecord) => exportDocument("html",normalizeQuotation(record.data));
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return !value ? "-" : Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN",{hour12:false});
+}
+watch(quote,persistDraft,{deep:true});
+onBeforeRouteLeave(() => !busy.value);
 onMounted(async () => {
   const restored = restoreDraft();
-  await Promise.all([loadCurrentSiteProfile(), loadProducts(), loadQuotationList(), loadTranslationModels()]);
-  applyCurrentSiteProfile(quote, !restored || restoredFromLegacyDraft.value);
-  if (!restored) await applyNextQuotationNumber();
+  try {
+    menus.value = (await getAllMenus()).data; assertScope();
+    await loadCurrentSiteProfile(); await loadProducts(); await loadQuotationList();
+    if (!restored) {
+      applyCurrentSiteProfile(true);
+      const result = await getNextQuotationNumber(quote.quotationDate); assertScope(); quote.quotationNo = result.data.quotationNo;
+      baseline.value = JSON.stringify(quote);
+    }
+  } catch(error) { reportError(error,"报价工作台加载失败"); }
+  finally { initializing.value = false; }
 });
+onBeforeUnmount(() => { persistDraft(); active = false; });
 </script>
 
 <style scoped>
@@ -976,9 +597,14 @@ onMounted(async () => {
 .list-filter { display: grid; grid-template-columns: minmax(280px, 1fr) auto; gap: 8px; margin-bottom: 12px; }
 .quotation-table { width: 100%; }
 .record-total { color: var(--text-success); font-variant-numeric: tabular-nums; }
-.quotation-workbench { display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 16px; align-items: start; }
-.quotation-editor { display: grid; gap: 12px; min-width: 0; }
-.editor-section { min-width: 0; padding: 14px; border: 1px solid var(--el-border-color-light); border-radius: 7px; background: var(--el-bg-color); box-shadow: var(--shadow-card); }
+.quotation-workbench { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; align-items:start; }
+.quotation-workbench.single-pane { grid-template-columns:minmax(0,1fr); }
+.quotation-editor { display:grid; gap:0; min-width:0; margin:0; padding:0; border:0; background:var(--el-bg-color); }
+.editor-section { min-width:0; padding:24px; border:0; border-bottom:1px solid var(--el-border-color-light); border-radius:0; box-shadow:none; }
+.workspace-controls { display:flex; align-items:center; flex-wrap:wrap; gap:14px; padding:0 0 18px; }
+.workspace-controls .el-select { width:190px; }
+.quotation-warning { margin-bottom:12px; }
+.form-grid>* { min-width:0; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .section-heading > div { display: flex; align-items: center; gap: 8px; }
 .section-heading span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 5px; color: var(--el-color-primary-dark-2); background: var(--el-color-primary-light-9); font-size: 11px; font-weight: 800; }
@@ -1030,7 +656,7 @@ onMounted(async () => {
 .logo-setting :deep(.el-form-item) { margin-bottom: 0; }
 .logo-preview { display: grid; place-items: center; width: 88px; height: 52px; overflow: hidden; border: 1px solid var(--el-border-color-light); border-radius: 5px; background: #fff; }
 .logo-preview .el-image { width: 100%; height: 100%; }
-.quote-preview-pane { position: relative; min-width: 0; overflow: visible; border: 1px solid var(--el-border-color-light); border-radius: 7px; background: #dfe3e9; box-shadow: var(--shadow-card); }
+.quote-preview-pane { position:sticky; top:16px; min-width:0; border:0; background:transparent; }
 .preview-toolbar { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 8px 12px; border-bottom: 1px solid var(--el-border-color-light); background: rgba(255,255,255,.97); }
 .preview-toolbar > div { display: flex; gap: 10px; align-items: baseline; }
 .preview-toolbar span { color: var(--el-text-color-secondary); font-size: 11px; }
@@ -1042,7 +668,6 @@ onMounted(async () => {
 .web-output-dialog :deep(.el-select) { width: 100%; }
 
 @media (max-width: 1280px) {
-  .quotation-workbench { grid-template-columns: 390px minmax(0, 1fr); }
   .form-grid.three { grid-template-columns: 1fr 1fr; }
   .line-pricing { grid-template-columns: 76px 1fr; }
 }
@@ -1067,5 +692,15 @@ onMounted(async () => {
   .quote-preview-frame :deep(.quotation-document) { width: calc(100% - 16px); padding: 18px 12px; }
   .list-filter { grid-template-columns: 1fr; }
   .quotation-list-panel { padding: 10px; }
+}
+.list-filter { grid-template-columns:minmax(200px,1fr) 180px auto; }
+.line-pricing { grid-template-columns:minmax(70px,1fr) minmax(50px,.6fr) minmax(120px,1.5fr); }
+.quotation-list-panel { border:0; box-shadow:none; border-radius:0; }
+.list-summary { border:0; border-radius:0; }
+@media(max-width:760px) {
+  .list-filter,.line-pricing { grid-template-columns:minmax(0,1fr); }
+  .editor-section { padding:16px; }
+  .page-actions .el-button { margin-left:0; }
+  .workspace-controls { gap:10px; }
 }
 </style>
